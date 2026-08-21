@@ -78,6 +78,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
             17 => research_effect(pool, user, soft).await?,
+            23 => analyze_effect(pool, user, victim, is_npc, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
             _ => {}
@@ -535,5 +536,51 @@ async fn research_effect(
         .await?;
     sqlx::query("INSERT INTO research_history(user_id,software_id,software_type,new_version,software_name) VALUES($1,$2,$3,$4,$5)")
         .bind(user).bind(soft).bind(f.get::<i16,_>("soft_type")).bind(version).bind(f.get::<String,_>("soft_name")).execute(pool).await?;
+    Ok(())
+}
+
+/// Case 23 of completeProcess. An analyzer reads a machine's CPU and memory, and how close
+/// the reading lands depends on the tool: the legacy gave a v10 fifty percent accuracy, a
+/// v20 eighty and a v30 the exact figure.
+///
+/// It switched on the version being exactly 10, 20 or 30 and killed the request otherwise,
+/// which any researched analyzer would trip. Reading it as thresholds keeps the same three
+/// tiers without that cliff.
+async fn analyze_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let Some(version)=sqlx::query_scalar::<_,i32>("SELECT soft_version FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc AND soft_type=16").bind(soft).bind(user).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let accuracy = if version >= 30 {
+        1.0
+    } else if version >= 20 {
+        0.8
+    } else {
+        0.5
+    };
+    let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
+        return Ok(());
+    };
+    let Some(hw)=sqlx::query("SELECT sum(cpu)::real AS cpu,sum(ram)::real AS ram FROM hardware WHERE user_id=$1 AND is_npc=$2").bind(victim).bind(victim_is_npc).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let cpu: f32 = hw.get::<Option<f32>, _>("cpu").unwrap_or(0.0);
+    let ram: f32 = hw.get::<Option<f32>, _>("ram").unwrap_or(0.0);
+    // The legacy nudged each bound inwards by a random fraction of the error band, so two
+    // readings of the same machine never matched exactly.
+    let jitter:f32=sqlx::query_scalar::<_,f32>("SELECT (5+random()*45)::real").fetch_one(pool).await?;
+    let span_cpu = cpu * (1.0 - accuracy);
+    let span_ram = ram * (1.0 - accuracy);
+    let cpu_min = (cpu - span_cpu + span_cpu / jitter).round() as i32;
+    let cpu_max = (cpu + span_cpu - span_cpu / jitter).round() as i32;
+    let ram_min = (ram - span_ram + span_ram / jitter).round() as i32;
+    let ram_max = (ram + span_ram - span_ram / jitter).round() as i32;
+    sqlx::query("INSERT INTO analyze_results(user_id,ip,cpu_min,cpu_max,ram_min,ram_max) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(user_id,ip) DO UPDATE SET cpu_min=EXCLUDED.cpu_min,cpu_max=EXCLUDED.cpu_max,ram_min=EXCLUDED.ram_min,ram_max=EXCLUDED.ram_max,analyzed_at=now()")
+        .bind(user).bind(ip).bind(cpu_min).bind(cpu_max).bind(ram_min).bind(ram_max).execute(pool).await?;
     Ok(())
 }

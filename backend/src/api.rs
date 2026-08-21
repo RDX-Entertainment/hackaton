@@ -282,6 +282,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/internet/bookmarks/{ip}", web::delete().to(remove_bookmark))
             .route("/internet/login", web::post().to(internet_login))
             .route("/internet/hack", web::post().to(internet_hack))
+            .route("/internet/analyze", web::post().to(internet_analyze))
             .route("/internet/{ip}/software", web::get().to(remote_software))
             .route("/internet/{ip}/software", web::post().to(transfer_software))
             .route("/internet/{ip}/software/{soft}", web::delete().to(delete_remote_software))
@@ -857,7 +858,10 @@ async fn internet_navigate(
     let bookmarked:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_important WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
     // A finished PORT_SCAN leaves a row here; the legacy read the same fact off the session.
     let scanned:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_scan WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"ip":ip,"kind":if t.is_npc {"npc"} else {"player"},"id":t.id,"name":t.name,"type":t.npc_type,"down":t.down,"access":access,"bookmarked":bookmarked,"scanned":scanned})))
+    // An analyzer's reading, if one was ever taken against this machine.
+    let hw=sqlx::query("SELECT cpu_min,cpu_max,ram_min,ram_max FROM analyze_results WHERE user_id=$1 AND ip=$2").bind(u.0).bind(ip).fetch_optional(&s.pool).await?
+        .map(|r|serde_json::json!({"cpu_min":r.get::<i32,_>("cpu_min"),"cpu_max":r.get::<i32,_>("cpu_max"),"ram_min":r.get::<i32,_>("ram_min"),"ram_max":r.get::<i32,_>("ram_max")}));
+    Ok(HttpResponse::Ok().json(serde_json::json!({"ip":ip,"kind":if t.is_npc {"npc"} else {"player"},"id":t.id,"name":t.name,"type":t.npc_type,"down":t.down,"access":access,"bookmarked":bookmarked,"scanned":scanned,"analysis":hw})))
 }
 // Port of Internet::verifyLogin, the 'root' branch. The legacy 'download' and 'clan' users
 // depend on type 8 and type 10 NPCs, which are not ported yet.
@@ -1144,6 +1148,28 @@ async fn require_access(s: &AppState, user: i64, ip: i64) -> Result<(), ApiError
         return Ok(());
     }
     Err(ApiError::BadRequest("NOT_LOGGED_IN".into()))
+}
+// Companion to /internet/hack for action 23. The legacy made you pick the analyzer off
+// your own file list; picking the best one you have running says the same thing with one
+// less step, and matches how hack chooses its cracker.
+async fn internet_analyze(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<IpBody>,
+) -> Result<HttpResponse, ApiError> {
+    let t = resolve_ip(&s, i.ip).await?;
+    let best=sqlx::query("SELECT s.id,s.soft_version FROM software s JOIN software_running r ON r.soft_id=s.id WHERE s.user_id=$1 AND NOT s.is_npc AND s.soft_type=16 ORDER BY s.soft_version DESC LIMIT 1").bind(u.0).fetch_optional(&s.pool).await?.ok_or_else(||ApiError::BadRequest("NO_SOFT".into()))?;
+    let soft: i64 = best.get("id");
+    let seconds: i32 = 60;
+    let dup:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=23 AND victim_id=$2 AND completed_at IS NULL)").bind(u.0).bind(t.id).fetch_one(&s.pool).await?;
+    if dup {
+        return Err(ApiError::BadRequest(
+            "identical process already active".into(),
+        ));
+    }
+    let info = if t.is_npc { "npc" } else { "player" };
+    let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal) VALUES($1,$2,23,$3,$4,$4,now()+($5::integer*interval '1 second'),$5) RETURNING pid").bind(u.0).bind(t.id).bind(soft).bind(info).bind(seconds).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"seconds":seconds,"analyzer_version":best.get::<i32,_>("soft_version")})))
 }
 // Port of important_show. The legacy joined npc_info to give every bookmark a name.
 async fn internet_bookmarks(

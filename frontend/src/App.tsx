@@ -92,6 +92,8 @@ function InternetScreen() {
       <small> · {remote.kind === 'npc' ? `NPC type ${remote.type}` : 'player'} · {remote.ip}</small>
       <p>{remote.down ? 'This machine is down.' : remote.access ? 'Logged in as root.' : 'Not logged in.'}{remote.scanned && ' · Port scanned.'}</p>
       <button onClick={() => void bookmark()}>{remote.bookmarked ? 'Remove bookmark' : 'Bookmark'}</button>
+      <button onClick={() => void act(internetApi.analyze(remote.ip), 'Analysis')}>Analyze</button>
+      {remote.analysis && <p className="muted">CPU {remote.analysis.cpu_min}–{remote.analysis.cpu_max} · RAM {remote.analysis.ram_min}–{remote.analysis.ram_max}</p>}
       {!remote.access && !remote.down && <>
         <form className="compose" onSubmit={signIn}>
           <label>User<input value={user} onChange={e => setUser(e.target.value)} required /></label>
