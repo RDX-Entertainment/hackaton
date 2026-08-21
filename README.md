@@ -17,3 +17,12 @@ distrobox enter web-dev -- bash -lc 'cd /home/raul/Projects/hackaton/frontend &&
 ```
 
 La API escucha en `127.0.0.1:8080` y Vite en `127.0.0.1:5173`. El proxy de Vite dirige `/api` a Actix Web.
+
+## Worker de juego
+
+El reemplazo Rust de los cronjobs se ejecuta separado del API. Procesa expiración de premium, ranking y la instantánea de estadísticas; en producción se deja en ejecución, y `--once` permite ejecutarlo desde un scheduler externo.
+
+```sh
+distrobox enter rust-dev -- bash -lc 'cd /home/raul/Projects/hackaton && cargo run -p legacy-api --bin worker'
+distrobox enter rust-dev -- bash -lc 'cd /home/raul/Projects/hackaton && cargo run -p legacy-api --bin worker -- --once'
+```
