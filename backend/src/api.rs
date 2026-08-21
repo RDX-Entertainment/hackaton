@@ -200,6 +200,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/clans", web::get().to(clans))
             .route("/clans", web::post().to(create_clan))
             .route("/clans/mine", web::get().to(my_clan))
+            .route("/clans/requests", web::get().to(clan_requests))
             .route("/clans/{id}/join", web::post().to(request_clan_join))
             .route(
                 "/clans/requests/{id}/accept",
@@ -1022,6 +1023,16 @@ async fn request_clan_join(
     }
     let req:Option<i64>=sqlx::query_scalar("INSERT INTO clan_requests(clan_id,user_id,message) SELECT $1,$2,$3 WHERE EXISTS(SELECT 1 FROM clans WHERE id=$1) ON CONFLICT DO NOTHING RETURNING id").bind(*id).bind(u.0).bind(i.message.trim()).fetch_optional(&s.pool).await?;
     Ok(HttpResponse::Created().json(serde_json::json!({"id":req.ok_or(ApiError::BadRequest("request already exists or clan missing".into()))?})))
+}
+async fn clan_requests(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let rows = sqlx::query("SELECT r.id,r.message,r.created_at,applicant.login FROM clan_requests r JOIN clan_members manager ON manager.clan_id=r.clan_id JOIN users applicant ON applicant.id=r.user_id WHERE manager.user_id=$1 AND manager.auth_level>=2 ORDER BY r.created_at")
+        .bind(u.0)
+        .fetch_all(&s.pool)
+        .await?
+        .into_iter()
+        .map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login"),"message":r.get::<String,_>("message"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")}))
+        .collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(rows))
 }
 async fn accept_clan_request(
     s: web::Data<AppState>,
