@@ -99,6 +99,12 @@ struct StartProcess {
 struct CertificationStart {
     account: Option<i64>,
 }
+#[derive(Deserialize)]
+struct SettingsUpdate {
+    email: Option<String>,
+    current_password: String,
+    new_password: Option<String>,
+}
 #[derive(Serialize)]
 struct Session {
     token: String,
@@ -210,6 +216,10 @@ pub fn configure(c: &mut web::ServiceConfig) {
                 "/certifications/{level}/complete",
                 web::post().to(complete_certification),
             )
+            .route("/logs", web::get().to(player_log))
+            .route("/stats", web::get().to(server_stats))
+            .route("/settings", web::get().to(settings))
+            .route("/settings", web::put().to(save_settings))
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -639,6 +649,87 @@ async fn accept_friend(
     .await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"friend_id":friend})))
+}
+async fn player_log(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let rows = sqlx::query("SELECT id,text FROM log WHERE user_id=$1 ORDER BY id DESC LIMIT 200")
+        .bind(u.0)
+        .fetch_all(&s.pool)
+        .await?
+        .into_iter()
+        .map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"text":r.get::<String,_>("text")}))
+        .collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(rows))
+}
+async fn server_stats(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let payload: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT payload FROM system_stats WHERE key='server'")
+            .fetch_optional(&s.pool)
+            .await?;
+    Ok(HttpResponse::Ok().json(payload.unwrap_or_else(|| serde_json::json!({}))))
+}
+async fn settings(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let r = sqlx::query("SELECT login,email,premium,last_login FROM users WHERE id=$1")
+        .bind(u.0)
+        .fetch_one(&s.pool)
+        .await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"login":r.get::<String,_>("login"),"email":r.get::<String,_>("email"),"premium":r.get::<bool,_>("premium"),"last_login":r.get::<chrono::DateTime<chrono::Utc>,_>("last_login")})))
+}
+async fn save_settings(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<SettingsUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    if i.current_password.is_empty() {
+        return Err(ApiError::BadRequest("current password is required".into()));
+    }
+    let mut tx = s.pool.begin().await?;
+    let current: String = sqlx::query_scalar("SELECT password FROM users WHERE id=$1 FOR UPDATE")
+        .bind(u.0)
+        .fetch_one(&mut *tx)
+        .await?;
+    if !verify(&i.current_password, &current).map_err(|_| ApiError::Unauthorized)? {
+        return Err(ApiError::Unauthorized);
+    }
+    if let Some(email) = &i.email {
+        let email = email.trim();
+        if !email.contains('@') || email.len() > 50 {
+            return Err(ApiError::BadRequest("invalid email".into()));
+        }
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE email=$1 AND id<>$2)")
+                .bind(email)
+                .bind(u.0)
+                .fetch_one(&mut *tx)
+                .await?;
+        if exists {
+            return Err(ApiError::BadRequest("email already exists".into()));
+        }
+        sqlx::query("UPDATE users SET email=$1 WHERE id=$2")
+            .bind(email)
+            .bind(u.0)
+            .execute(&mut *tx)
+            .await?;
+    }
+    if let Some(password) = &i.new_password {
+        if password.len() < 8 {
+            return Err(ApiError::BadRequest(
+                "new password must have 8 characters".into(),
+            ));
+        }
+        let password =
+            hash(password, 13).map_err(|_| ApiError::BadRequest("cannot hash password".into()))?;
+        sqlx::query("UPDATE users SET password=$1 WHERE id=$2")
+            .bind(password)
+            .bind(u.0)
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query("INSERT INTO log(user_id,text) VALUES($1,'Account settings updated')")
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"saved":true})))
 }
 fn certification(level: i16) -> Option<(&'static str, &'static str, i64)> {
     match level {
