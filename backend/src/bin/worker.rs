@@ -79,6 +79,9 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             15 => scan_effect(pool, user, victim, is_npc).await?,
             16 => exploit_effect(pool, user, victim, is_npc).await?,
             17 => research_effect(pool, user, soft).await?,
+            18 => park_effect(pool, user, soft).await?,
+            19 => unpark_effect(pool, user, soft).await?,
+            20 => discard_effect(pool, user, soft).await?,
             23 => analyze_effect(pool, user, victim, is_npc, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
@@ -651,5 +654,64 @@ async fn exploit_effect(
         add_log(pool, victim, victim_is_npc, &format!("[{}] logged in as {login}", dotted(attacker_ip))).await?;
         add_log(pool, user, false, &format!("localhost logged in to [{}] as {login}", dotted(ip))).await?;
     }
+    Ok(())
+}
+
+/// Case 18 of completeProcess. Parking a file on the external drive, which is the point of
+/// having one: it is not on the machine, so formatting or losing the machine leaves it.
+///
+/// The row keeps the source file's id rather than a fresh one, exactly as the legacy wrote
+/// it. A parked file is the same file, somewhere else.
+async fn park_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), sqlx::Error> {
+    let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc").bind(soft).bind(user).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let size: i32 = f.get("soft_size");
+    let already:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_external WHERE id=$1)").bind(soft).fetch_one(pool).await?;
+    if already {
+        return Ok(());
+    }
+    // BAD_XHD: the drive's capacity against what is already parked on it.
+    let capacity:Option<i64>=sqlx::query_scalar("SELECT sum(size)::bigint FROM hardware_external WHERE user_id=$1").bind(user).fetch_one(pool).await?;
+    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software_external WHERE user_id=$1").bind(user).fetch_one(pool).await?;
+    if capacity.unwrap_or(0) < used.unwrap_or(0) + size as i64 {
+        return Ok(());
+    }
+    sqlx::query("INSERT INTO software_external(id,user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to) VALUES($1,$2,$3,$4,$5,$6,$7,$8)")
+        .bind(soft).bind(user).bind(f.get::<String,_>("soft_name")).bind(f.get::<i32,_>("soft_version")).bind(size).bind(f.get::<i32,_>("soft_ram")).bind(f.get::<i16,_>("soft_type")).bind(f.get::<i64,_>("licensed_to")).execute(pool).await?;
+    Ok(())
+}
+
+/// Case 19. Bringing a parked file back onto the machine, refused when the disk has no
+/// room or a copy is already sitting there.
+async fn unpark_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), sqlx::Error> {
+    let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to FROM software_external WHERE id=$1 AND user_id=$2").bind(soft).bind(user).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let name: String = f.get("soft_name");
+    let version: i32 = f.get("soft_version");
+    let size: i32 = f.get("soft_size");
+    let held:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE user_id=$1 AND NOT is_npc AND soft_name=$2 AND soft_version=$3)").bind(user).bind(&name).bind(version).fetch_one(pool).await?;
+    if held {
+        return Ok(());
+    }
+    // BAD_HDD, the same disk check every copy onto a machine goes through.
+    let total:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
+    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
+    if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + size as i64 {
+        return Ok(());
+    }
+    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to) VALUES($1,$2,$3,$4,$5,$6,$7)")
+        .bind(user).bind(&name).bind(version).bind(size).bind(f.get::<i32,_>("soft_ram")).bind(f.get::<i16,_>("soft_type")).bind(f.get::<i64,_>("licensed_to")).execute(pool).await?;
+    Ok(())
+}
+
+/// Case 20. Clearing a file off the drive, which is the only way to make room on it.
+async fn discard_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM software_external WHERE id=$1 AND user_id=$2")
+        .bind(soft)
+        .bind(user)
+        .execute(pool)
+        .await?;
     Ok(())
 }
