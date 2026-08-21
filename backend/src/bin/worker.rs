@@ -23,6 +23,9 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn tick(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
+    // Completion marker for the legacy Process::completeProcess polling flow.
+    sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now() WHERE completed_at IS NULL AND NOT is_paused AND time_end<=now()")
+        .execute(pool).await?;
     // Port of cron/updatePremium.php.
     sqlx::query("UPDATE users SET premium=false WHERE id IN (SELECT user_id FROM users_premium WHERE premium_until < now())")
         .execute(pool).await?;

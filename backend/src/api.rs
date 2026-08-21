@@ -88,6 +88,13 @@ struct ListEntry {
     password: String,
     virus_id: Option<i64>,
 }
+#[derive(Deserialize)]
+struct StartProcess {
+    action: u8,
+    victim_id: Option<i64>,
+    software_id: Option<i64>,
+    info: Option<String>,
+}
 #[derive(Serialize)]
 struct Session {
     token: String,
@@ -142,6 +149,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/software", web::get().to(software))
             .route("/hardware", web::get().to(hardware))
             .route("/processes", web::get().to(processes))
+            .route("/processes", web::post().to(start_process))
             .route("/processes/{id}", web::delete().to(delete_process))
             .route("/processes/{id}/pause", web::post().to(pause_process))
             .route("/processes/{id}/resume", web::post().to(resume_process))
@@ -326,8 +334,49 @@ async fn hardware(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse
     Ok(HttpResponse::Ok().json(v))
 }
 async fn processes(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let v=rows(&s,u.0,"SELECT pid,victim_id,action,info,info_str,time_ideal,time_worked,is_paused FROM processes WHERE creator_id=$1 ORDER BY time_start DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("pid"),"victim_id":r.get::<i64,_>("victim_id"),"action":r.get::<i16,_>("action"),"info":r.get::<String,_>("info"),"details":r.get::<String,_>("info_str"),"ideal_seconds":r.get::<i32,_>("time_ideal"),"worked_seconds":r.get::<i32,_>("time_worked"),"paused":r.get::<bool,_>("is_paused")})).collect::<Vec<_>>();
+    let v=rows(&s,u.0,"SELECT pid,victim_id,action,info,info_str,time_ideal,time_worked,is_paused,completed_at FROM processes WHERE creator_id=$1 ORDER BY time_start DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("pid"),"victim_id":r.get::<i64,_>("victim_id"),"action":r.get::<i16,_>("action"),"info":r.get::<String,_>("info"),"details":r.get::<String,_>("info_str"),"ideal_seconds":r.get::<i32,_>("time_ideal"),"worked_seconds":r.get::<i32,_>("time_worked"),"paused":r.get::<bool,_>("is_paused"),"completed":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("completed_at").is_some()})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(v))
+}
+async fn start_process(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<StartProcess>,
+) -> Result<HttpResponse, ApiError> {
+    if !PROCESS_ACTIONS.iter().any(|(_, id)| *id == i.action) {
+        return Err(ApiError::BadRequest("unsupported process action".into()));
+    }
+    let info = i.info.as_deref().unwrap_or("").trim();
+    if info.len() > 30 {
+        return Err(ApiError::BadRequest("process info is too long".into()));
+    }
+    let soft = i.software_id.unwrap_or(0);
+    if soft != 0 {
+        let owned: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc)",
+        )
+        .bind(soft)
+        .bind(u.0)
+        .fetch_one(&s.pool)
+        .await?;
+        if !owned {
+            return Err(ApiError::NotFound);
+        }
+    }
+    let seconds: i32 = match i.action {
+        1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 13 | 14 => 30,
+        10 | 11 | 12 | 15 | 16 | 17 | 22 | 23 => 60,
+        18 | 19 | 20 | 24 | 25 | 26 | 27 | 28 => 120,
+        _ => 60,
+    };
+    let duplicate:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=$2 AND victim_id=$3 AND soft_id=$4 AND info=$5 AND completed_at IS NULL)").bind(u.0).bind(i.action as i16).bind(i.victim_id.unwrap_or(0)).bind(soft).bind(info).fetch_one(&s.pool).await?;
+    if duplicate {
+        return Err(ApiError::BadRequest(
+            "identical process already active".into(),
+        ));
+    }
+    let id:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal) VALUES($1,$2,$3,$4,$5,$5,now()+($6::integer*interval '1 second'),$6) RETURNING pid").bind(u.0).bind(i.victim_id.unwrap_or(0)).bind(i.action as i16).bind(soft).bind(info).bind(seconds).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created()
+        .json(serde_json::json!({"id":id,"action":i.action,"seconds":seconds})))
 }
 async fn delete_process(
     s: web::Data<AppState>,
