@@ -111,6 +111,8 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/hardware", web::get().to(hardware))
             .route("/processes", web::get().to(processes))
             .route("/processes/{id}", web::delete().to(delete_process))
+            .route("/processes/{id}/pause", web::post().to(pause_process))
+            .route("/processes/{id}/resume", web::post().to(resume_process))
             .route("/mails", web::get().to(mails))
             .route("/mails", web::post().to(compose_mail))
             .route("/mails/{id}", web::get().to(mail))
@@ -292,6 +294,39 @@ async fn delete_process(
         return Err(ApiError::NotFound);
     }
     Ok(HttpResponse::NoContent().finish())
+}
+async fn pause_process(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let mut tx = s.pool.begin().await?;
+    let end:Option<chrono::DateTime<chrono::Utc>>=sqlx::query_scalar("SELECT time_end FROM processes WHERE pid=$1 AND creator_id=$2 AND NOT is_paused FOR UPDATE").bind(*id).bind(u.0).fetch_optional(&mut *tx).await?;
+    let end = end.ok_or(ApiError::NotFound)?;
+    let seconds: i32 = sqlx::query_scalar(
+        "SELECT GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-now()))::integer)",
+    )
+    .bind(end)
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE processes SET is_paused=true WHERE pid=$1; INSERT INTO processes_paused(pid,time_left,user_id) VALUES($1,$2,$3) ON CONFLICT(pid) DO UPDATE SET time_left=EXCLUDED.time_left,user_id=EXCLUDED.user_id,time_paused=now()").bind(*id).bind(seconds).bind(u.0).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":*id,"paused":true,"seconds_left":seconds})))
+}
+async fn resume_process(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let mut tx = s.pool.begin().await?;
+    let seconds:Option<i32>=sqlx::query_scalar("SELECT pp.time_left FROM processes_paused pp JOIN processes p ON p.pid=pp.pid WHERE pp.pid=$1 AND pp.user_id=$2 AND p.creator_id=$2 AND p.is_paused FOR UPDATE").bind(*id).bind(u.0).fetch_optional(&mut *tx).await?;
+    let seconds = seconds.ok_or(ApiError::NotFound)?;
+    sqlx::query("UPDATE processes SET is_paused=false,time_start=now(),time_end=now()+($1::integer * interval '1 second') WHERE pid=$2; DELETE FROM processes_paused WHERE pid=$2").bind(seconds).bind(*id).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(
+        HttpResponse::Ok()
+            .json(serde_json::json!({"id":*id,"paused":false,"seconds_left":seconds})),
+    )
 }
 async fn mails(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
     let v=rows(&s,u.0,"SELECT id,sender_id,recipient_id,type,subject,text,is_read FROM mails WHERE (sender_id=$1 OR recipient_id=$1) AND NOT is_deleted ORDER BY date_sent DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"from":r.get::<i64,_>("sender_id"),"to":r.get::<i64,_>("recipient_id"),"type":r.get::<i16,_>("type"),"subject":r.get::<String,_>("subject"),"text":r.get::<String,_>("text"),"read":r.get::<bool,_>("is_read")})).collect::<Vec<_>>();
