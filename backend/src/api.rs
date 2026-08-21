@@ -1,7 +1,7 @@
 use crate::{
     auth::{CurrentUser, issue_token},
     error::ApiError,
-    legacy::{PROCESS_ACTIONS, SOFTWARE_TYPES},
+    legacy::{HARDWARE_PARTS, PROCESS_ACTIONS, SOFTWARE_TYPES},
     state::AppState,
 };
 use actix_web::{HttpResponse, web};
@@ -125,6 +125,19 @@ struct Transfer {
     direction: String,
 }
 #[derive(Deserialize)]
+struct BuyPart {
+    kind: String,
+    part: u8,
+    account: i64,
+}
+#[derive(Deserialize)]
+struct NewSoftware {
+    name: String,
+    soft_type: i16,
+    size: i32,
+    ram: i32,
+}
+#[derive(Deserialize)]
 struct CertificationStart {
     account: Option<i64>,
 }
@@ -194,6 +207,9 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/game/software-types", web::get().to(software_type_catalog))
             .route("/software", web::get().to(software))
             .route("/hardware", web::get().to(hardware))
+            .route("/hardware/shop", web::get().to(hardware_shop))
+            .route("/hardware/shop", web::post().to(buy_hardware))
+            .route("/software", web::post().to(create_software))
             .route("/processes", web::get().to(processes))
             .route("/processes", web::post().to(start_process))
             .route("/processes/{id}", web::delete().to(delete_process))
@@ -916,6 +932,99 @@ async fn internet_hack(
     let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,info,info_str,time_end,time_ideal) VALUES($1,$2,$3,$4,$4,now()+($5::integer*interval '1 second'),$5) RETURNING pid").bind(u.0).bind(t.id).bind(action).bind(info).bind(seconds).fetch_one(&s.pool).await?;
     Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"action":action,"seconds":seconds,"attacker_version":attacker,"defender_version":defender})))
 }
+// Port of hardwareItens.php. The legacy priced parts in static arrays and billed the
+// upgrade to a bank account, the same way the university charges for a certification.
+async fn hardware_shop(_: CurrentUser) -> HttpResponse {
+    let v = HARDWARE_PARTS
+        .iter()
+        .map(|p| {
+            serde_json::json!({"kind":p.kind,"id":p.id,"name":p.name,"power":p.power,"price":p.price})
+        })
+        .collect::<Vec<_>>();
+    HttpResponse::Ok().json(v)
+}
+// Buying a part replaces what the machine had rather than adding to it, so a cheaper part
+// is a downgrade and the shop lets you make that mistake, as the legacy did.
+async fn buy_hardware(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<BuyPart>,
+) -> Result<HttpResponse, ApiError> {
+    let p = HARDWARE_PARTS
+        .iter()
+        .find(|p| p.kind == i.kind && p.id == i.part)
+        .ok_or_else(|| ApiError::BadRequest("unknown part".into()))?;
+    let mut tx = s.pool.begin().await?;
+    let cash: Option<i64> = sqlx::query_scalar(
+        "SELECT cash FROM bank_accounts WHERE bank_acc=$1 AND bank_user=$2 FOR UPDATE",
+    )
+    .bind(i.account)
+    .bind(u.0)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if cash.unwrap_or(0) < p.price {
+        return Err(ApiError::BadRequest("insufficient funds".into()));
+    }
+    // A disk cannot shrink below what is already stored on it, nor memory below what is
+    // loaded; the legacy had no such guard because it never let you downgrade in practice.
+    let floor: i64 = match p.kind {
+        "hdd" => sqlx::query_scalar("SELECT COALESCE(sum(soft_size),0)::bigint FROM software WHERE user_id=$1 AND NOT is_npc").bind(u.0).fetch_one(&mut *tx).await?,
+        "ram" => sqlx::query_scalar("SELECT COALESCE(sum(s.soft_ram),0)::bigint FROM software s JOIN software_running r ON r.soft_id=s.id WHERE r.user_id=$1 AND NOT r.is_npc").bind(u.0).fetch_one(&mut *tx).await?,
+        _ => 0,
+    };
+    if (p.power as i64) < floor {
+        return Err(ApiError::BadRequest("PART_TOO_SMALL".into()));
+    }
+    sqlx::query("UPDATE bank_accounts SET cash=cash-$1 WHERE bank_acc=$2 AND bank_user=$3")
+        .bind(p.price)
+        .bind(i.account)
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    let sql = match p.kind {
+        "cpu" => "UPDATE hardware SET cpu=$1 WHERE user_id=$2 AND NOT is_npc",
+        "ram" => "UPDATE hardware SET ram=$1 WHERE user_id=$2 AND NOT is_npc",
+        "hdd" => "UPDATE hardware SET hdd=$1 WHERE user_id=$2 AND NOT is_npc",
+        _ => "UPDATE hardware SET net=$1 WHERE user_id=$2 AND NOT is_npc",
+    };
+    sqlx::query(sql)
+        .bind(p.power as f32)
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE users_stats SET money_hardware=money_hardware+$1 WHERE uid=$2")
+        .bind(p.price)
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"kind":p.kind,"name":p.name,"power":p.power,"paid":p.price})))
+}
+// Port of createsoft.php. Writing your own program is the other way to get one, next to
+// stealing it, and it is what makes an empty disk useful.
+async fn create_software(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<NewSoftware>,
+) -> Result<HttpResponse, ApiError> {
+    let name = i.name.trim();
+    if name.is_empty() || name.len() > 25 {
+        return Err(ApiError::BadRequest("invalid software name".into()));
+    }
+    if !SOFTWARE_TYPES.iter().any(|(_, id)| *id as i16 == i.soft_type) {
+        return Err(ApiError::BadRequest("unknown software type".into()));
+    }
+    if i.size <= 0 || i.ram < 0 {
+        return Err(ApiError::BadRequest("invalid size".into()));
+    }
+    let total:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(u.0).fetch_one(&s.pool).await?;
+    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc").bind(u.0).fetch_one(&s.pool).await?;
+    if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + i.size as i64 {
+        return Err(ApiError::BadRequest("NO_DISK_SPACE".into()));
+    }
+    let id:i64=sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,1,$3,$4,$5) RETURNING id").bind(u.0).bind(name).bind(i.size).bind(i.ram).bind(i.soft_type).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":id,"name":name,"version":1})))
+}
 // Port of the file list Internet::showPageInfo drew once you were inside a machine.
 async fn remote_software(
     s: web::Data<AppState>,
@@ -1409,22 +1518,23 @@ async fn start_research(
     u: CurrentUser,
     i: web::Json<ResearchStart>,
 ) -> Result<HttpResponse, ApiError> {
-    let mut tx = s.pool.begin().await?;
-    let software=sqlx::query("SELECT id,soft_name,soft_version,soft_type FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc FOR UPDATE").bind(i.software_id).bind(u.0).fetch_optional(&mut *tx).await?.ok_or(ApiError::NotFound)?;
-    let version = software.get::<i32, _>("soft_version") + 1;
-    let id:i64=sqlx::query_scalar("INSERT INTO research_history(user_id,software_id,software_type,new_version,software_name) VALUES($1,$2,$3,$4,$5) RETURNING id").bind(u.0).bind(i.software_id).bind(software.get::<i16,_>("soft_type")).bind(version).bind(software.get::<String,_>("soft_name")).fetch_one(&mut *tx).await?;
-    sqlx::query("UPDATE software SET soft_version=$1 WHERE id=$2")
-        .bind(version)
-        .bind(i.software_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("UPDATE users_stats SET money_research=money_research+1 WHERE uid=$1")
-        .bind(u.0)
-        .execute(&mut *tx)
-        .await?;
-    tx.commit().await?;
+    // Research was action 17 in the legacy, a process like any other. Raising a version
+    // instantly and for free made it the one upgrade path that cost nothing, which is why
+    // it now opens a process and the worker applies the new version when it lands.
+    let exists:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc)").bind(i.software_id).bind(u.0).fetch_one(&s.pool).await?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+    let dup:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=17 AND soft_id=$2 AND completed_at IS NULL)").bind(u.0).bind(i.software_id).fetch_one(&s.pool).await?;
+    if dup {
+        return Err(ApiError::BadRequest(
+            "identical process already active".into(),
+        ));
+    }
+    let seconds: i32 = 60;
+    let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal) VALUES($1,0,17,$2,'local','local',now()+($3::integer*interval '1 second'),$3) RETURNING pid").bind(u.0).bind(i.software_id).bind(seconds).fetch_one(&s.pool).await?;
     Ok(HttpResponse::Created()
-        .json(serde_json::json!({"id":id,"software_id":i.software_id,"version":version})))
+        .json(serde_json::json!({"process_id":pid,"software_id":i.software_id,"seconds":seconds})))
 }
 async fn bitcoin_wallets(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
     let wallets=sqlx::query("SELECT address,amount::text AS amount,created_at FROM bitcoin_wallets WHERE user_id=$1 ORDER BY created_at").bind(u.0).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"address":r.get::<String,_>("address"),"amount":r.get::<String,_>("amount"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>();

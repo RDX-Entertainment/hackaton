@@ -77,6 +77,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
+            17 => research_effect(pool, user, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
             _ => {}
@@ -512,5 +513,27 @@ async fn reset_password_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sql
         .await?;
     sqlx::query("UPDATE compromised_lists SET password='unknown',virus_id=0 WHERE ip=$1 AND password<>'exploited'")
         .bind(ip).execute(pool).await?;
+    Ok(())
+}
+
+/// Case 17 of completeProcess. Research is the upgrade path that does not need a victim:
+/// you improve what you already own rather than steal a better copy. Each run raises the
+/// version by one and leaves a row in research_history.
+async fn research_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_type FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc").bind(soft).bind(user).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let version: i32 = f.get::<i32, _>("soft_version") + 1;
+    sqlx::query("UPDATE software SET soft_version=$1 WHERE id=$2")
+        .bind(version)
+        .bind(soft)
+        .execute(pool)
+        .await?;
+    sqlx::query("INSERT INTO research_history(user_id,software_id,software_type,new_version,software_name) VALUES($1,$2,$3,$4,$5)")
+        .bind(user).bind(soft).bind(f.get::<i16,_>("soft_type")).bind(version).bind(f.get::<String,_>("soft_name")).execute(pool).await?;
     Ok(())
 }
