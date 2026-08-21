@@ -95,6 +95,10 @@ struct StartProcess {
     software_id: Option<i64>,
     info: Option<String>,
 }
+#[derive(Deserialize)]
+struct CertificationStart {
+    account: Option<i64>,
+}
 #[derive(Serialize)]
 struct Session {
     token: String,
@@ -197,6 +201,15 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/lists", web::get().to(compromised_lists))
             .route("/lists", web::post().to(add_compromised_list))
             .route("/lists/{id}", web::delete().to(delete_compromised_list))
+            .route("/certifications", web::get().to(certifications))
+            .route(
+                "/certifications/{level}/start",
+                web::post().to(start_certification),
+            )
+            .route(
+                "/certifications/{level}/complete",
+                web::post().to(complete_certification),
+            )
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -626,6 +639,131 @@ async fn accept_friend(
     .await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"friend_id":friend})))
+}
+fn certification(level: i16) -> Option<(&'static str, &'static str, i64)> {
+    match level {
+        1 => Some((
+            "Basic tutorial",
+            "Follow this tutorial to learn how to play",
+            0,
+        )),
+        2 => Some(("Hacking 101", "Learn the basics of hacking", 0)),
+        3 => Some((
+            "Intermediate hacking",
+            "Improve your hacking techniques",
+            50,
+        )),
+        4 => Some(("Advanced hacking", "Meet the wonders of DDoS world", 200)),
+        5 => Some(("DDoS security", "Learn to protect yourself from DDoS", 500)),
+        _ => None,
+    }
+}
+async fn certifications(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let level: i16 = sqlx::query_scalar("SELECT cert_level FROM certifications WHERE user_id=$1")
+        .bind(u.0)
+        .fetch_one(&s.pool)
+        .await?;
+    let learning: bool = sqlx::query_scalar("SELECT learning FROM users_learning WHERE user_id=$1")
+        .bind(u.0)
+        .fetch_one(&s.pool)
+        .await?;
+    let current: Option<i64> =
+        sqlx::query_scalar("SELECT puzzle_id FROM users_puzzle WHERE user_id=$1")
+            .bind(u.0)
+            .fetch_optional(&s.pool)
+            .await?;
+    let items=(1..=5).filter_map(|n|certification(n).map(|(name,description,price)|serde_json::json!({"level":n,"name":name,"description":description,"price":price,"completed":level>=n,"available":learning&&level==n-1,"learning":!learning&&current==Some(n as i64)}))).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(serde_json::json!({"level":level,"items":items})))
+}
+async fn start_certification(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    level: web::Path<i16>,
+    i: web::Json<CertificationStart>,
+) -> Result<HttpResponse, ApiError> {
+    let (_, _, price) = certification(*level)
+        .ok_or_else(|| ApiError::BadRequest("invalid certification".into()))?;
+    let mut tx = s.pool.begin().await?;
+    let current: i16 =
+        sqlx::query_scalar("SELECT cert_level FROM certifications WHERE user_id=$1 FOR UPDATE")
+            .bind(u.0)
+            .fetch_one(&mut *tx)
+            .await?;
+    let learning: bool =
+        sqlx::query_scalar("SELECT learning FROM users_learning WHERE user_id=$1 FOR UPDATE")
+            .bind(u.0)
+            .fetch_one(&mut *tx)
+            .await?;
+    if current != *level - 1 || !learning {
+        return Err(ApiError::BadRequest(
+            "certification is not available".into(),
+        ));
+    }
+    if price > 0 {
+        let account = i
+            .account
+            .ok_or_else(|| ApiError::BadRequest("bank account required".into()))?;
+        let cash: Option<i64> = sqlx::query_scalar(
+            "SELECT cash FROM bank_accounts WHERE bank_acc=$1 AND bank_user=$2 FOR UPDATE",
+        )
+        .bind(account)
+        .bind(u.0)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if cash.unwrap_or(0) < price {
+            return Err(ApiError::BadRequest("insufficient funds".into()));
+        }
+        sqlx::query("UPDATE bank_accounts SET cash=cash-$1 WHERE bank_acc=$2 AND bank_user=$3")
+            .bind(price)
+            .bind(account)
+            .bind(u.0)
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query("UPDATE users_learning SET learning=false WHERE user_id=$1")
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE users_puzzle SET puzzle_id=$1 WHERE user_id=$2")
+        .bind(*level as i64)
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"level":*level,"started":true})))
+}
+async fn complete_certification(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    level: web::Path<i16>,
+) -> Result<HttpResponse, ApiError> {
+    certification(*level).ok_or_else(|| ApiError::BadRequest("invalid certification".into()))?;
+    let mut tx = s.pool.begin().await?;
+    let active: Option<i64> =
+        sqlx::query_scalar("SELECT puzzle_id FROM users_puzzle WHERE user_id=$1 FOR UPDATE")
+            .bind(u.0)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if active != Some(*level as i64) {
+        return Err(ApiError::BadRequest(
+            "certification is not being learned".into(),
+        ));
+    }
+    sqlx::query("UPDATE certifications SET cert_level=$1 WHERE user_id=$2")
+        .bind(*level)
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE users_learning SET learning=true WHERE user_id=$1")
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE users_puzzle SET puzzle_id=0 WHERE user_id=$1")
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"level":*level,"completed":true})))
 }
 async fn profile(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
     let r=sqlx::query("SELECT u.id,u.login,u.game_ip,p.biography,p.visible,COALESCE(c.reputation,0) AS reputation,COALESCE(rk.rank,-1) AS rank,st.mission_count,st.hack_count,st.money_earned FROM users u JOIN player_profiles p ON p.user_id=u.id LEFT JOIN cache c ON c.user_id=u.id LEFT JOIN ranking_user rk ON rk.user_id=u.id LEFT JOIN users_stats st ON st.uid=u.id WHERE u.id=$1").bind(u.0).fetch_one(&s.pool).await?;
