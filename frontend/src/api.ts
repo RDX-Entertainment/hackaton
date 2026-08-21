@@ -11,6 +11,7 @@ export const financeApi = { openAccount:(bank_id:number,password:string)=>reques
 export const researchApi = { start:(software_id:number)=>request<{id:number;version:number}>('/research',{method:'POST',body:JSON.stringify({software_id})}) };
 export const gameApi = { processActions:()=>request<{id:number;name:string}[]>('/game/process-actions') };
 export const clanApi = { all:()=>request<{id:number;name:string;nick:string;members:number;slots:number;description:string}[]>('/clans'), join:(id:number,message:string)=>request<{id:number}>(`/clans/${id}/join`,{method:'POST',body:JSON.stringify({message})}) };
+export const missionsApi = { list:()=>request<Record<string,unknown>[]>('/missions'), command:(id:number,action:'accept'|'abort')=>request(`/missions/${id}`,{method:'POST',body:JSON.stringify({action})}) };
 export type Dashboard = { user: User; money: number; processes: number; unread_mail: number };
 export type Page = { page: string; user_id: number; status: string };
 export type WikiSummary = { slug:string; title:string; updated_at:string };
