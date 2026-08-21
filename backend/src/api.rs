@@ -101,6 +101,21 @@ struct StartProcess {
     info: Option<String>,
 }
 #[derive(Deserialize)]
+struct InternetLogin {
+    ip: i64,
+    user: String,
+    password: String,
+}
+#[derive(Deserialize)]
+struct InternetHack {
+    ip: i64,
+    kind: String,
+}
+#[derive(Deserialize)]
+struct IpBody {
+    ip: i64,
+}
+#[derive(Deserialize)]
 struct CertificationStart {
     account: Option<i64>,
 }
@@ -236,6 +251,13 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/settings", web::put().to(save_settings))
             .route("/news", web::get().to(news))
             .route("/internet/targets", web::get().to(internet_targets))
+            .route("/internet/history", web::get().to(internet_history))
+            .route("/internet/bookmarks", web::get().to(internet_bookmarks))
+            .route("/internet/bookmarks", web::post().to(add_bookmark))
+            .route("/internet/bookmarks/{ip}", web::delete().to(remove_bookmark))
+            .route("/internet/login", web::post().to(internet_login))
+            .route("/internet/hack", web::post().to(internet_hack))
+            .route("/internet/{ip}", web::get().to(internet_navigate))
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -754,6 +776,179 @@ async fn internet_targets(
 ) -> Result<HttpResponse, ApiError> {
     let rows=sqlx::query("SELECT n.id,n.npc_ip,n.npc_type,n.down_until,i.name,i.web FROM npc n LEFT JOIN npc_info i ON i.npc_id=n.id WHERE n.down_until<=now() ORDER BY n.npc_type,n.npc_ip LIMIT 200").fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"ip":r.get::<i64,_>("npc_ip"),"type":r.get::<i16,_>("npc_type"),"name":r.get::<Option<String>,_>("name"),"web":r.get::<Option<String>,_>("web")})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(rows))
+}
+// ---- Internet: port of classes/Internet.class.php ----
+// The legacy resolved an IP by looking at npc first and only then at users
+// (Player::getIDByIP). That order is what decides whether a target is an NPC or a player,
+// so it is kept: an NPC IP wins over a player holding the same one.
+struct Remote {
+    is_npc: bool,
+    id: i64,
+    name: String,
+    npc_type: i16,
+    down: bool,
+}
+async fn resolve_ip(s: &AppState, ip: i64) -> Result<Remote, ApiError> {
+    if let Some(r)=sqlx::query("SELECT n.id,n.npc_type,n.down_until>now() AS down,COALESCE(i.name,'') AS name FROM npc n LEFT JOIN npc_info i ON i.npc_id=n.id WHERE n.npc_ip=$1").bind(ip).fetch_optional(&s.pool).await? {
+        return Ok(Remote {
+            is_npc: true,
+            id: r.get("id"),
+            name: r.get("name"),
+            npc_type: r.get("npc_type"),
+            down: r.get("down"),
+        });
+    }
+    let r = sqlx::query("SELECT id,login FROM users WHERE game_ip=$1")
+        .bind(ip)
+        .fetch_optional(&s.pool)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    Ok(Remote {
+        is_npc: false,
+        id: r.get("id"),
+        name: r.get("login"),
+        npc_type: 0,
+        down: false,
+    })
+}
+// Port of Internet::navigate. Returns what the legacy painted in showPageInfo and the
+// sidebar: who sits on that IP, whether it is down, whether access is already granted and
+// whether it is bookmarked.
+async fn internet_navigate(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    ip: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let ip = ip.into_inner();
+    let t = resolve_ip(&s, ip).await?;
+    // history_add kept five IPs in the 'ip-data' cookie, moving a revisited one to the end.
+    sqlx::query("INSERT INTO internet_history(user_id,ip) VALUES($1,$2) ON CONFLICT(user_id,ip) DO UPDATE SET visited_at=now()").bind(u.0).bind(ip).execute(&s.pool).await?;
+    let access:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_access WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
+    let bookmarked:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_important WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"ip":ip,"kind":if t.is_npc {"npc"} else {"player"},"id":t.id,"name":t.name,"type":t.npc_type,"down":t.down,"access":access,"bookmarked":bookmarked})))
+}
+// Port of Internet::verifyLogin, the 'root' branch. The legacy 'download' and 'clan' users
+// depend on type 8 and type 10 NPCs, which are not ported yet.
+async fn internet_login(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<InternetLogin>,
+) -> Result<HttpResponse, ApiError> {
+    if i.user.trim() != "root" {
+        return Err(ApiError::BadRequest("UNKNOWN_USER".into()));
+    }
+    let t = resolve_ip(&s, i.ip).await?;
+    if t.down {
+        return Err(ApiError::BadRequest("SERVER_DOWN".into()));
+    }
+    let expected: String = if t.is_npc {
+        sqlx::query_scalar("SELECT npc_pass FROM npc WHERE id=$1")
+            .bind(t.id)
+            .fetch_one(&s.pool)
+            .await?
+    } else {
+        sqlx::query_scalar("SELECT game_pass FROM users WHERE id=$1")
+            .bind(t.id)
+            .fetch_one(&s.pool)
+            .await?
+    };
+    if i.password != expected {
+        return Err(ApiError::BadRequest("BAD_PASSWORD".into()));
+    }
+    sqlx::query("INSERT INTO internet_access(user_id,ip,via_exploit) VALUES($1,$2,false) ON CONFLICT(user_id,ip) DO UPDATE SET granted_at=now()").bind(u.0).bind(i.ip).execute(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"access":true,"name":t.name})))
+}
+// Port of both branches of Internet::hack. 'bf' pits the attacker cracker against the
+// victim hasher and demands certification 2; 'scan' pits the port scanner against the
+// firewall and demands 3. When the attacker version falls short the legacy bailed out with
+// BAD_CRACKER.
+async fn internet_hack(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<InternetHack>,
+) -> Result<HttpResponse, ApiError> {
+    let (mine, theirs, needed, action): (i16, i16, i16, i16) = match i.kind.as_str() {
+        "bf" => (1, 2, 2, 11),
+        "scan" => (3, 4, 3, 15),
+        _ => return Err(ApiError::BadRequest("unsupported hack type".into())),
+    };
+    let level:i16=sqlx::query_scalar("SELECT cert_level FROM certifications WHERE user_id=$1").bind(u.0).fetch_optional(&s.pool).await?.unwrap_or(0);
+    if level < needed {
+        return Err(ApiError::BadRequest("NO_CERTIFICATION".into()));
+    }
+    let t = resolve_ip(&s, i.ip).await?;
+    if t.down {
+        return Err(ApiError::BadRequest("SERVER_DOWN".into()));
+    }
+    let attacker:Option<i32>=sqlx::query_scalar("SELECT max(soft_version) FROM software WHERE user_id=$1 AND soft_type=$2 AND NOT soft_hidden AND NOT is_npc").bind(u.0).bind(mine).fetch_one(&s.pool).await?;
+    let Some(attacker) = attacker else {
+        return Err(ApiError::BadRequest("NO_SOFT".into()));
+    };
+    // getBestSoftware read software with isNPC=1 for NPCs. Here theirs lives in
+    // software_original: software references users(id) and an NPC is not a user.
+    let defender: i32 = if t.is_npc {
+        sqlx::query_scalar("SELECT COALESCE(max(soft_version),0) FROM software_original WHERE npc_id=$1 AND soft_type=$2").bind(t.id).bind(theirs).fetch_one(&s.pool).await?
+    } else {
+        sqlx::query_scalar("SELECT COALESCE(max(soft_version),0) FROM software WHERE user_id=$1 AND soft_type=$2 AND NOT soft_hidden AND NOT is_npc").bind(t.id).bind(theirs).fetch_one(&s.pool).await?
+    };
+    if attacker < defender {
+        return Err(ApiError::BadRequest("BAD_CRACKER".into()));
+    }
+    let seconds: i32 = 60;
+    let dup:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=$2 AND victim_id=$3 AND completed_at IS NULL)").bind(u.0).bind(action).bind(t.id).fetch_one(&s.pool).await?;
+    if dup {
+        return Err(ApiError::BadRequest("identical process already active".into()));
+    }
+    let info = if t.is_npc { "npc" } else { "player" };
+    let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,info,info_str,time_end,time_ideal) VALUES($1,$2,$3,$4,$4,now()+($5::integer*interval '1 second'),$5) RETURNING pid").bind(u.0).bind(t.id).bind(action).bind(info).bind(seconds).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"action":action,"seconds":seconds,"attacker_version":attacker,"defender_version":defender})))
+}
+// Port of important_show. The legacy joined npc_info to give every bookmark a name.
+async fn internet_bookmarks(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+) -> Result<HttpResponse, ApiError> {
+    let v=sqlx::query("SELECT b.ip,COALESCE(i.name,us.login,'') AS name FROM internet_important b LEFT JOIN npc n ON n.npc_ip=b.ip LEFT JOIN npc_info i ON i.npc_id=n.id LEFT JOIN users us ON us.game_ip=b.ip WHERE b.user_id=$1 ORDER BY b.id").bind(u.0).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"ip":r.get::<i64,_>("ip"),"name":r.get::<String,_>("name")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
+}
+async fn add_bookmark(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<IpBody>,
+) -> Result<HttpResponse, ApiError> {
+    resolve_ip(&s, i.ip).await?;
+    sqlx::query("INSERT INTO internet_important(user_id,ip) VALUES($1,$2) ON CONFLICT DO NOTHING")
+        .bind(u.0)
+        .bind(i.ip)
+        .execute(&s.pool)
+        .await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"ip":i.ip})))
+}
+async fn remove_bookmark(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    ip: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    if sqlx::query("DELETE FROM internet_important WHERE user_id=$1 AND ip=$2")
+        .bind(u.0)
+        .bind(*ip)
+        .execute(&s.pool)
+        .await?
+        .rows_affected()
+        == 0
+    {
+        return Err(ApiError::NotFound);
+    }
+    Ok(HttpResponse::NoContent().finish())
+}
+// Port of history_show. The legacy kept five entries in a cookie; the trimming happens on
+// read so the full history survives in the database.
+async fn internet_history(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+) -> Result<HttpResponse, ApiError> {
+    let v=sqlx::query("SELECT h.ip,h.visited_at,COALESCE(i.name,us.login,'') AS name FROM internet_history h LEFT JOIN npc n ON n.npc_ip=h.ip LEFT JOIN npc_info i ON i.npc_id=n.id LEFT JOIN users us ON us.game_ip=h.ip WHERE h.user_id=$1 ORDER BY h.visited_at DESC LIMIT 5").bind(u.0).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"ip":r.get::<i64,_>("ip"),"name":r.get::<String,_>("name"),"visited_at":r.get::<chrono::DateTime<chrono::Utc>,_>("visited_at")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
 async fn server_stats(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
     let payload: Option<serde_json::Value> =
