@@ -220,6 +220,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/stats", web::get().to(server_stats))
             .route("/settings", web::get().to(settings))
             .route("/settings", web::put().to(save_settings))
+            .route("/news", web::get().to(news))
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -658,6 +659,10 @@ async fn player_log(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpRespon
         .into_iter()
         .map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"text":r.get::<String,_>("text")}))
         .collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(rows))
+}
+async fn news(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let rows=sqlx::query("SELECT id,author,title,content,published_at,type,info1,info2 FROM news ORDER BY published_at DESC LIMIT 50").fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"author":r.get::<String,_>("author"),"title":r.get::<String,_>("title"),"content":r.get::<String,_>("content"),"published_at":r.get::<chrono::DateTime<chrono::Utc>,_>("published_at"),"type":r.get::<i16,_>("type")})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(rows))
 }
 async fn server_stats(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
