@@ -221,6 +221,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/settings", web::get().to(settings))
             .route("/settings", web::put().to(save_settings))
             .route("/news", web::get().to(news))
+            .route("/internet/targets", web::get().to(internet_targets))
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -531,7 +532,7 @@ async fn delete_mail(
     Ok(HttpResponse::NoContent().finish())
 }
 async fn missions(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let v=rows(&s,u.0,"SELECT id,type,status,hirer,victim,info,info2,prize,level FROM missions WHERE user_id=$1 ORDER BY date_generated DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"type":r.get::<i16,_>("type"),"status":r.get::<i16,_>("status"),"hirer":r.get::<i64,_>("hirer"),"victim":r.get::<i64,_>("victim"),"info":r.get::<i64,_>("info"),"info2":r.get::<i64,_>("info2"),"prize":r.get::<i64,_>("prize"),"level":r.get::<i16,_>("level")})).collect::<Vec<_>>();
+    let v=rows(&s,u.0,"SELECT id,type,status,hirer,victim,info,info2,prize,level FROM missions WHERE user_id=$1 OR status=1 ORDER BY date_generated DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"type":r.get::<i16,_>("type"),"status":r.get::<i16,_>("status"),"hirer":r.get::<i64,_>("hirer"),"victim":r.get::<i64,_>("victim"),"info":r.get::<i64,_>("info"),"info2":r.get::<i64,_>("info2"),"prize":r.get::<i64,_>("prize"),"level":r.get::<i16,_>("level")})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(v))
 }
 async fn mission_command(
@@ -663,6 +664,13 @@ async fn player_log(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpRespon
 }
 async fn news(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
     let rows=sqlx::query("SELECT id,author,title,content,published_at,type,info1,info2 FROM news ORDER BY published_at DESC LIMIT 50").fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"author":r.get::<String,_>("author"),"title":r.get::<String,_>("title"),"content":r.get::<String,_>("content"),"published_at":r.get::<chrono::DateTime<chrono::Utc>,_>("published_at"),"type":r.get::<i16,_>("type")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(rows))
+}
+async fn internet_targets(
+    s: web::Data<AppState>,
+    _: CurrentUser,
+) -> Result<HttpResponse, ApiError> {
+    let rows=sqlx::query("SELECT n.id,n.npc_ip,n.npc_type,n.down_until,i.name,i.web FROM npc n LEFT JOIN npc_info i ON i.npc_id=n.id WHERE n.down_until<=now() ORDER BY n.npc_type,n.npc_ip LIMIT 200").fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"ip":r.get::<i64,_>("npc_ip"),"type":r.get::<i16,_>("npc_type"),"name":r.get::<Option<String>,_>("name"),"web":r.get::<Option<String>,_>("web")})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(rows))
 }
 async fn server_stats(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {

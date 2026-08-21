@@ -26,6 +26,11 @@ async fn tick(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
     // Completion marker for the legacy Process::completeProcess polling flow.
     sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now() WHERE completed_at IS NULL AND NOT is_paused AND time_end<=now()")
         .execute(pool).await?;
+    // Port of cron/generateMissions.php: replenish the public board from NPCs.
+    for (level, desired) in [(1_i16, 50_i64), (2, 30), (3, 25)] {
+        sqlx::query("WITH available AS (SELECT COUNT(*) AS total FROM missions WHERE status=1 AND level=$1), candidates AS (SELECT h.npc_ip AS hirer,v.npc_ip AS victim FROM npc h JOIN npc v ON h.id<>v.id WHERE h.npc_type=70+$1 AND v.npc_type=70+$1 AND h.down_until<=now() AND v.down_until<=now() LIMIT (SELECT GREATEST(0,$2-total) FROM available)) INSERT INTO missions(type,status,hirer,victim,prize,level) SELECT 1,1,hirer,victim,(150*$1)::bigint,$1 FROM candidates")
+            .bind(level).bind(desired).execute(pool).await?;
+    }
     // Port of cron/updatePremium.php.
     sqlx::query("UPDATE users SET premium=false WHERE id IN (SELECT user_id FROM users_premium WHERE premium_until < now())")
         .execute(pool).await?;
