@@ -35,6 +35,11 @@ struct BankTransfer {
     amount: i64,
 }
 #[derive(Deserialize)]
+struct CreateBankAccount {
+    bank_id: i64,
+    password: String,
+}
+#[derive(Deserialize)]
 struct MissionCommand {
     action: String,
 }
@@ -170,6 +175,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/missions", web::get().to(missions))
             .route("/missions/{id}", web::post().to(mission_command))
             .route("/finances/accounts", web::get().to(bank_accounts))
+            .route("/finances/accounts", web::post().to(create_bank_account))
             .route("/finances/transfers", web::post().to(bank_transfer))
             .route("/ranking/users", web::get().to(ranking))
             .route("/friends", web::get().to(friends))
@@ -567,6 +573,43 @@ async fn mission_command(
 async fn bank_accounts(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
     let v=rows(&s,u.0,"SELECT id,bank_acc,bank_id,cash FROM bank_accounts WHERE bank_user=$1 ORDER BY date_created DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"account":r.get::<i64,_>("bank_acc"),"bank_id":r.get::<i64,_>("bank_id"),"cash":r.get::<i64,_>("cash")})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(v))
+}
+async fn create_bank_account(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<CreateBankAccount>,
+) -> Result<HttpResponse, ApiError> {
+    if !(1..=9999).contains(&i.bank_id)
+        || i.password.len() != 6
+        || !i.password.bytes().all(|b| b.is_ascii_alphanumeric())
+    {
+        return Err(ApiError::BadRequest("invalid bank account data".into()));
+    }
+    let existing: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM bank_accounts WHERE bank_user=$1 AND bank_id=$2")
+            .bind(u.0)
+            .bind(i.bank_id)
+            .fetch_one(&s.pool)
+            .await?;
+    if existing > 0 {
+        return Err(ApiError::BadRequest(
+            "account already exists for this bank".into(),
+        ));
+    }
+    for _ in 0..5 {
+        let account = rand::rng().random_range(111_111_111_i64..=999_999_999);
+        let result=sqlx::query("INSERT INTO bank_accounts(bank_acc,bank_pass,bank_id,bank_user) VALUES($1,$2,$3,$4) ON CONFLICT(bank_acc) DO NOTHING").bind(account).bind(&i.password).bind(i.bank_id).bind(u.0).execute(&s.pool).await?;
+        if result.rows_affected() == 1 {
+            sqlx::query("INSERT INTO log(user_id,text) VALUES($1,$2)")
+                .bind(u.0)
+                .bind(format!("Bank account {account} opened"))
+                .execute(&s.pool)
+                .await?;
+            return Ok(HttpResponse::Created()
+                .json(serde_json::json!({"account":account,"bank_id":i.bank_id,"cash":0})));
+        }
+    }
+    Err(ApiError::Internal(sqlx::Error::RowNotFound))
 }
 async fn bank_transfer(
     s: web::Data<AppState>,
