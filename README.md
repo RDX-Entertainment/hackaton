@@ -5,6 +5,7 @@ El proyecto está separado deliberadamente en dos aplicaciones:
 - `backend/`: API JSON de Rust con Actix Web y PostgreSQL.
 - `frontend/`: SPA React con Redux Toolkit y rutas que sustituyen las páginas del juego.
 - `backend/schema/legacy.sql`: esquema MySQL original, preservado como referencia de migración.
+- `backend/migrations/0002_wiki_forum.sql`: wiki y foro propios que sustituyen las instalaciones heredadas de DokuWiki y phpBB.
 
 ## Ejecutar con Distrobox
 

@@ -42,6 +42,20 @@ struct MissionCommand {
 struct FriendRequest {
     user_id: i64,
 }
+#[derive(Deserialize)]
+struct WikiEdit {
+    title: String,
+    content: String,
+}
+#[derive(Deserialize)]
+struct ForumTopic {
+    title: String,
+    content: String,
+}
+#[derive(Deserialize)]
+struct ForumPost {
+    content: String,
+}
 #[derive(Serialize)]
 struct Session {
     token: String,
@@ -111,6 +125,17 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route(
                 "/friends/requests/{id}/accept",
                 web::post().to(accept_friend),
+            )
+            .route("/wiki", web::get().to(wiki_index))
+            .route("/wiki/{slug}", web::get().to(wiki_page))
+            .route("/wiki/{slug}", web::put().to(save_wiki_page))
+            .route("/wiki/{slug}/revisions", web::get().to(wiki_revisions))
+            .route("/forum/topics", web::get().to(forum_topics))
+            .route("/forum/topics", web::post().to(create_forum_topic))
+            .route("/forum/topics/{id}", web::get().to(forum_topic))
+            .route(
+                "/forum/topics/{id}/posts",
+                web::post().to(create_forum_post),
             )
             .route("/pages/{page}", web::get().to(page_data)),
     );
@@ -466,6 +491,132 @@ async fn accept_friend(
     .await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"friend_id":friend})))
+}
+async fn wiki_index(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let pages = sqlx::query("SELECT slug,title,updated_at FROM wiki_pages ORDER BY title")
+        .fetch_all(&s.pool).await?
+        .into_iter().map(|r| serde_json::json!({"slug":r.get::<String,_>("slug"),"title":r.get::<String,_>("title"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(pages))
+}
+async fn wiki_page(
+    s: web::Data<AppState>,
+    _: CurrentUser,
+    slug: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let r = sqlx::query("SELECT p.slug,p.title,p.content,p.created_at,p.updated_at,u.login AS author FROM wiki_pages p LEFT JOIN users u ON u.id=p.author_id WHERE p.slug=$1")
+        .bind(slug.as_str()).fetch_optional(&s.pool).await?.ok_or(ApiError::NotFound)?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"slug":r.get::<String,_>("slug"),"title":r.get::<String,_>("title"),"content":r.get::<String,_>("content"),"author":r.get::<Option<String>,_>("author"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})))
+}
+async fn save_wiki_page(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    slug: web::Path<String>,
+    input: web::Json<WikiEdit>,
+) -> Result<HttpResponse, ApiError> {
+    let slug = slug.into_inner();
+    let title = input.title.trim();
+    let content = input.content.trim();
+    if !valid_slug(&slug) || title.is_empty() || title.len() > 160 || content.is_empty() {
+        return Err(ApiError::BadRequest("invalid wiki page".into()));
+    }
+    let mut tx = s.pool.begin().await?;
+    let id: i64 = sqlx::query_scalar("INSERT INTO wiki_pages(slug,title,content,author_id) VALUES($1,$2,$3,$4) ON CONFLICT(slug) DO UPDATE SET title=EXCLUDED.title,content=EXCLUDED.content,author_id=EXCLUDED.author_id,updated_at=now() RETURNING id").bind(&slug).bind(title).bind(content).bind(u.0).fetch_one(&mut *tx).await?;
+    sqlx::query("INSERT INTO wiki_revisions(page_id,author_id,title,content) VALUES($1,$2,$3,$4)")
+        .bind(id)
+        .bind(u.0)
+        .bind(title)
+        .bind(content)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"slug":slug,"id":id})))
+}
+async fn wiki_revisions(
+    s: web::Data<AppState>,
+    _: CurrentUser,
+    slug: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let revisions=sqlx::query("SELECT r.id,r.title,r.created_at,u.login AS author FROM wiki_revisions r JOIN wiki_pages p ON p.id=r.page_id LEFT JOIN users u ON u.id=r.author_id WHERE p.slug=$1 ORDER BY r.created_at DESC").bind(slug.as_str()).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"title":r.get::<String,_>("title"),"author":r.get::<Option<String>,_>("author"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(revisions))
+}
+async fn forum_topics(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let topics=sqlx::query("SELECT t.id,t.title,t.created_at,t.updated_at,u.login AS author,COUNT(p.id) AS posts FROM forum_topics t JOIN users u ON u.id=t.author_id LEFT JOIN forum_posts p ON p.topic_id=t.id GROUP BY t.id,u.login ORDER BY t.updated_at DESC").fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"title":r.get::<String,_>("title"),"author":r.get::<String,_>("author"),"posts":r.get::<i64,_>("posts"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(topics))
+}
+async fn create_forum_topic(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    input: web::Json<ForumTopic>,
+) -> Result<HttpResponse, ApiError> {
+    let title = input.title.trim();
+    let content = input.content.trim();
+    if title.is_empty() || title.len() > 120 || content.is_empty() {
+        return Err(ApiError::BadRequest("invalid forum topic".into()));
+    }
+    let mut tx = s.pool.begin().await?;
+    let id: i64 =
+        sqlx::query_scalar("INSERT INTO forum_topics(title,author_id) VALUES($1,$2) RETURNING id")
+            .bind(title)
+            .bind(u.0)
+            .fetch_one(&mut *tx)
+            .await?;
+    sqlx::query("INSERT INTO forum_posts(topic_id,author_id,content) VALUES($1,$2,$3)")
+        .bind(id)
+        .bind(u.0)
+        .bind(content)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":id})))
+}
+async fn forum_topic(
+    s: web::Data<AppState>,
+    _: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let topic=sqlx::query("SELECT t.id,t.title,u.login AS author,t.created_at FROM forum_topics t JOIN users u ON u.id=t.author_id WHERE t.id=$1").bind(*id).fetch_optional(&s.pool).await?.ok_or(ApiError::NotFound)?;
+    let posts=sqlx::query("SELECT p.id,p.content,p.created_at,u.login AS author FROM forum_posts p JOIN users u ON u.id=p.author_id WHERE p.topic_id=$1 ORDER BY p.created_at").bind(*id).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"content":r.get::<String,_>("content"),"author":r.get::<String,_>("author"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":topic.get::<i64,_>("id"),"title":topic.get::<String,_>("title"),"author":topic.get::<String,_>("author"),"created_at":topic.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"posts":posts})))
+}
+async fn create_forum_post(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    id: web::Path<i64>,
+    input: web::Json<ForumPost>,
+) -> Result<HttpResponse, ApiError> {
+    let content = input.content.trim();
+    if content.is_empty() {
+        return Err(ApiError::BadRequest("empty forum post".into()));
+    }
+    let mut tx = s.pool.begin().await?;
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM forum_topics WHERE id=$1)")
+        .bind(*id)
+        .fetch_one(&mut *tx)
+        .await?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+    let post: i64 = sqlx::query_scalar(
+        "INSERT INTO forum_posts(topic_id,author_id,content) VALUES($1,$2,$3) RETURNING id",
+    )
+    .bind(*id)
+    .bind(u.0)
+    .bind(content)
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE forum_topics SET updated_at=now() WHERE id=$1")
+        .bind(*id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":post})))
+}
+fn valid_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 120
+        && slug
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'_' | b'-'))
 }
 async fn page_data(
     _: web::Data<AppState>,
