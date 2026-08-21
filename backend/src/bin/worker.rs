@@ -29,6 +29,11 @@ async fn tick(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         sqlx::query("WITH available AS (SELECT COUNT(*) AS total FROM missions WHERE status=1 AND level=$1), candidates AS (SELECT h.npc_ip AS hirer,v.npc_ip AS victim FROM npc h JOIN npc v ON h.id<>v.id WHERE h.npc_type=70+$1 AND v.npc_type=70+$1 AND h.down_until<=now() AND v.down_until<=now() LIMIT (SELECT GREATEST(0,$2-total) FROM available)) INSERT INTO missions(type,status,hirer,victim,prize,level) SELECT 1,1,hirer,victim,(150*$1)::bigint,$1 FROM candidates")
             .bind(level).bind(desired).execute(pool).await?;
     }
+    // Port of cron/restoreSoftware.php: put back any original software an NPC has lost.
+    // Without this a machine stripped by a DELETE stays stripped for good, and the world
+    // wears down to nothing worth breaking into.
+    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc) SELECT o.npc_id,o.soft_name,o.soft_version,o.soft_size,o.soft_ram,o.soft_type,TRUE FROM software_original o WHERE NOT EXISTS(SELECT 1 FROM software s WHERE s.user_id=o.npc_id AND s.is_npc AND s.soft_name=o.soft_name AND s.soft_version=o.soft_version)")
+        .execute(pool).await?;
     // Port of cron/updatePremium.php.
     sqlx::query("UPDATE users SET premium=false WHERE id IN (SELECT user_id FROM users_premium WHERE premium_until < now())")
         .execute(pool).await?;
