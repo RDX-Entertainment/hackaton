@@ -190,6 +190,9 @@ fn dotted(ip: i64) -> String {
 
 /// Case 8 of completeProcess. The replacement text waited in log_edit while the process
 /// ran; finishing it is what actually overwrites the victim's log.
+///
+/// There is no case 9: wiping a log is this same case with an empty text, which is why
+/// D_LOG needs nothing of its own.
 async fn edit_log_effect(
     pool: &sqlx::PgPool,
     pid: i64,
@@ -203,6 +206,12 @@ async fn edit_log_effect(
         .bind(victim)
         .bind(is_npc)
         .bind(text)
+        .execute(pool)
+        .await?;
+    // deleteTmpLog: the pending text has been spent, and leaving it behind would pile up
+    // a row per edit forever.
+    sqlx::query("DELETE FROM log_edit WHERE process_id=$1")
+        .bind(pid)
         .execute(pool)
         .await?;
     Ok(())
