@@ -77,6 +77,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
+            16 => exploit_effect(pool, user, victim, is_npc).await?,
             17 => research_effect(pool, user, soft).await?,
             23 => analyze_effect(pool, user, victim, is_npc, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
@@ -582,5 +583,73 @@ async fn analyze_effect(
     let ram_max = (ram + span_ram - span_ram / jitter).round() as i32;
     sqlx::query("INSERT INTO analyze_results(user_id,ip,cpu_min,cpu_max,ram_min,ram_max) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(user_id,ip) DO UPDATE SET cpu_min=EXCLUDED.cpu_min,cpu_max=EXCLUDED.cpu_max,ram_min=EXCLUDED.ram_min,ram_max=EXCLUDED.ram_max,analyzed_at=now()")
         .bind(user).bind(ip).bind(cpu_min).bind(cpu_max).bind(ram_min).bind(ram_max).execute(pool).await?;
+    Ok(())
+}
+
+/// Best version of a software type a machine has loaded, which is what getBestSoftware
+/// asked for whenever it passed installed = 1.
+async fn best_running(
+    pool: &sqlx::PgPool,
+    owner: i64,
+    is_npc: bool,
+    soft_type: i16,
+) -> Result<i32, sqlx::Error> {
+    sqlx::query_scalar("SELECT COALESCE(max(s.soft_version),0) FROM software s JOIN software_running r ON r.soft_id=s.id WHERE s.user_id=$1 AND s.is_npc=$2 AND s.soft_type=$3 AND NOT s.soft_hidden")
+        .bind(owner).bind(is_npc).bind(soft_type).fetch_one(pool).await
+}
+
+/// Case 16 of completeProcess, the other way in. Rather than guessing the password you go
+/// through a service, so an FTP or SSH exploit is measured against the victim's firewall
+/// instead of their hasher.
+///
+/// Which exploits land decides who you become: ftp alone, ssh alone, or root with both.
+/// The credential is filed as 'exploited' rather than a password, and that is exactly why
+/// reset_password_effect leaves those rows alone -- there was never a password to change,
+/// so changing one takes nothing away.
+async fn exploit_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+) -> Result<(), sqlx::Error> {
+    let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
+        return Ok(());
+    };
+    let firewall = best_running(pool, victim, victim_is_npc, 4).await?;
+    let ftp = best_running(pool, user, false, 13).await?;
+    let ssh = best_running(pool, user, false, 14).await?;
+    let login = match (ftp > 0 && ftp >= firewall, ssh > 0 && ssh >= firewall) {
+        (true, true) => "root",
+        (true, false) => "ftp",
+        (false, true) => "ssh",
+        // Neither exploit clears the firewall, so nothing opens.
+        (false, false) => return Ok(()),
+    };
+    // ALREADY_LISTED: the legacy refused when the machine was already held under a real
+    // password, and refused a repeat exploit that would not improve on the user it granted.
+    let held:Option<String>=sqlx::query_scalar("SELECT password FROM compromised_lists WHERE user_id=$1 AND ip=$2").bind(user).bind(ip).fetch_optional(pool).await?;
+    match held.as_deref() {
+        Some("exploited") => {
+            sqlx::query("UPDATE compromised_lists SET login=$3,hacked_at=now() WHERE user_id=$1 AND ip=$2")
+                .bind(user).bind(ip).bind(login).execute(pool).await?;
+        }
+        Some(_) => return Ok(()),
+        None => {
+            sqlx::query("INSERT INTO compromised_lists(user_id,ip,login,password) VALUES($1,$2,$3,'exploited')")
+                .bind(user).bind(ip).bind(login).execute(pool).await?;
+        }
+    }
+    sqlx::query("INSERT INTO internet_access(user_id,ip,via_exploit) VALUES($1,$2,true) ON CONFLICT(user_id,ip) DO UPDATE SET via_exploit=true,granted_at=now()")
+        .bind(user).bind(ip).execute(pool).await?;
+    let cracker = best_running(pool, victim, victim_is_npc, 1).await?;
+    sqlx::query("UPDATE users_stats SET exp=exp+$2,hack_count=hack_count+1 WHERE uid=$1")
+        .bind(user)
+        .bind((firewall + cracker) as i64)
+        .execute(pool)
+        .await?;
+    if let Some(attacker_ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_optional(pool).await? {
+        add_log(pool, victim, victim_is_npc, &format!("[{}] logged in as {login}", dotted(attacker_ip))).await?;
+        add_log(pool, user, false, &format!("localhost logged in to [{}] as {login}", dotted(ip))).await?;
+    }
     Ok(())
 }
