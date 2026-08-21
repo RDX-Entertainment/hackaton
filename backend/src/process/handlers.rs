@@ -1,0 +1,176 @@
+use actix_web::{
+    web,
+    HttpResponse,
+};
+
+use crate::{
+    auth::CurrentUser,
+    error::ApiError,
+    state::AppState,
+};
+
+use super::{
+    dtos::StartProcessRequest,
+    services,
+};
+
+//
+// ==============================
+// ROUTES
+// ==============================
+//
+
+pub fn configure(
+    cfg: &mut web::ServiceConfig,
+) {
+    cfg
+        .route(
+            "/game/process-actions",
+            web::get().to(process_actions),
+        )
+        .route(
+            "/processes",
+            web::get().to(processes),
+        )
+        .route(
+            "/processes",
+            web::post().to(start_process),
+        )
+        .route(
+            "/processes/{id}",
+            web::delete().to(delete_process),
+        )
+        .route(
+            "/processes/{id}/pause",
+            web::post().to(pause_process),
+        )
+        .route(
+            "/processes/{id}/resume",
+            web::post().to(resume_process),
+        );
+}
+
+//
+// ==============================
+// ACTION CATALOGUE
+// ==============================
+//
+
+pub async fn process_actions(
+    _: CurrentUser,
+) -> HttpResponse {
+    HttpResponse::Ok()
+        .json(services::action_catalog())
+}
+
+//
+// ==============================
+// QUEUE
+// ==============================
+//
+
+pub async fn processes(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::processes(
+        &state.pool,
+        user.0,
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+//
+// ==============================
+// START
+// ==============================
+//
+
+pub async fn start_process(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    input: web::Json<StartProcessRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::start(
+        &state.pool,
+        user.0,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Created()
+            .json(response),
+    )
+}
+
+//
+// ==============================
+// DELETE
+// ==============================
+//
+
+pub async fn delete_process(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::delete(
+        &state.pool,
+        user.0,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::NoContent()
+            .finish(),
+    )
+}
+
+//
+// ==============================
+// PAUSE / RESUME
+// ==============================
+//
+
+pub async fn pause_process(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::pause(
+        &state.pool,
+        user.0,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn resume_process(
+    state: web::Data<AppState>,
+    user: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::resume(
+        &state.pool,
+        user.0,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
