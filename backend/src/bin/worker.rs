@@ -77,6 +77,8 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
+            25 => reset_ip_effect(pool, user).await?,
+            26 => reset_password_effect(pool, user).await?,
             _ => {}
         }
         sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now() WHERE pid=$1")
@@ -454,5 +456,52 @@ async fn uninstall_effect(
         .bind(soft)
         .execute(pool)
         .await?;
+    Ok(())
+}
+
+/// Case 25 of completeProcess. A new address is the only way out of an IP that half the
+/// server has written down, so the legacy checked the draw against every machine before
+/// taking it.
+///
+/// The legacy also billed this to a bank account, priced off uptime by Player::ip_info.
+/// The port has neither the uptime column nor the reset timers that price depends on, so
+/// the reset is free here until those exist.
+async fn reset_ip_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sqlx::Error> {
+    for _ in 0..16 {
+        let candidate:i64=sqlx::query_scalar("SELECT (floor(random()*4294967294)+1)::bigint").fetch_one(pool).await?;
+        let taken:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE game_ip=$1) OR EXISTS(SELECT 1 FROM npc WHERE npc_ip=$1)").bind(candidate).fetch_one(pool).await?;
+        if taken {
+            continue;
+        }
+        sqlx::query("UPDATE users SET game_ip=$2 WHERE id=$1")
+            .bind(user)
+            .bind(candidate)
+            .execute(pool)
+            .await?;
+        return Ok(());
+    }
+    Ok(())
+}
+
+/// Case 26 of completeProcess, and the answer to being cracked. Changing the password is
+/// not only a new string: the legacy went through every list holding the old one and blanked
+/// it to 'unknown', so a stolen credential stops working the moment its owner reacts.
+///
+/// Entries marked 'exploited' were left alone, because those were not taken by guessing
+/// the password in the first place.
+async fn reset_password_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sqlx::Error> {
+    let Some(ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1")
+        .bind(user)
+        .fetch_optional(pool)
+        .await?
+    else {
+        return Ok(());
+    };
+    sqlx::query("UPDATE users SET game_pass=substr(md5(random()::text),1,8) WHERE id=$1")
+        .bind(user)
+        .execute(pool)
+        .await?;
+    sqlx::query("UPDATE compromised_lists SET password='unknown',virus_id=0 WHERE ip=$1 AND password<>'exploited'")
+        .bind(ip).execute(pool).await?;
     Ok(())
 }
