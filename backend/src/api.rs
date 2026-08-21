@@ -547,6 +547,34 @@ async fn mission_command(
     id: web::Path<i64>,
     i: web::Json<MissionCommand>,
 ) -> Result<HttpResponse, ApiError> {
+    if i.action == "accept" {
+        let active: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM missions WHERE user_id=$1 AND status=2")
+                .bind(u.0)
+                .fetch_one(&s.pool)
+                .await?;
+        if active != 0 {
+            return Err(ApiError::BadRequest("you already are in a mission".into()));
+        }
+        let level: Option<i16> =
+            sqlx::query_scalar("SELECT level FROM missions WHERE id=$1 AND status=1")
+                .bind(*id)
+                .fetch_optional(&s.pool)
+                .await?;
+        let level = level.ok_or(ApiError::NotFound)?;
+        let version: Option<i32> = sqlx::query_scalar("SELECT MAX(soft_version) FROM software WHERE user_id=$1 AND NOT is_npc AND soft_type=1")
+            .bind(u.0).fetch_one(&s.pool).await?;
+        let player_level = match version.unwrap_or(0) {
+            60.. => 3,
+            30.. => 2,
+            _ => 1,
+        };
+        if level != player_level {
+            return Err(ApiError::BadRequest(
+                "mission level does not match your best cracker".into(),
+            ));
+        }
+    }
     let n =
         match i.action.as_str() {
             "accept" => {
