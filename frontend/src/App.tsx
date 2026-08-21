@@ -73,8 +73,8 @@ function InternetScreen() {
     if (!remote) return;
     try { const r = await internetApi.hack(remote.ip, kind); setMessage(`Task #${r.process_id} started · yours v${r.attacker_version} against v${r.defender_version}. Run the worker, then reconnect.`) } catch (err) { say(err) }
   };
-  const act = async (run: Promise<{ process_id: number }>, label: string) => {
-    try { const r = await run; setMessage(`${label} queued as task #${r.process_id}. It lands when the worker runs.`) } catch (err) { say(err) }
+  const act = async (run: Promise<{ process_id?: number; id?: number }>, label: string) => {
+    try { const r = await run; setMessage(`${label} queued as task #${r.process_id ?? r.id}. It lands when the worker runs.`) } catch (err) { say(err) }
   };
   const bookmark = async () => {
     if (!remote) return;
@@ -102,6 +102,7 @@ function InternetScreen() {
         </form>
         <button onClick={() => void crack('bf')}>Crack password</button>
         <button onClick={() => void crack('scan')}>Port scan</button>
+        <button onClick={() => void act(api.startProcess(16, remote.id, undefined, remote.kind), 'Exploit')}>Exploit FTP/SSH</button>
       </>}
     </article>}
     {remote?.access && <>
@@ -170,6 +171,7 @@ function SoftwareScreen() {
         ? <button onClick={() => void queue(5, f.id, 'Seek')}>Seek</button>
         : <button onClick={() => void queue(4, f.id, 'Hide')}>Hide</button>}
       <button onClick={() => void research(f.id)}>Research</button>
+      <button onClick={() => void queue(18, f.id, 'Park on external drive')}>Park</button>
     </article>)}
     {!files.length && <p className="muted">Nothing on disk yet. Write something, or go take it.</p>}
   </>;
