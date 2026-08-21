@@ -51,17 +51,20 @@ async fn tick(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
 /// the player anything. Only the two actions this port can currently start are resolved;
 /// every other action still just gets marked done, exactly as before.
 async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
-    let due = sqlx::query("SELECT pid,creator_id,victim_id,action,info FROM processes WHERE completed_at IS NULL AND NOT is_paused AND time_end<=now()")
+    let due = sqlx::query("SELECT pid,creator_id,victim_id,action,soft_id,info FROM processes WHERE completed_at IS NULL AND NOT is_paused AND time_end<=now()")
         .fetch_all(pool).await?;
     for p in due {
         let pid: i64 = p.get("pid");
         let user: i64 = p.get("creator_id");
         let victim: i64 = p.get("victim_id");
         let action: i16 = p.get("action");
+        let soft: i64 = p.get("soft_id");
         // Internet::hack writes "npc" or "player" into info when it starts the process,
         // which is what the legacy carried in its isNPC flag.
         let is_npc = p.get::<String, _>("info") == "npc";
         match action {
+            1 | 2 => transfer_effect(pool, user, victim, is_npc, soft, action).await?,
+            3 => delete_effect(pool, user, victim, is_npc, soft).await?,
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
@@ -208,5 +211,110 @@ async fn scan_effect(
     };
     sqlx::query("INSERT INTO internet_scan(user_id,ip) VALUES($1,$2) ON CONFLICT(user_id,ip) DO UPDATE SET scanned_at=now()")
         .bind(user).bind(ip).execute(pool).await?;
+    Ok(())
+}
+
+/// Cases 1 and 2 of completeProcess, download and upload. Both copy a file between two
+/// machines, so they differ only in which end is the source.
+///
+/// The legacy checked here rather than at the start: a copy that no longer fits, or that
+/// duplicates something already held, is dropped silently at this point.
+async fn transfer_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+    action: i16,
+) -> Result<(), sqlx::Error> {
+    let download = action == 1;
+    let (from, from_npc, to, to_npc) = if download {
+        (victim, victim_is_npc, user, false)
+    } else {
+        (user, false, victim, victim_is_npc)
+    };
+    let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(from).bind(from_npc).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let name: String = f.get("soft_name");
+    let version: i32 = f.get("soft_version");
+    let size: i32 = f.get("soft_size");
+    let ram: i32 = f.get("soft_ram");
+    let soft_type: i16 = f.get("soft_type");
+    let licensed: i64 = f.get("licensed_to");
+    // "SELECT id FROM software WHERE ... softType AND softVersion AND softName": the same
+    // file twice is not worth the disk.
+    let held:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE user_id=$1 AND is_npc=$2 AND soft_type=$3 AND soft_version=$4 AND soft_name=$5 AND NOT soft_hidden)").bind(to).bind(to_npc).bind(soft_type).bind(version).bind(&name).fetch_one(pool).await?;
+    if held {
+        return Ok(());
+    }
+    // calculateHDDUsage: total >= used + size, or the file does not land.
+    let total:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND is_npc=$2").bind(to).bind(to_npc).fetch_one(pool).await?;
+    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND is_npc=$2").bind(to).bind(to_npc).fetch_one(pool).await?;
+    if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + size as i64 {
+        return Ok(());
+    }
+    // originalFrom keeps the trail back to the file this copy was taken from.
+    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc,original_from,licensed_to) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)")
+        .bind(to).bind(&name).bind(version).bind(size).bind(ram).bind(soft_type).bind(to_npc).bind(soft).bind(licensed).execute(pool).await?;
+    let verb = if download { "downloaded" } else { "uploaded" };
+    log_pair(pool, user, victim, victim_is_npc, verb, &format!("{name}{version}")).await?;
+    Ok(())
+}
+
+/// Case 3 of completeProcess. A remote delete takes the file away for good.
+async fn delete_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let Some(f)=sqlx::query("SELECT soft_name,soft_version FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(victim).bind(victim_is_npc).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let label = format!(
+        "{}{}",
+        f.get::<String, _>("soft_name"),
+        f.get::<i32, _>("soft_version")
+    );
+    sqlx::query("DELETE FROM software WHERE id=$1")
+        .bind(soft)
+        .execute(pool)
+        .await?;
+    log_pair(pool, user, victim, victim_is_npc, "deleted", &label).await?;
+    Ok(())
+}
+
+/// The two-sided log line every file action in completeProcess wrote: the victim reads it
+/// as coming from an address, the attacker as going out to one.
+async fn log_pair(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    verb: &str,
+    file: &str,
+) -> Result<(), sqlx::Error> {
+    let attacker_ip:Option<i64>=sqlx::query_scalar("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_one(pool).await?;
+    let Some((victim_ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
+        return Ok(());
+    };
+    if let Some(attacker_ip) = attacker_ip {
+        add_log(
+            pool,
+            victim,
+            victim_is_npc,
+            &format!("[{}] {verb} file {file} at localhost", dotted(attacker_ip)),
+        )
+        .await?;
+        add_log(
+            pool,
+            user,
+            false,
+            &format!("localhost {verb} file {file} at [{}]", dotted(victim_ip)),
+        )
+        .await?;
+    }
     Ok(())
 }

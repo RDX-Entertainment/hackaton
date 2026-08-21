@@ -120,6 +120,11 @@ struct LogEdit {
     text: String,
 }
 #[derive(Deserialize)]
+struct Transfer {
+    software_id: i64,
+    direction: String,
+}
+#[derive(Deserialize)]
 struct CertificationStart {
     account: Option<i64>,
 }
@@ -261,6 +266,9 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/internet/bookmarks/{ip}", web::delete().to(remove_bookmark))
             .route("/internet/login", web::post().to(internet_login))
             .route("/internet/hack", web::post().to(internet_hack))
+            .route("/internet/{ip}/software", web::get().to(remote_software))
+            .route("/internet/{ip}/software", web::post().to(transfer_software))
+            .route("/internet/{ip}/software/{soft}", web::delete().to(delete_remote_software))
             .route("/internet/{ip}/log", web::get().to(remote_log))
             .route("/internet/{ip}/log", web::put().to(edit_remote_log))
             .route("/internet/{ip}", web::get().to(internet_navigate))
@@ -907,6 +915,79 @@ async fn internet_hack(
     let info = if t.is_npc { "npc" } else { "player" };
     let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,info,info_str,time_end,time_ideal) VALUES($1,$2,$3,$4,$4,now()+($5::integer*interval '1 second'),$5) RETURNING pid").bind(u.0).bind(t.id).bind(action).bind(info).bind(seconds).fetch_one(&s.pool).await?;
     Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"action":action,"seconds":seconds,"attacker_version":attacker,"defender_version":defender})))
+}
+// Port of the file list Internet::showPageInfo drew once you were inside a machine.
+async fn remote_software(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    ip: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let ip = ip.into_inner();
+    let t = resolve_ip(&s, ip).await?;
+    require_access(&s, u.0, ip).await?;
+    let v=sqlx::query("SELECT id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_folder FROM software WHERE user_id=$1 AND is_npc=$2 AND NOT soft_hidden ORDER BY soft_name").bind(t.id).bind(t.is_npc).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"name":r.get::<String,_>("soft_name"),"version":r.get::<i32,_>("soft_version"),"size":r.get::<i32,_>("soft_size"),"ram":r.get::<i32,_>("soft_ram"),"type":r.get::<i16,_>("soft_type"),"folder":r.get::<bool,_>("is_folder")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
+}
+/// A bitcoin wallet, a folder and anything from 90 up are the three things case 1 of
+/// completeProcess refused to copy. Checked when the transfer is asked for rather than
+/// only when it lands, so the player is not left waiting on a process that cannot work.
+fn transferable(soft_type: i16) -> bool {
+    soft_type != 19 && soft_type != 31 && soft_type < 90
+}
+// Port of the DOWNLOAD and UPLOAD branches of Internet::handlePost. Both open a process;
+// the copy itself happens in completeProcess, which is where the legacy checked disk space
+// and refused duplicates.
+async fn transfer_software(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    ip: web::Path<i64>,
+    i: web::Json<Transfer>,
+) -> Result<HttpResponse, ApiError> {
+    let ip = ip.into_inner();
+    let t = resolve_ip(&s, ip).await?;
+    require_access(&s, u.0, ip).await?;
+    let action: i16 = match i.direction.as_str() {
+        "download" => 1,
+        "upload" => 2,
+        _ => return Err(ApiError::BadRequest("unsupported transfer".into())),
+    };
+    // A download reads from the remote machine, an upload from the player's own.
+    let (owner, owner_is_npc) = if action == 1 {
+        (t.id, t.is_npc)
+    } else {
+        (u.0, false)
+    };
+    let row=sqlx::query("SELECT soft_type,soft_name,soft_size FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3 AND NOT soft_hidden").bind(i.software_id).bind(owner).bind(owner_is_npc).fetch_optional(&s.pool).await?.ok_or(ApiError::NotFound)?;
+    if !transferable(row.get::<i16, _>("soft_type")) {
+        return Err(ApiError::BadRequest("CANNOT_TRANSFER".into()));
+    }
+    let seconds: i32 = 30;
+    let dup:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=$2 AND victim_id=$3 AND soft_id=$4 AND completed_at IS NULL)").bind(u.0).bind(action).bind(t.id).bind(i.software_id).fetch_one(&s.pool).await?;
+    if dup {
+        return Err(ApiError::BadRequest("identical process already active".into()));
+    }
+    let info = if t.is_npc { "npc" } else { "player" };
+    let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal) VALUES($1,$2,$3,$4,$5,$5,now()+($6::integer*interval '1 second'),$6) RETURNING pid").bind(u.0).bind(t.id).bind(action).bind(i.software_id).bind(info).bind(seconds).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"action":action,"seconds":seconds})))
+}
+// Port of the DELETE branch. Deleting a file on a machine you broke into is how the legacy
+// let you take something away from a victim rather than just copy it.
+async fn delete_remote_software(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    path: web::Path<(i64, i64)>,
+) -> Result<HttpResponse, ApiError> {
+    let (ip, soft) = path.into_inner();
+    let t = resolve_ip(&s, ip).await?;
+    require_access(&s, u.0, ip).await?;
+    let exists:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3)").bind(soft).bind(t.id).bind(t.is_npc).fetch_one(&s.pool).await?;
+    if !exists {
+        return Err(ApiError::NotFound);
+    }
+    let seconds: i32 = 30;
+    let info = if t.is_npc { "npc" } else { "player" };
+    let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal) VALUES($1,$2,3,$3,$4,$4,now()+($5::integer*interval '1 second'),$5) RETURNING pid").bind(u.0).bind(t.id).bind(soft).bind(info).bind(seconds).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"seconds":seconds})))
 }
 // Port of log.php and logEdit.php against a remote machine. The legacy gated both on
 // $_SESSION['HACKED'] holding the current IP; here the same gate is the internet_access
