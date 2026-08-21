@@ -56,6 +56,25 @@ struct ForumTopic {
 struct ForumPost {
     content: String,
 }
+#[derive(Deserialize)]
+struct ProfileUpdate {
+    biography: String,
+    visible: bool,
+}
+#[derive(Deserialize)]
+struct ClanCreate {
+    name: String,
+    nick: String,
+    description: String,
+}
+#[derive(Deserialize)]
+struct ClanJoin {
+    message: String,
+}
+#[derive(Deserialize)]
+struct ResearchStart {
+    software_id: i64,
+}
 #[derive(Serialize)]
 struct Session {
     token: String,
@@ -139,6 +158,18 @@ pub fn configure(c: &mut web::ServiceConfig) {
                 "/forum/topics/{id}/posts",
                 web::post().to(create_forum_post),
             )
+            .route("/profile", web::get().to(profile))
+            .route("/profile", web::put().to(save_profile))
+            .route("/clans", web::get().to(clans))
+            .route("/clans", web::post().to(create_clan))
+            .route("/clans/mine", web::get().to(my_clan))
+            .route("/clans/{id}/join", web::post().to(request_clan_join))
+            .route(
+                "/clans/requests/{id}/accept",
+                web::post().to(accept_clan_request),
+            )
+            .route("/research", web::get().to(research))
+            .route("/research", web::post().to(start_research))
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -210,6 +241,7 @@ async fn register(
         "INSERT INTO users_puzzle(user_id) VALUES($1)",
         "INSERT INTO users_learning(user_id) VALUES($1)",
         "INSERT INTO users_language(user_id) VALUES($1)",
+        "INSERT INTO player_profiles(user_id) VALUES($1)",
     ] {
         sqlx::query(q).bind(id).execute(&mut *tx).await?;
     }
@@ -526,6 +558,143 @@ async fn accept_friend(
     .await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"friend_id":friend})))
+}
+async fn profile(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let r=sqlx::query("SELECT u.id,u.login,u.game_ip,p.biography,p.visible,COALESCE(c.reputation,0) AS reputation,COALESCE(rk.rank,-1) AS rank,st.mission_count,st.hack_count,st.money_earned FROM users u JOIN player_profiles p ON p.user_id=u.id LEFT JOIN cache c ON c.user_id=u.id LEFT JOIN ranking_user rk ON rk.user_id=u.id LEFT JOIN users_stats st ON st.uid=u.id WHERE u.id=$1").bind(u.0).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login"),"game_ip":r.get::<i64,_>("game_ip"),"biography":r.get::<String,_>("biography"),"visible":r.get::<bool,_>("visible"),"reputation":r.get::<i64,_>("reputation"),"rank":r.get::<i32,_>("rank"),"missions":r.get::<i32,_>("mission_count"),"hacks":r.get::<i32,_>("hack_count"),"money_earned":r.get::<i64,_>("money_earned")})))
+}
+async fn save_profile(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<ProfileUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let bio = i.biography.trim();
+    if bio.len() > 3000 {
+        return Err(ApiError::BadRequest("biography is too long".into()));
+    }
+    sqlx::query("INSERT INTO player_profiles(user_id,biography,visible) VALUES($1,$2,$3) ON CONFLICT(user_id) DO UPDATE SET biography=EXCLUDED.biography,visible=EXCLUDED.visible,updated_at=now()").bind(u.0).bind(bio).bind(i.visible).execute(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"saved":true})))
+}
+async fn clans(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let rows=sqlx::query("SELECT c.id,c.clan_ip,c.name,c.nick,c.description,c.slots_total,c.money,c.power,COUNT(m.user_id) AS members FROM clans c LEFT JOIN clan_members m ON m.clan_id=c.id GROUP BY c.id ORDER BY c.power DESC,c.name").fetch_all(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"ip":r.get::<i64,_>("clan_ip"),"name":r.get::<String,_>("name"),"nick":r.get::<String,_>("nick"),"description":r.get::<String,_>("description"),"slots":r.get::<i16,_>("slots_total"),"members":r.get::<i64,_>("members"),"money":r.get::<i64,_>("money"),"power":r.get::<i64,_>("power")})).collect::<Vec<_>>()))
+}
+async fn create_clan(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<ClanCreate>,
+) -> Result<HttpResponse, ApiError> {
+    let name = i.name.trim();
+    let nick = i.nick.trim().to_uppercase();
+    if name.is_empty()
+        || name.len() > 25
+        || nick.len() != 3
+        || !nick.bytes().all(|c| c.is_ascii_alphanumeric())
+        || i.description.len() > 3000
+    {
+        return Err(ApiError::BadRequest("invalid clan data".into()));
+    }
+    let mut tx = s.pool.begin().await?;
+    let already: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clan_members WHERE user_id=$1)")
+            .bind(u.0)
+            .fetch_one(&mut *tx)
+            .await?;
+    if already {
+        return Err(ApiError::BadRequest("already in a clan".into()));
+    }
+    let ip = rand::rng().random_range(1_i64..=u32::MAX as i64);
+    let id:i64=sqlx::query_scalar("INSERT INTO clans(clan_ip,name,nick,description,created_by) VALUES($1,$2,$3,$4,$5) RETURNING id").bind(ip).bind(name).bind(nick).bind(i.description.trim()).bind(u.0).fetch_one(&mut *tx).await?;
+    sqlx::query("INSERT INTO clan_members(clan_id,user_id,auth_level,hierarchy) VALUES($1,$2,3,0)")
+        .bind(id)
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":id})))
+}
+async fn my_clan(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let clan=sqlx::query("SELECT c.id,c.name,c.nick,c.description,c.slots_total,c.money,c.power,m.auth_level FROM clan_members m JOIN clans c ON c.id=m.clan_id WHERE m.user_id=$1").bind(u.0).fetch_optional(&s.pool).await?;
+    let Some(c) = clan else {
+        return Ok(HttpResponse::Ok().json(serde_json::json!(null)));
+    };
+    let id: i64 = c.get("id");
+    let members=sqlx::query("SELECT u.id,u.login,m.auth_level,m.member_since FROM clan_members m JOIN users u ON u.id=m.user_id WHERE m.clan_id=$1 ORDER BY m.auth_level DESC,m.member_since").bind(id).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login"),"auth_level":r.get::<i16,_>("auth_level")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"name":c.get::<String,_>("name"),"nick":c.get::<String,_>("nick"),"description":c.get::<String,_>("description"),"slots":c.get::<i16,_>("slots_total"),"money":c.get::<i64,_>("money"),"power":c.get::<i64,_>("power"),"auth_level":c.get::<i16,_>("auth_level"),"members":members})))
+}
+async fn request_clan_join(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    id: web::Path<i64>,
+    i: web::Json<ClanJoin>,
+) -> Result<HttpResponse, ApiError> {
+    if i.message.len() > 3000 {
+        return Err(ApiError::BadRequest("request message is too long".into()));
+    }
+    let own: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clan_members WHERE user_id=$1)")
+            .bind(u.0)
+            .fetch_one(&s.pool)
+            .await?;
+    if own {
+        return Err(ApiError::BadRequest("already in a clan".into()));
+    }
+    let req:Option<i64>=sqlx::query_scalar("INSERT INTO clan_requests(clan_id,user_id,message) SELECT $1,$2,$3 WHERE EXISTS(SELECT 1 FROM clans WHERE id=$1) ON CONFLICT DO NOTHING RETURNING id").bind(*id).bind(u.0).bind(i.message.trim()).fetch_optional(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":req.ok_or(ApiError::BadRequest("request already exists or clan missing".into()))?})))
+}
+async fn accept_clan_request(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let mut tx = s.pool.begin().await?;
+    let request=sqlx::query("SELECT r.clan_id,r.user_id,c.slots_total FROM clan_requests r JOIN clans c ON c.id=r.clan_id JOIN clan_members a ON a.clan_id=r.clan_id WHERE r.id=$1 AND a.user_id=$2 AND a.auth_level>=2 FOR UPDATE").bind(*id).bind(u.0).fetch_optional(&mut *tx).await?.ok_or(ApiError::NotFound)?;
+    let clan: i64 = request.get("clan_id");
+    let applicant: i64 = request.get("user_id");
+    let members: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM clan_members WHERE clan_id=$1")
+        .bind(clan)
+        .fetch_one(&mut *tx)
+        .await?;
+    if members >= request.get::<i16, _>("slots_total") as i64 {
+        return Err(ApiError::BadRequest("clan is full".into()));
+    }
+    sqlx::query("INSERT INTO clan_members(clan_id,user_id) VALUES($1,$2)")
+        .bind(clan)
+        .bind(applicant)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM clan_requests WHERE id=$1")
+        .bind(*id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"clan_id":clan,"user_id":applicant})))
+}
+async fn research(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let rows=sqlx::query("SELECT id,software_id,software_type,new_version,software_name,researched_at FROM research_history WHERE user_id=$1 ORDER BY researched_at DESC").bind(u.0).fetch_all(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"software_id":r.get::<i64,_>("software_id"),"type":r.get::<i16,_>("software_type"),"version":r.get::<i32,_>("new_version"),"name":r.get::<String,_>("software_name"),"researched_at":r.get::<chrono::DateTime<chrono::Utc>,_>("researched_at")})).collect::<Vec<_>>()))
+}
+async fn start_research(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<ResearchStart>,
+) -> Result<HttpResponse, ApiError> {
+    let mut tx = s.pool.begin().await?;
+    let software=sqlx::query("SELECT id,soft_name,soft_version,soft_type FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc FOR UPDATE").bind(i.software_id).bind(u.0).fetch_optional(&mut *tx).await?.ok_or(ApiError::NotFound)?;
+    let version = software.get::<i32, _>("soft_version") + 1;
+    let id:i64=sqlx::query_scalar("INSERT INTO research_history(user_id,software_id,software_type,new_version,software_name) VALUES($1,$2,$3,$4,$5) RETURNING id").bind(u.0).bind(i.software_id).bind(software.get::<i16,_>("soft_type")).bind(version).bind(software.get::<String,_>("soft_name")).fetch_one(&mut *tx).await?;
+    sqlx::query("UPDATE software SET soft_version=$1 WHERE id=$2")
+        .bind(version)
+        .bind(i.software_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE users_stats SET money_research=money_research+1 WHERE uid=$1")
+        .bind(u.0)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Created()
+        .json(serde_json::json!({"id":id,"software_id":i.software_id,"version":version})))
 }
 async fn wiki_index(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
     let pages = sqlx::query("SELECT slug,title,updated_at FROM wiki_pages ORDER BY title")
