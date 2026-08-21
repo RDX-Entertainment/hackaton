@@ -1,15 +1,14 @@
-use actix_web::{HttpResponse, web};
-use bcrypt::{hash, verify};
-use rand::{Rng, distr::Alphanumeric};
-use serde::{Deserialize, Serialize};
-use sqlx::{Row, mysql::MySqlRow};
-
 use crate::{
     auth::{CurrentUser, issue_token},
     error::ApiError,
     legacy::PROCESS_ACTIONS,
     state::AppState,
 };
+use actix_web::{HttpResponse, web};
+use bcrypt::{hash, verify};
+use rand::{Rng, distr::Alphanumeric};
+use serde::{Deserialize, Serialize};
+use sqlx::{Row, postgres::PgRow};
 
 #[derive(Deserialize)]
 struct Login {
@@ -69,19 +68,24 @@ struct ProcessAction {
     name: &'static str,
     id: u8,
 }
-
-fn user_from(row: &MySqlRow) -> User {
+fn user(row: &PgRow) -> User {
     User {
         id: row.get("id"),
         login: row.get("login"),
         email: row.get("email"),
-        game_ip: row.get("gameIP"),
-        premium: row.get::<i8, _>("premium") != 0,
+        game_ip: row.get("game_ip"),
+        premium: row.get("premium"),
     }
 }
+fn actions() -> Vec<ProcessAction> {
+    PROCESS_ACTIONS
+        .iter()
+        .map(|(name, id)| ProcessAction { name, id: *id })
+        .collect()
+}
 
-pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
+pub fn configure(c: &mut web::ServiceConfig) {
+    c.service(
         web::scope("/api")
             .route("/health", web::get().to(health))
             .route("/auth/login", web::post().to(login))
@@ -101,7 +105,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/missions/{id}", web::post().to(mission_command))
             .route("/finances/accounts", web::get().to(bank_accounts))
             .route("/finances/transfers", web::post().to(bank_transfer))
-            .route("/ranking/users", web::get().to(user_ranking))
+            .route("/ranking/users", web::get().to(ranking))
             .route("/friends", web::get().to(friends))
             .route("/friends/requests", web::post().to(request_friend))
             .route(
@@ -111,537 +115,363 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
-
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({"status":"ok"}))
 }
-
-async fn login(
-    state: web::Data<AppState>,
-    input: web::Json<Login>,
-) -> Result<HttpResponse, ApiError> {
-    let row = sqlx::query("SELECT id, login, email, gameIP, premium, password FROM users WHERE BINARY login = ? LIMIT 1")
-        .bind(&input.username).fetch_optional(&state.pool).await?.ok_or(ApiError::Unauthorized)?;
-    let hash: String = row.get("password");
-    verify(&input.password, &hash)
-        .map_err(|_| ApiError::Unauthorized)?
-        .then_some(())
+async fn login(s: web::Data<AppState>, i: web::Json<Login>) -> Result<HttpResponse, ApiError> {
+    let r = sqlx::query("SELECT id,login,email,game_ip,premium,password FROM users WHERE login=$1")
+        .bind(i.username.trim())
+        .fetch_optional(&s.pool)
+        .await?
         .ok_or(ApiError::Unauthorized)?;
-    sqlx::query("UPDATE users SET lastLogin = CURRENT_TIMESTAMP WHERE id = ?")
-        .bind(row.get::<i64, _>("id"))
-        .execute(&state.pool)
+    if !verify(&i.password, &r.get::<String, _>("password")).map_err(|_| ApiError::Unauthorized)? {
+        return Err(ApiError::Unauthorized);
+    }
+    let id = r.get("id");
+    sqlx::query("UPDATE users SET last_login=now() WHERE id=$1")
+        .bind(id)
+        .execute(&s.pool)
         .await?;
-    let token = issue_token(row.get("id"), &state.jwt_secret)?;
     Ok(HttpResponse::Ok().json(Session {
-        token,
-        user: user_from(&row),
+        token: issue_token(id, &s.jwt_secret)?,
+        user: user(&r),
     }))
 }
-
 async fn register(
-    state: web::Data<AppState>,
-    input: web::Json<Register>,
+    s: web::Data<AppState>,
+    i: web::Json<Register>,
 ) -> Result<HttpResponse, ApiError> {
-    let username = input.username.trim();
-    if !(1..=15).contains(&username.len())
-        || !username
+    let name = i.username.trim();
+    if !(1..=15).contains(&name.len())
+        || !name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        || i.password.is_empty()
+        || !i.email.contains('@')
     {
-        return Err(ApiError::BadRequest(
-            "invalid username; allowed characters are azAZ09._- and 15 characters maximum".into(),
-        ));
-    }
-    if input.password.is_empty() || !input.email.contains('@') || input.email.len() > 50 {
         return Err(ApiError::BadRequest("invalid registration data".into()));
     }
-    let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE login = ? OR email = ?")
-        .bind(username)
-        .bind(&input.email)
-        .fetch_one(&state.pool)
-        .await?;
-    if exists != 0 {
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE login=$1 OR email=$2)")
+            .bind(name)
+            .bind(i.email.trim())
+            .fetch_one(&s.pool)
+            .await?;
+    if exists {
         return Err(ApiError::BadRequest(
             "username or email already exists".into(),
         ));
     }
-    let game_ip = rand::rng().random_range(1_i64..=u32::MAX as i64);
-    let game_pass: String = rand::rng()
+    let ip = rand::rng().random_range(1_i64..=u32::MAX as i64);
+    let pass: String = rand::rng()
         .sample_iter(Alphanumeric)
         .take(8)
         .map(char::from)
         .collect();
-    // The legacy BCrypt implementation used cost 13 and stores 60-character $2a$ hashes.
-    let hash = hash(&input.password, 13)
-        .map_err(|_| ApiError::BadRequest("cannot hash password".into()))?;
-    let mut tx = state.pool.begin().await?;
-    let result = sqlx::query("INSERT INTO users (login,password,email,gamePass,gameIP,realIP,homeIP,learning,premium) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)")
-        .bind(username).bind(hash).bind(&input.email).bind(game_pass).bind(game_ip).bind(game_ip).bind(game_ip).execute(&mut *tx).await?;
-    let user_id = result.last_insert_id() as i64;
-    sqlx::query("INSERT INTO users_stats (uid,dateJoined,exp,certifications,awards,timePlaying,missionCount,hackCount,ddosCount,warezSent,spamSent,bitcoinSent,ipResets,pwdResets,moneyEarned,moneyTransfered,moneyHardware,moneyResearch,profileViews) VALUES (?,NOW(),0,'','',0,0,0,0,0,0,0,0,0,0,0,0,0,0)")
-        .bind(user_id).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO hardware (userID, name, cpu, hdd, ram, net, isNPC) VALUES (?, 'Server #1', 500, 100, 256, 1, 0)").bind(user_id).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO `log` (userID, text, isNPC) VALUES (?, CONCAT(SUBSTRING(NOW(), 1, 16), ' - localhost installed current operating system'), 0)").bind(user_id).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO cache (userID, reputation) VALUES (?, 0)")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO cache_profile (userID, expireDate) VALUES (?, NOW())")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO ranking_user (userID, rank) VALUES (?, -1)")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO certifications (userID, certLevel) VALUES (?, 0)")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO users_puzzle (userID, puzzleID) VALUES (?, 0)")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO users_learning (userID, learning) VALUES (?, 1)")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO users_language (userID, lang) VALUES (?, 'en')")
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
-    let row = sqlx::query("SELECT id, login, email, gameIP, premium FROM users WHERE id = ?")
-        .bind(user_id)
+    let pwd =
+        hash(&i.password, 13).map_err(|_| ApiError::BadRequest("cannot hash password".into()))?;
+    let mut tx = s.pool.begin().await?;
+    let id:i64=sqlx::query_scalar("INSERT INTO users(login,password,email,game_pass,game_ip,real_ip,home_ip) VALUES($1,$2,$3,$4,$5,$5,$5) RETURNING id").bind(name).bind(pwd).bind(i.email.trim()).bind(pass).bind(ip).fetch_one(&mut *tx).await?;
+    for q in [
+        "INSERT INTO users_stats(uid) VALUES($1)",
+        "INSERT INTO hardware(user_id,name) VALUES($1,'Server #1')",
+        "INSERT INTO log(user_id,text) VALUES($1,'localhost installed current operating system')",
+        "INSERT INTO cache(user_id) VALUES($1)",
+        "INSERT INTO cache_profile(user_id) VALUES($1)",
+        "INSERT INTO ranking_user(user_id,rank) VALUES($1,-1)",
+        "INSERT INTO certifications(user_id) VALUES($1)",
+        "INSERT INTO users_puzzle(user_id) VALUES($1)",
+        "INSERT INTO users_learning(user_id) VALUES($1)",
+        "INSERT INTO users_language(user_id) VALUES($1)",
+    ] {
+        sqlx::query(q).bind(id).execute(&mut *tx).await?;
+    }
+    let r = sqlx::query("SELECT id,login,email,game_ip,premium FROM users WHERE id=$1")
+        .bind(id)
         .fetch_one(&mut *tx)
         .await?;
-    let token = issue_token(user_id, &state.jwt_secret)?;
     tx.commit().await?;
     Ok(HttpResponse::Created().json(Session {
-        token,
-        user: user_from(&row),
+        token: issue_token(id, &s.jwt_secret)?,
+        user: user(&r),
     }))
 }
-
-async fn me(state: web::Data<AppState>, user: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let row = sqlx::query("SELECT id, login, email, gameIP, premium FROM users WHERE id = ?")
-        .bind(user.0)
-        .fetch_optional(&state.pool)
+async fn me(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let r = sqlx::query("SELECT id,login,email,game_ip,premium FROM users WHERE id=$1")
+        .bind(u.0)
+        .fetch_optional(&s.pool)
         .await?
         .ok_or(ApiError::NotFound)?;
-    Ok(HttpResponse::Ok().json(user_from(&row)))
+    Ok(HttpResponse::Ok().json(user(&r)))
 }
-
-async fn dashboard(
-    state: web::Data<AppState>,
-    user: CurrentUser,
-) -> Result<HttpResponse, ApiError> {
-    let row = sqlx::query("SELECT id, login, email, gameIP, premium FROM users WHERE id = ?")
-        .bind(user.0)
-        .fetch_optional(&state.pool)
+async fn dashboard(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let r = sqlx::query("SELECT id,login,email,game_ip,premium FROM users WHERE id=$1")
+        .bind(u.0)
+        .fetch_optional(&s.pool)
         .await?
         .ok_or(ApiError::NotFound)?;
-    let money: Option<f64> =
-        sqlx::query_scalar("SELECT SUM(cash) FROM bankAccounts WHERE bankUser = ?")
-            .bind(user.0)
-            .fetch_one(&state.pool)
+    let money: Option<i64> =
+        sqlx::query_scalar("SELECT SUM(cash) FROM bank_accounts WHERE bank_user=$1")
+            .bind(u.0)
+            .fetch_one(&s.pool)
             .await?;
-    let processes: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM processes WHERE pCreatorID = ?")
-        .bind(user.0)
-        .fetch_one(&state.pool)
+    let processes = sqlx::query_scalar("SELECT COUNT(*) FROM processes WHERE creator_id=$1")
+        .bind(u.0)
+        .fetch_one(&s.pool)
         .await?;
-    let unread_mail: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM mails WHERE `to` = ? AND isRead = 0")
-            .bind(user.0)
-            .fetch_one(&state.pool)
-            .await?;
+    let unread_mail = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM mails WHERE recipient_id=$1 AND NOT is_read AND NOT is_deleted",
+    )
+    .bind(u.0)
+    .fetch_one(&s.pool)
+    .await?;
     Ok(HttpResponse::Ok().json(Dashboard {
-        user: user_from(&row),
-        money: money.unwrap_or(0.0),
+        user: user(&r),
+        money: money.unwrap_or(0) as f64,
         processes,
         unread_mail,
-        actions: PROCESS_ACTIONS
-            .iter()
-            .map(|(name, id)| ProcessAction { name, id: *id })
-            .collect(),
+        actions: actions(),
     }))
 }
-
 async fn process_actions(_: CurrentUser) -> HttpResponse {
-    HttpResponse::Ok().json(
-        PROCESS_ACTIONS
-            .iter()
-            .map(|(name, id)| ProcessAction { name, id: *id })
-            .collect::<Vec<_>>(),
-    )
+    HttpResponse::Ok().json(actions())
 }
-
-async fn software(state: web::Data<AppState>, user: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT id, softName, softVersion, softSize, softRam, softType, softHidden, isFolder FROM software WHERE userID = ? AND isNPC = 0 ORDER BY softName")
-        .bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"name":r.get::<String,_>("softName"),"version":r.get::<i64,_>("softVersion"),"size":r.get::<i64,_>("softSize"),"ram":r.get::<i64,_>("softRam"),"type":r.get::<i64,_>("softType"),"hidden":r.get::<i8,_>("softHidden") != 0,"folder":r.get::<i8,_>("isFolder") != 0})).collect::<Vec<_>>()))
+async fn rows(s: &AppState, u: i64, sql: &str) -> Result<Vec<PgRow>, ApiError> {
+    Ok(sqlx::query(sql).bind(u).fetch_all(&s.pool).await?)
 }
-
-async fn hardware(state: web::Data<AppState>, user: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT serverID, name, cpu, hdd, ram, net FROM hardware WHERE userID = ? AND isNPC = 0 ORDER BY serverID")
-        .bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("serverID"),"name":r.get::<String,_>("name"),"cpu":r.get::<f32,_>("cpu"),"hdd":r.get::<f32,_>("hdd"),"ram":r.get::<f32,_>("ram"),"net":r.get::<f32,_>("net")})).collect::<Vec<_>>()))
+async fn software(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT id,soft_name,soft_version,soft_size,soft_ram,soft_type,soft_hidden,is_folder FROM software WHERE user_id=$1 AND NOT is_npc ORDER BY soft_name").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"name":r.get::<String,_>("soft_name"),"version":r.get::<i32,_>("soft_version"),"size":r.get::<i32,_>("soft_size"),"ram":r.get::<i32,_>("soft_ram"),"type":r.get::<i16,_>("soft_type"),"hidden":r.get::<bool,_>("soft_hidden"),"folder":r.get::<bool,_>("is_folder")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
-async fn processes(
-    state: web::Data<AppState>,
-    user: CurrentUser,
-) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT pid, pVictimID, pAction, pInfo, pInfoStr, pTimeStart, pTimeEnd, pTimeIdeal, pTimeWorked, isPaused FROM processes WHERE pCreatorID = ? ORDER BY pTimeStart DESC")
-        .bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("pid"),"victim_id":r.get::<i64,_>("pVictimID"),"action":r.get::<i64,_>("pAction"),"info":r.get::<String,_>("pInfo"),"details":r.get::<String,_>("pInfoStr"),"ideal_seconds":r.get::<i64,_>("pTimeIdeal"),"worked_seconds":r.get::<i64,_>("pTimeWorked"),"paused":r.get::<i8,_>("isPaused") != 0})).collect::<Vec<_>>()))
+async fn hardware(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT server_id,name,cpu,hdd,ram,net FROM hardware WHERE user_id=$1 AND NOT is_npc ORDER BY server_id").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("server_id"),"name":r.get::<String,_>("name"),"cpu":r.get::<f32,_>("cpu"),"hdd":r.get::<f32,_>("hdd"),"ram":r.get::<f32,_>("ram"),"net":r.get::<f32,_>("net")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
+async fn processes(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT pid,victim_id,action,info,info_str,time_ideal,time_worked,is_paused FROM processes WHERE creator_id=$1 ORDER BY time_start DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("pid"),"victim_id":r.get::<i64,_>("victim_id"),"action":r.get::<i16,_>("action"),"info":r.get::<String,_>("info"),"details":r.get::<String,_>("info_str"),"ideal_seconds":r.get::<i32,_>("time_ideal"),"worked_seconds":r.get::<i32,_>("time_worked"),"paused":r.get::<bool,_>("is_paused")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
+}
 async fn delete_process(
-    state: web::Data<AppState>,
-    user: CurrentUser,
+    s: web::Data<AppState>,
+    u: CurrentUser,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
-    let mut tx = state.pool.begin().await?;
-    let row =
-        sqlx::query("SELECT pCreatorID, pAction, pInfo FROM processes WHERE pid = ? FOR UPDATE")
-            .bind(*id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(ApiError::NotFound)?;
-    if row.get::<i64, _>("pCreatorID") != user.0 {
+    if sqlx::query("DELETE FROM processes WHERE pid=$1 AND creator_id=$2")
+        .bind(*id)
+        .bind(u.0)
+        .execute(&s.pool)
+        .await?
+        .rows_affected()
+        == 0
+    {
         return Err(ApiError::NotFound);
     }
-    if row.get::<i64, _>("pAction") == 8 {
-        sqlx::query("DELETE FROM log_edit WHERE id = CAST(? AS UNSIGNED)")
-            .bind(row.get::<String, _>("pInfo"))
-            .execute(&mut *tx)
-            .await?;
-    }
-    sqlx::query("DELETE FROM processes_paused WHERE pid = ?")
-        .bind(*id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("DELETE FROM processes WHERE pid = ?")
-        .bind(*id)
-        .execute(&mut *tx)
-        .await?;
-    tx.commit().await?;
     Ok(HttpResponse::NoContent().finish())
 }
-
-async fn mails(state: web::Data<AppState>, user: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT id, `from`, `to`, type, subject, text, dateSent, isRead, isDeleted FROM mails WHERE (`from` = ? OR `to` = ?) AND isDeleted = 0 ORDER BY dateSent DESC")
-        .bind(user.0).bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"from":r.get::<i64,_>("from"),"to":r.get::<i64,_>("to"),"type":r.get::<i64,_>("type"),"subject":r.get::<String,_>("subject"),"text":r.get::<String,_>("text"),"read":r.get::<i8,_>("isRead") != 0})).collect::<Vec<_>>()))
+async fn mails(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT id,sender_id,recipient_id,type,subject,text,is_read FROM mails WHERE (sender_id=$1 OR recipient_id=$1) AND NOT is_deleted ORDER BY date_sent DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"from":r.get::<i64,_>("sender_id"),"to":r.get::<i64,_>("recipient_id"),"type":r.get::<i16,_>("type"),"subject":r.get::<String,_>("subject"),"text":r.get::<String,_>("text"),"read":r.get::<bool,_>("is_read")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
 async fn mail(
-    state: web::Data<AppState>,
-    user: CurrentUser,
+    s: web::Data<AppState>,
+    u: CurrentUser,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
-    let row = sqlx::query("SELECT id, `from`, `to`, type, subject, text, dateSent, isRead, isDeleted FROM mails WHERE id = ? AND (`from` = ? OR `to` = ?) LIMIT 1")
-        .bind(*id).bind(user.0).bind(user.0).fetch_optional(&state.pool).await?.ok_or(ApiError::NotFound)?;
-    if row.get::<i8, _>("isDeleted") != 0 && row.get::<i64, _>("from") != user.0 {
+    let r=sqlx::query("SELECT id,sender_id,recipient_id,type,subject,text,is_read,is_deleted FROM mails WHERE id=$1 AND (sender_id=$2 OR recipient_id=$2)").bind(*id).bind(u.0).fetch_optional(&s.pool).await?.ok_or(ApiError::NotFound)?;
+    if r.get::<bool, _>("is_deleted") && r.get::<i64, _>("sender_id") != u.0 {
         return Err(ApiError::NotFound);
     }
-    if row.get::<i64, _>("to") == user.0 {
-        sqlx::query("UPDATE mails SET isRead = 1 WHERE id = ?")
+    if r.get::<i64, _>("recipient_id") == u.0 {
+        sqlx::query("UPDATE mails SET is_read=true WHERE id=$1")
             .bind(*id)
-            .execute(&state.pool)
+            .execute(&s.pool)
             .await?;
     }
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id":row.get::<i64,_>("id"),"from":row.get::<i64,_>("from"),"to":row.get::<i64,_>("to"),"type":row.get::<i64,_>("type"),"subject":row.get::<String,_>("subject"),"text":row.get::<String,_>("text"),"read":true})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":r.get::<i64,_>("id"),"from":r.get::<i64,_>("sender_id"),"to":r.get::<i64,_>("recipient_id"),"type":r.get::<i16,_>("type"),"subject":r.get::<String,_>("subject"),"text":r.get::<String,_>("text"),"read":true})))
 }
-
 async fn compose_mail(
-    state: web::Data<AppState>,
-    user: CurrentUser,
-    input: web::Json<ComposeMail>,
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<ComposeMail>,
 ) -> Result<HttpResponse, ApiError> {
-    let subject = input.subject.trim();
-    let text = input.text.trim();
-    if subject.is_empty()
-        || subject.len() > 40
-        || !subject
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b".,!? _-$()'\"".contains(&c))
-    {
-        return Err(ApiError::BadRequest("invalid mail subject".into()));
+    let subject = i.subject.trim();
+    let text = i.text.trim();
+    if subject.is_empty() || subject.len() > 40 || text.is_empty() {
+        return Err(ApiError::BadRequest("invalid mail".into()));
     }
-    if text.is_empty() {
-        return Err(ApiError::BadRequest("message can not be empty".into()));
-    }
-    let recipient = if let Ok(id) = input.to.trim().parse::<i64>() {
-        sqlx::query("SELECT id FROM users WHERE id = ?")
+    let target: Option<i64> = if let Ok(id) = i.to.trim().parse::<i64>() {
+        sqlx::query_scalar("SELECT id FROM users WHERE id=$1")
             .bind(id)
-            .fetch_optional(&state.pool)
+            .fetch_optional(&s.pool)
             .await?
-            .map(|r| r.get::<i64, _>("id"))
-            .ok_or(ApiError::NotFound)?
     } else {
-        let login = input.to.trim();
-        sqlx::query("SELECT id FROM users WHERE BINARY login = ?")
-            .bind(login)
-            .fetch_optional(&state.pool)
+        sqlx::query_scalar("SELECT id FROM users WHERE login=$1")
+            .bind(i.to.trim())
+            .fetch_optional(&s.pool)
             .await?
-            .map(|r| r.get::<i64, _>("id"))
-            .ok_or(ApiError::NotFound)?
     };
-    if recipient == user.0 {
+    let target = target.ok_or(ApiError::NotFound)?;
+    if target == u.0 {
         return Err(ApiError::BadRequest(
             "you can not send email to yourself".into(),
         ));
     }
-    let result = sqlx::query("INSERT INTO mails (`from`, `to`, type, subject, text, dateSent, isRead, isDeleted) VALUES (?, ?, 0, ?, ?, NOW(), 0, 0)")
-        .bind(user.0).bind(recipient).bind(subject).bind(text).execute(&state.pool).await?;
-    Ok(HttpResponse::Created()
-        .json(serde_json::json!({"id":result.last_insert_id(),"to":recipient})))
+    let id: i64 = sqlx::query_scalar(
+        "INSERT INTO mails(sender_id,recipient_id,subject,text) VALUES($1,$2,$3,$4) RETURNING id",
+    )
+    .bind(u.0)
+    .bind(target)
+    .bind(subject)
+    .bind(text)
+    .fetch_one(&s.pool)
+    .await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":id,"to":target})))
 }
-
 async fn delete_mail(
-    state: web::Data<AppState>,
-    user: CurrentUser,
+    s: web::Data<AppState>,
+    u: CurrentUser,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        sqlx::query("UPDATE mails SET isDeleted = 1 WHERE id = ? AND `to` = ? AND isDeleted = 0")
-            .bind(*id)
-            .bind(user.0)
-            .execute(&state.pool)
-            .await?;
-    if result.rows_affected() == 0 {
+    if sqlx::query(
+        "UPDATE mails SET is_deleted=true WHERE id=$1 AND recipient_id=$2 AND NOT is_deleted",
+    )
+    .bind(*id)
+    .bind(u.0)
+    .execute(&s.pool)
+    .await?
+    .rows_affected()
+        == 0
+    {
         return Err(ApiError::NotFound);
     }
     Ok(HttpResponse::NoContent().finish())
 }
-
-async fn missions(state: web::Data<AppState>, user: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT id, type, status, hirer, victim, info, info2, missionStart, missionEnd, prize, level FROM missions WHERE userID = ? ORDER BY dateGenerated DESC")
-        .bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"type":r.get::<i64,_>("type"),"status":r.get::<i64,_>("status"),"hirer":r.get::<i64,_>("hirer"),"victim":r.get::<i64,_>("victim"),"info":r.get::<i64,_>("info"),"info2":r.get::<i64,_>("info2"),"prize":r.get::<i64,_>("prize"),"level":r.get::<i64,_>("level")})).collect::<Vec<_>>()))
+async fn missions(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT id,type,status,hirer,victim,info,info2,prize,level FROM missions WHERE user_id=$1 ORDER BY date_generated DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"type":r.get::<i16,_>("type"),"status":r.get::<i16,_>("status"),"hirer":r.get::<i64,_>("hirer"),"victim":r.get::<i64,_>("victim"),"info":r.get::<i64,_>("info"),"info2":r.get::<i64,_>("info2"),"prize":r.get::<i64,_>("prize"),"level":r.get::<i16,_>("level")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
 async fn mission_command(
-    state: web::Data<AppState>,
-    user: CurrentUser,
+    s: web::Data<AppState>,
+    u: CurrentUser,
     id: web::Path<i64>,
-    input: web::Json<MissionCommand>,
+    i: web::Json<MissionCommand>,
 ) -> Result<HttpResponse, ApiError> {
-    let mut tx = state.pool.begin().await?;
-    let mission =
-        sqlx::query("SELECT id, type, status, userID, level FROM missions WHERE id = ? FOR UPDATE")
+    let n =
+        match i.action.as_str() {
+            "accept" => {
+                sqlx::query("UPDATE missions SET status=2,user_id=$1 WHERE id=$2 AND status=1")
+                    .bind(u.0)
+                    .bind(*id)
+                    .execute(&s.pool)
+                    .await?
+            }
+            "abort" => sqlx::query(
+                "UPDATE missions SET status=4 WHERE id=$1 AND user_id=$2 AND status=2 AND type<=49",
+            )
             .bind(*id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(ApiError::NotFound)?;
-    match input.action.as_str() {
-        "accept" => {
-            if mission.get::<i64, _>("status") != 1 {
-                return Err(ApiError::BadRequest(
-                    "mission has already been taken".into(),
-                ));
-            }
-            let active: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM missions WHERE userID = ? AND status = 2")
-                    .bind(user.0)
-                    .fetch_one(&mut *tx)
-                    .await?;
-            if active != 0 {
-                return Err(ApiError::BadRequest("you already are in a mission".into()));
-            }
-            let version: Option<i64> = sqlx::query_scalar("SELECT MAX(softVersion) FROM software WHERE userID = ? AND isNPC = 0 AND softType = 1")
-                .bind(user.0).fetch_one(&mut *tx).await?;
-            let level = match version.unwrap_or(0) {
-                60.. => 3,
-                30.. => 2,
-                _ => 1,
-            };
-            if mission.get::<i64, _>("level") != level {
-                return Err(ApiError::BadRequest(
-                    "mission level does not match your best cracker".into(),
-                ));
-            }
-            sqlx::query("UPDATE missions SET status = 2, userID = ? WHERE id = ?")
-                .bind(user.0)
-                .bind(*id)
-                .execute(&mut *tx)
-                .await?;
-        }
-        "abort" => {
-            if mission.get::<i64, _>("userID") != user.0 || mission.get::<i64, _>("status") != 2 {
-                return Err(ApiError::BadRequest("you are not in this mission".into()));
-            }
-            if mission.get::<i64, _>("type") > 49 {
-                return Err(ApiError::BadRequest(
-                    "you are not allowed to abort this kind of mission".into(),
-                ));
-            }
-            sqlx::query("UPDATE missions SET status = 4 WHERE id = ?")
-                .bind(*id)
-                .execute(&mut *tx)
-                .await?;
-        }
-        _ => return Err(ApiError::BadRequest("unsupported mission action".into())),
+            .bind(u.0)
+            .execute(&s.pool)
+            .await?,
+            _ => return Err(ApiError::BadRequest("unsupported mission action".into())),
+        };
+    if n.rows_affected() == 0 {
+        return Err(ApiError::BadRequest("mission action not allowed".into()));
     }
-    tx.commit().await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id":*id,"action":input.action})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":*id,"action":i.action})))
 }
-
-async fn bank_accounts(
-    state: web::Data<AppState>,
-    user: CurrentUser,
-) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT id, bankAcc, bankID, cash, dateCreated FROM bankAccounts WHERE bankUser = ? ORDER BY dateCreated DESC")
-        .bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"account":r.get::<i64,_>("bankAcc"),"bank_id":r.get::<i64,_>("bankID"),"cash":r.get::<i64,_>("cash")})).collect::<Vec<_>>()))
+async fn bank_accounts(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT id,bank_acc,bank_id,cash FROM bank_accounts WHERE bank_user=$1 ORDER BY date_created DESC").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"account":r.get::<i64,_>("bank_acc"),"bank_id":r.get::<i64,_>("bank_id"),"cash":r.get::<i64,_>("cash")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
 async fn bank_transfer(
-    state: web::Data<AppState>,
-    user: CurrentUser,
-    input: web::Json<BankTransfer>,
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<BankTransfer>,
 ) -> Result<HttpResponse, ApiError> {
-    if input.amount <= 0 || input.from_account == input.to_account {
+    if i.amount <= 0 || i.from_account == i.to_account {
         return Err(ApiError::BadRequest("invalid transfer".into()));
     }
-    let mut tx = state.pool.begin().await?;
-    let source = sqlx::query("SELECT id, bankAcc, bankPass, bankID, bankUser, cash FROM bankAccounts WHERE bankAcc = ? FOR UPDATE")
-        .bind(input.from_account)
+    let mut tx = s.pool.begin().await?;
+    let a = sqlx::query(
+        "SELECT id,bank_pass,bank_user,cash FROM bank_accounts WHERE bank_acc=$1 FOR UPDATE",
+    )
+    .bind(i.from_account)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    let b = sqlx::query("SELECT id,bank_user FROM bank_accounts WHERE bank_acc=$1 FOR UPDATE")
+        .bind(i.to_account)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(ApiError::NotFound)?;
-    if source.get::<i64, _>("bankUser") != user.0
-        || source.get::<String, _>("bankPass") != input.password
-    {
+    if a.get::<i64, _>("bank_user") != u.0 || a.get::<String, _>("bank_pass") != i.password {
         return Err(ApiError::Unauthorized);
     }
-    let target = sqlx::query(
-        "SELECT id, bankAcc, bankID, bankUser FROM bankAccounts WHERE bankAcc = ? FOR UPDATE",
-    )
-    .bind(input.to_account)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ApiError::NotFound)?;
-    if source.get::<i64, _>("cash") < input.amount {
+    if a.get::<i64, _>("cash") < i.amount {
         return Err(ApiError::BadRequest("insufficient funds".into()));
     }
-    sqlx::query("UPDATE bankAccounts SET cash = cash - ? WHERE id = ?")
-        .bind(input.amount)
-        .bind(source.get::<i64, _>("id"))
+    sqlx::query("UPDATE bank_accounts SET cash=cash-$1 WHERE id=$2")
+        .bind(i.amount)
+        .bind(a.get::<i64, _>("id"))
         .execute(&mut *tx)
         .await?;
-    sqlx::query("UPDATE bankAccounts SET cash = cash + ? WHERE id = ?")
-        .bind(input.amount)
-        .bind(target.get::<i64, _>("id"))
-        .execute(&mut *tx)
-        .await?;
-    // This matches Ranking::updateMoneyStats(3, amount, userTo) in the legacy transfer flow.
-    sqlx::query("UPDATE users_stats SET moneyTransfered = moneyTransfered + ? WHERE uid = ?")
-        .bind(input.amount)
-        .bind(target.get::<i64, _>("bankUser"))
+    sqlx::query("UPDATE bank_accounts SET cash=cash+$1 WHERE id=$2")
+        .bind(i.amount)
+        .bind(b.get::<i64, _>("id"))
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    Ok(HttpResponse::Ok().json(
-        serde_json::json!({"from":input.from_account,"to":input.to_account,"amount":input.amount}),
-    ))
+    Ok(HttpResponse::Ok()
+        .json(serde_json::json!({"from":i.from_account,"to":i.to_account,"amount":i.amount})))
 }
-
-async fn user_ranking(
-    state: web::Data<AppState>,
-    _: CurrentUser,
-) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT r.rank, u.id, u.login FROM ranking_user r JOIN users u ON u.id = r.userID ORDER BY r.rank ASC LIMIT 100")
-        .fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"rank":r.get::<i64,_>("rank"),"user_id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login")})).collect::<Vec<_>>()))
+async fn ranking(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=sqlx::query("SELECT r.rank,u.id,u.login FROM ranking_user r JOIN users u ON u.id=r.user_id ORDER BY r.rank LIMIT 100").fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"rank":r.get::<i32,_>("rank"),"user_id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
-async fn friends(state: web::Data<AppState>, user: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let rows = sqlx::query("SELECT u.id, u.login, f.dateAdd FROM users_friends f JOIN users u ON u.id = CASE WHEN f.userID = ? THEN f.friendID ELSE f.userID END WHERE f.userID = ? OR f.friendID = ? ORDER BY f.dateAdd DESC")
-        .bind(user.0).bind(user.0).bind(user.0).fetch_all(&state.pool).await?;
-    Ok(HttpResponse::Ok().json(rows.into_iter().map(|r| serde_json::json!({"id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login")})).collect::<Vec<_>>()))
+async fn friends(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let v=rows(&s,u.0,"SELECT u.id,u.login FROM users_friends f JOIN users u ON u.id=CASE WHEN f.user_id=$1 THEN f.friend_id ELSE f.user_id END WHERE f.user_id=$1 OR f.friend_id=$1").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"login":r.get::<String,_>("login")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(v))
 }
-
 async fn request_friend(
-    state: web::Data<AppState>,
-    user: CurrentUser,
-    input: web::Json<FriendRequest>,
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<FriendRequest>,
 ) -> Result<HttpResponse, ApiError> {
-    if input.user_id == user.0 {
+    if i.user_id == u.0 {
         return Err(ApiError::BadRequest("you can not add yourself".into()));
     }
-    let mut tx = state.pool.begin().await?;
-    let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id = ?")
-        .bind(input.user_id)
-        .fetch_one(&mut *tx)
-        .await?;
-    if exists == 0 {
-        return Err(ApiError::NotFound);
-    }
-    let related: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users_friends WHERE (userID = ? AND friendID = ?) OR (userID = ? AND friendID = ?)").bind(user.0).bind(input.user_id).bind(input.user_id).bind(user.0).fetch_one(&mut *tx).await?;
-    if related != 0 {
-        return Err(ApiError::BadRequest("already friends".into()));
-    }
-    let pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM friend_requests WHERE userID = ? AND requestedBy = ?",
-    )
-    .bind(input.user_id)
-    .bind(user.0)
-    .fetch_one(&mut *tx)
-    .await?;
-    if pending != 0 {
-        return Err(ApiError::BadRequest("request already sent".into()));
-    }
-    let result = sqlx::query("INSERT INTO friend_requests (userID, requestedBy) VALUES (?, ?)")
-        .bind(input.user_id)
-        .bind(user.0)
-        .execute(&mut *tx)
-        .await?;
-    let sender: String = sqlx::query_scalar("SELECT login FROM users WHERE id = ?")
-        .bind(user.0)
-        .fetch_one(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO mails (`from`, `to`, type, subject, text, dateSent, isRead, isDeleted) VALUES (-6, ?, 1, ?, ?, NOW(), 0, 0)")
-        .bind(input.user_id).bind(format!("New friend request from {sender}")).bind(format!("{sender} added you as a friend. Request #{}.", result.last_insert_id())).execute(&mut *tx).await?;
-    tx.commit().await?;
-    Ok(HttpResponse::Created().json(serde_json::json!({"id":result.last_insert_id()})))
+    let id:Option<i64>=sqlx::query_scalar("INSERT INTO friend_requests(user_id,requested_by) SELECT $1,$2 WHERE EXISTS(SELECT 1 FROM users WHERE id=$1) ON CONFLICT DO NOTHING RETURNING id").bind(i.user_id).bind(u.0).fetch_optional(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":id.ok_or(ApiError::BadRequest("request already exists or user missing".into()))?})))
 }
-
 async fn accept_friend(
-    state: web::Data<AppState>,
-    user: CurrentUser,
+    s: web::Data<AppState>,
+    u: CurrentUser,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
-    let mut tx = state.pool.begin().await?;
-    let row = sqlx::query(
-        "SELECT requestedBy FROM friend_requests WHERE id = ? AND userID = ? FOR UPDATE",
+    let mut tx = s.pool.begin().await?;
+    let friend: Option<i64> = sqlx::query_scalar(
+        "DELETE FROM friend_requests WHERE id=$1 AND user_id=$2 RETURNING requested_by",
     )
     .bind(*id)
-    .bind(user.0)
+    .bind(u.0)
     .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ApiError::NotFound)?;
-    let friend_id: i64 = row.get("requestedBy");
-    sqlx::query("DELETE FROM friend_requests WHERE id = ?")
-        .bind(*id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("INSERT INTO users_friends (userID, friendID, dateAdd) VALUES (?, ?, NOW())")
-        .bind(user.0)
-        .bind(friend_id)
-        .execute(&mut *tx)
-        .await?;
+    .await?;
+    let friend = friend.ok_or(ApiError::NotFound)?;
+    sqlx::query(
+        "INSERT INTO users_friends(user_id,friend_id) VALUES($1,$2),($2,$1) ON CONFLICT DO NOTHING",
+    )
+    .bind(u.0)
+    .bind(friend)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"friend_id":friend_id})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"friend_id":friend})))
 }
-
 async fn page_data(
-    _state: web::Data<AppState>,
-    user: CurrentUser,
+    _: web::Data<AppState>,
+    u: CurrentUser,
     page: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    // Page data starts with an authenticated identity. Domain-specific responses are added per legacy page.
     let known = [
         "software",
         "internet",
@@ -671,5 +501,5 @@ async fn page_data(
         return Err(ApiError::NotFound);
     }
     Ok(HttpResponse::Ok()
-        .json(serde_json::json!({"page":page.into_inner(),"user_id":user.0,"status":"available"})))
+        .json(serde_json::json!({"page":page.into_inner(),"user_id":u.0,"status":"available"})))
 }

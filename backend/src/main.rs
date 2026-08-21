@@ -7,7 +7,7 @@ mod state;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use dotenvy::dotenv;
-use sqlx::mysql::MySqlPoolOptions;
+use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tracing_actix_web::TracingLogger;
 
@@ -25,11 +25,15 @@ async fn main() -> std::io::Result<()> {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(8080);
-    let pool = MySqlPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(10)
         .connect(&database_url)
         .await
-        .expect("unable to connect to MySQL");
+        .expect("unable to connect to PostgreSQL");
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("unable to apply PostgreSQL migrations");
     let state = web::Data::new(AppState { pool, jwt_secret });
 
     HttpServer::new(move || {

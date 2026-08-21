@@ -2,13 +2,13 @@
 
 El proyecto está separado deliberadamente en dos aplicaciones:
 
-- `backend/`: API JSON de Rust con Actix Web y acceso directo al esquema MySQL heredado.
+- `backend/`: API JSON de Rust con Actix Web y PostgreSQL.
 - `frontend/`: SPA React con Redux Toolkit y rutas que sustituyen las páginas del juego.
-- `backend/schema/legacy.sql`: esquema MySQL original, preservado para importar datos existentes.
+- `backend/schema/legacy.sql`: esquema MySQL original, preservado como referencia de migración.
 
 ## Ejecutar con Distrobox
 
-Importa el esquema en una instancia MySQL/MariaDB compatible y copia `backend/.env.example` a `backend/.env`, configurando `DATABASE_URL` y `JWT_SECRET`.
+Copia `backend/.env.example` a `backend/.env`, configura `DATABASE_URL` y `JWT_SECRET`; el backend aplica las migraciones PostgreSQL al arrancar. La base local usada por este port es `hacker_experience`.
 
 ```sh
 distrobox enter rust-dev -- bash -lc 'cd /home/raul/Projects/hackaton && cargo run -p legacy-api'
