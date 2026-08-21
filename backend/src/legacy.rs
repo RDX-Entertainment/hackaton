@@ -28,3 +28,34 @@ pub const PROCESS_ACTIONS: &[(&str, u8)] = &[
     ("DDOS", 27),
     ("INSTALL_WEBSERVER", 28),
 ];
+
+/// Names from PC::getSoftwareName. The frontend receives soft_type as a number in every
+/// software payload, so it needs this table to avoid printing opaque ids.
+pub const SOFTWARE_TYPES: &[(&str, u8)] = &[
+    ("Cracker", 1),
+    ("Hasher", 2),
+    ("Port Scan", 3),
+    ("Firewall", 4),
+    ("Hidder", 5),
+    ("Seeker", 6),
+    ("Antivirus", 7),
+    ("Spam virus", 8),
+    ("Warez virus", 9),
+    ("DDoS virus", 10),
+    ("Virus collector", 11),
+    ("DDoS breaker", 12),
+    ("FTP Exploit", 13),
+    ("SSH Exploit", 14),
+    ("Nmap", 15),
+    ("Analyzer", 16),
+    ("Torrent", 17),
+    ("Web server", 18),
+    ("Bitcoin Wallet", 19),
+    ("Bitcoin Miner", 20),
+    ("Riddle", 26),
+    ("Doom", 29),
+    ("Text file", 30),
+    ("Folder", 31),
+    ("Doom virus", 96),
+    ("Virus", 99),
+];

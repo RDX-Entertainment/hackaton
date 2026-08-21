@@ -1,7 +1,7 @@
 use crate::{
     auth::{CurrentUser, issue_token},
     error::ApiError,
-    legacy::PROCESS_ACTIONS,
+    legacy::{PROCESS_ACTIONS, SOFTWARE_TYPES},
     state::AppState,
 };
 use actix_web::{HttpResponse, web};
@@ -129,10 +129,10 @@ struct Dashboard {
     money: f64,
     processes: i64,
     unread_mail: i64,
-    actions: Vec<ProcessAction>,
+    actions: Vec<CatalogEntry>,
 }
 #[derive(Serialize)]
-struct ProcessAction {
+struct CatalogEntry {
     name: &'static str,
     id: u8,
 }
@@ -145,10 +145,16 @@ fn user(row: &PgRow) -> User {
         premium: row.get("premium"),
     }
 }
-fn actions() -> Vec<ProcessAction> {
+fn actions() -> Vec<CatalogEntry> {
     PROCESS_ACTIONS
         .iter()
-        .map(|(name, id)| ProcessAction { name, id: *id })
+        .map(|(name, id)| CatalogEntry { name, id: *id })
+        .collect()
+}
+fn software_types() -> Vec<CatalogEntry> {
+    SOFTWARE_TYPES
+        .iter()
+        .map(|(name, id)| CatalogEntry { name, id: *id })
         .collect()
 }
 
@@ -161,6 +167,7 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/me", web::get().to(me))
             .route("/dashboard", web::get().to(dashboard))
             .route("/game/process-actions", web::get().to(process_actions))
+            .route("/game/software-types", web::get().to(software_type_catalog))
             .route("/software", web::get().to(software))
             .route("/hardware", web::get().to(hardware))
             .route("/processes", web::get().to(processes))
@@ -353,6 +360,9 @@ async fn dashboard(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpRespons
 }
 async fn process_actions(_: CurrentUser) -> HttpResponse {
     HttpResponse::Ok().json(actions())
+}
+async fn software_type_catalog(_: CurrentUser) -> HttpResponse {
+    HttpResponse::Ok().json(software_types())
 }
 async fn rows(s: &AppState, u: i64, sql: &str) -> Result<Vec<PgRow>, ApiError> {
     Ok(sqlx::query(sql).bind(u).fetch_all(&s.pool).await?)
