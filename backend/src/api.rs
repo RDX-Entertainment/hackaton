@@ -75,6 +75,19 @@ struct ClanJoin {
 struct ResearchStart {
     software_id: i64,
 }
+#[derive(Deserialize)]
+struct BitcoinTransfer {
+    from: String,
+    to: String,
+    amount: String,
+}
+#[derive(Deserialize)]
+struct ListEntry {
+    ip: i64,
+    login: String,
+    password: String,
+    virus_id: Option<i64>,
+}
 #[derive(Serialize)]
 struct Session {
     token: String,
@@ -170,6 +183,12 @@ pub fn configure(c: &mut web::ServiceConfig) {
             )
             .route("/research", web::get().to(research))
             .route("/research", web::post().to(start_research))
+            .route("/bitcoin/wallets", web::get().to(bitcoin_wallets))
+            .route("/bitcoin/wallets", web::post().to(create_bitcoin_wallet))
+            .route("/bitcoin/transfers", web::post().to(bitcoin_transfer))
+            .route("/lists", web::get().to(compromised_lists))
+            .route("/lists", web::post().to(add_compromised_list))
+            .route("/lists/{id}", web::delete().to(delete_compromised_list))
             .route("/pages/{page}", web::get().to(page_data)),
     );
 }
@@ -695,6 +714,121 @@ async fn start_research(
     tx.commit().await?;
     Ok(HttpResponse::Created()
         .json(serde_json::json!({"id":id,"software_id":i.software_id,"version":version})))
+}
+async fn bitcoin_wallets(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
+    let wallets=sqlx::query("SELECT address,amount::text AS amount,created_at FROM bitcoin_wallets WHERE user_id=$1 ORDER BY created_at").bind(u.0).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"address":r.get::<String,_>("address"),"amount":r.get::<String,_>("amount"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(wallets))
+}
+async fn create_bitcoin_wallet(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+) -> Result<HttpResponse, ApiError> {
+    let address: String = rand::rng()
+        .sample_iter(Alphanumeric)
+        .take(34)
+        .map(char::from)
+        .collect();
+    let key: String = rand::rng()
+        .sample_iter(Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    sqlx::query("INSERT INTO bitcoin_wallets(address,user_id,private_key) VALUES($1,$2,$3)")
+        .bind(&address)
+        .bind(u.0)
+        .bind(key)
+        .execute(&s.pool)
+        .await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"address":address,"amount":"0.0000000"})))
+}
+async fn bitcoin_transfer(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<BitcoinTransfer>,
+) -> Result<HttpResponse, ApiError> {
+    let amount: i64 = i
+        .amount
+        .parse::<f64>()
+        .ok()
+        .filter(|n| n.is_finite() && *n > 0.0)
+        .map(|n| (n * 10_000_000.0).round() as i64)
+        .ok_or_else(|| ApiError::BadRequest("invalid bitcoin amount".into()))?;
+    let canonical = format!("{}.{:07}", amount / 10_000_000, amount % 10_000_000);
+    if i.from == i.to {
+        return Err(ApiError::BadRequest("same bitcoin wallet".into()));
+    }
+    let mut tx = s.pool.begin().await?;
+    let source=sqlx::query("SELECT address,user_id,amount::text AS amount FROM bitcoin_wallets WHERE address=$1 FOR UPDATE").bind(&i.from).fetch_optional(&mut *tx).await?.ok_or(ApiError::NotFound)?;
+    let _target = sqlx::query("SELECT address FROM bitcoin_wallets WHERE address=$1 FOR UPDATE")
+        .bind(&i.to)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if source.get::<i64, _>("user_id") != u.0 {
+        return Err(ApiError::Unauthorized);
+    }
+    let available = (source
+        .get::<String, _>("amount")
+        .parse::<f64>()
+        .unwrap_or(0.0)
+        * 10_000_000.0)
+        .round() as i64;
+    if available < amount {
+        return Err(ApiError::BadRequest("insufficient bitcoin funds".into()));
+    }
+    sqlx::query("UPDATE bitcoin_wallets SET amount=amount-CAST($1 AS numeric) WHERE address=$2")
+        .bind(&canonical)
+        .bind(&i.from)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE bitcoin_wallets SET amount=amount+CAST($1 AS numeric) WHERE address=$2")
+        .bind(&canonical)
+        .bind(&i.to)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"from":i.from,"to":i.to,"amount":canonical})))
+}
+async fn compromised_lists(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+) -> Result<HttpResponse, ApiError> {
+    let entries=sqlx::query("SELECT id,ip,login,hacked_at,virus_id FROM compromised_lists WHERE user_id=$1 ORDER BY hacked_at DESC").bind(u.0).fetch_all(&s.pool).await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"ip":r.get::<i64,_>("ip"),"login":r.get::<String,_>("login"),"hacked_at":r.get::<chrono::DateTime<chrono::Utc>,_>("hacked_at"),"virus_id":r.get::<i64,_>("virus_id")})).collect::<Vec<_>>();
+    Ok(HttpResponse::Ok().json(entries))
+}
+async fn add_compromised_list(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    i: web::Json<ListEntry>,
+) -> Result<HttpResponse, ApiError> {
+    let login = i.login.trim();
+    if login.is_empty()
+        || login.len() > 15
+        || i.password.is_empty()
+        || i.password.len() > 60
+        || i.ip <= 0
+    {
+        return Err(ApiError::BadRequest("invalid compromised account".into()));
+    }
+    let id:i64=sqlx::query_scalar("INSERT INTO compromised_lists(user_id,ip,login,password,virus_id) VALUES($1,$2,$3,$4,$5) RETURNING id").bind(u.0).bind(i.ip).bind(login).bind(&i.password).bind(i.virus_id.unwrap_or(0)).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"id":id})))
+}
+async fn delete_compromised_list(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    if sqlx::query("DELETE FROM compromised_lists WHERE id=$1 AND user_id=$2")
+        .bind(*id)
+        .bind(u.0)
+        .execute(&s.pool)
+        .await?
+        .rows_affected()
+        == 0
+    {
+        return Err(ApiError::NotFound);
+    }
+    Ok(HttpResponse::NoContent().finish())
 }
 async fn wiki_index(s: web::Data<AppState>, _: CurrentUser) -> Result<HttpResponse, ApiError> {
     let pages = sqlx::query("SELECT slug,title,updated_at FROM wiki_pages ORDER BY title")
