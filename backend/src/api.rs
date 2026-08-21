@@ -116,6 +116,10 @@ struct IpBody {
     ip: i64,
 }
 #[derive(Deserialize)]
+struct LogEdit {
+    text: String,
+}
+#[derive(Deserialize)]
 struct CertificationStart {
     account: Option<i64>,
 }
@@ -257,6 +261,8 @@ pub fn configure(c: &mut web::ServiceConfig) {
             .route("/internet/bookmarks/{ip}", web::delete().to(remove_bookmark))
             .route("/internet/login", web::post().to(internet_login))
             .route("/internet/hack", web::post().to(internet_hack))
+            .route("/internet/{ip}/log", web::get().to(remote_log))
+            .route("/internet/{ip}/log", web::put().to(edit_remote_log))
             .route("/internet/{ip}", web::get().to(internet_navigate))
             .route("/pages/{page}", web::get().to(page_data)),
     );
@@ -886,13 +892,10 @@ async fn internet_hack(
     let Some(attacker) = attacker else {
         return Err(ApiError::BadRequest("NO_SOFT".into()));
     };
-    // getBestSoftware read software with isNPC=1 for NPCs. Here theirs lives in
-    // software_original: software references users(id) and an NPC is not a user.
-    let defender: i32 = if t.is_npc {
-        sqlx::query_scalar("SELECT COALESCE(max(soft_version),0) FROM software_original WHERE npc_id=$1 AND soft_type=$2").bind(t.id).bind(theirs).fetch_one(&s.pool).await?
-    } else {
-        sqlx::query_scalar("SELECT COALESCE(max(soft_version),0) FROM software WHERE user_id=$1 AND soft_type=$2 AND NOT soft_hidden AND NOT is_npc").bind(t.id).bind(theirs).fetch_one(&s.pool).await?
-    };
+    // getBestSoftware read the victim's defences straight out of software, with isNPC
+    // picking the id space. 0011 dropped the users(id) constraint that made that
+    // impossible for NPCs, so one query now covers both kinds of target.
+    let defender:i32=sqlx::query_scalar("SELECT COALESCE(max(soft_version),0) FROM software WHERE user_id=$1 AND soft_type=$2 AND NOT soft_hidden AND is_npc=$3").bind(t.id).bind(theirs).bind(t.is_npc).fetch_one(&s.pool).await?;
     if attacker < defender {
         return Err(ApiError::BadRequest("BAD_CRACKER".into()));
     }
@@ -904,6 +907,53 @@ async fn internet_hack(
     let info = if t.is_npc { "npc" } else { "player" };
     let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,info,info_str,time_end,time_ideal) VALUES($1,$2,$3,$4,$4,now()+($5::integer*interval '1 second'),$5) RETURNING pid").bind(u.0).bind(t.id).bind(action).bind(info).bind(seconds).fetch_one(&s.pool).await?;
     Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"action":action,"seconds":seconds,"attacker_version":attacker,"defender_version":defender})))
+}
+// Port of log.php and logEdit.php against a remote machine. The legacy gated both on
+// $_SESSION['HACKED'] holding the current IP; here the same gate is the internet_access
+// row a finished crack or a correct login leaves behind.
+async fn remote_log(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    ip: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let ip = ip.into_inner();
+    let t = resolve_ip(&s, ip).await?;
+    require_access(&s, u.0, ip).await?;
+    // getLogValue($uid, $npc): one row per machine, newest entry on top.
+    let text:Option<String>=sqlx::query_scalar("SELECT text FROM log WHERE user_id=$1 AND is_npc=$2").bind(t.id).bind(t.is_npc).fetch_optional(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"ip":ip,"text":text.unwrap_or_default()})))
+}
+// Port of logEdit.php. The legacy never rewrote the log inline: it parked the new text in
+// log_edit through tmpLog and opened an E_LOG process, so covering your tracks takes time
+// and can be caught half-done. The worker applies it when the process finishes.
+async fn edit_remote_log(
+    s: web::Data<AppState>,
+    u: CurrentUser,
+    ip: web::Path<i64>,
+    i: web::Json<LogEdit>,
+) -> Result<HttpResponse, ApiError> {
+    let ip = ip.into_inner();
+    let t = resolve_ip(&s, ip).await?;
+    require_access(&s, u.0, ip).await?;
+    let seconds: i32 = 30;
+    let pid:i64=sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,info,info_str,time_end,time_ideal) VALUES($1,$2,8,$3,$3,now()+($4::integer*interval '1 second'),$4) RETURNING pid").bind(u.0).bind(t.id).bind(if t.is_npc {"npc"} else {"player"}).bind(seconds).fetch_one(&s.pool).await?;
+    sqlx::query("INSERT INTO log_edit(vic_id,is_npc,editor_id,log_text,process_id) VALUES($1,$2,$3,$4,$5)")
+        .bind(t.id)
+        .bind(t.is_npc)
+        .bind(u.0)
+        .bind(&i.text)
+        .bind(pid)
+        .execute(&s.pool)
+        .await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"process_id":pid,"seconds":seconds})))
+}
+// $_SESSION['HACKED'] == $ip, the check every remote screen in the legacy started with.
+async fn require_access(s: &AppState, user: i64, ip: i64) -> Result<(), ApiError> {
+    let ok:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_access WHERE user_id=$1 AND ip=$2)").bind(user).bind(ip).fetch_one(&s.pool).await?;
+    if ok {
+        return Ok(());
+    }
+    Err(ApiError::BadRequest("NOT_LOGGED_IN".into()))
 }
 // Port of important_show. The legacy joined npc_info to give every bookmark a name.
 async fn internet_bookmarks(

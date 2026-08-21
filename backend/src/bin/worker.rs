@@ -62,6 +62,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         // which is what the legacy carried in its isNPC flag.
         let is_npc = p.get::<String, _>("info") == "npc";
         match action {
+            8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
             _ => {}
@@ -131,16 +132,64 @@ async fn hack_effect(
     sqlx::query("INSERT INTO internet_access(user_id,ip,via_exploit) VALUES($1,$2,false) ON CONFLICT(user_id,ip) DO UPDATE SET granted_at=now()")
         .bind(user).bind(ip).execute(pool).await?;
     // exp_add('HACK', hasher version + victim cracker version), as in the legacy.
-    let exp: i64 = if is_npc {
-        sqlx::query_scalar("SELECT COALESCE(sum(soft_version),0)::bigint FROM software_original WHERE npc_id=$1 AND soft_type IN (1,2)")
-            .bind(victim).fetch_one(pool).await?
-    } else {
-        sqlx::query_scalar("SELECT COALESCE(sum(soft_version),0)::bigint FROM software WHERE user_id=$1 AND soft_type IN (1,2) AND NOT is_npc")
-            .bind(victim).fetch_one(pool).await?
-    };
+    let exp:i64=sqlx::query_scalar("SELECT COALESCE(sum(soft_version),0)::bigint FROM software WHERE user_id=$1 AND soft_type IN (1,2) AND is_npc=$2")
+        .bind(victim).bind(is_npc).fetch_one(pool).await?;
     sqlx::query("UPDATE users_stats SET exp=exp+$2,hack_count=hack_count+1 WHERE uid=$1")
         .bind(user)
         .bind(exp)
+        .execute(pool)
+        .await?;
+    // Every action in completeProcess wrote two log lines, one on each side, through
+    // LogVPC::logText('LOGIN', ...). The victim sees who came in, the attacker sees where
+    // they went, and the pair is what makes log editing worth doing at all.
+    if let Some(attacker_ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_optional(pool).await? {
+        add_log(pool, victim, is_npc, &format!("[{}] logged in as root", dotted(attacker_ip))).await?;
+        add_log(pool, user, false, &format!("localhost logged in to [{}] as root", dotted(ip))).await?;
+    }
+    Ok(())
+}
+
+/// Port of LogVPC::addLog. The legacy stamped every line with the minute it happened and
+/// prepended it, so a machine keeps one log row with the newest entry on top.
+async fn add_log(
+    pool: &sqlx::PgPool,
+    owner: i64,
+    is_npc: bool,
+    text: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE log SET text=to_char(now(),'YYYY-MM-DD HH24:MI')||' - '||$3||E'
+'||text WHERE user_id=$1 AND is_npc=$2")
+        .bind(owner).bind(is_npc).bind(text).execute(pool).await?;
+    Ok(())
+}
+
+/// long2ip. Game IPs travel as the 32-bit integers the legacy stored, but a log line is
+/// read by a person.
+fn dotted(ip: i64) -> String {
+    format!(
+        "{}.{}.{}.{}",
+        (ip >> 24) & 255,
+        (ip >> 16) & 255,
+        (ip >> 8) & 255,
+        ip & 255
+    )
+}
+
+/// Case 8 of completeProcess. The replacement text waited in log_edit while the process
+/// ran; finishing it is what actually overwrites the victim's log.
+async fn edit_log_effect(
+    pool: &sqlx::PgPool,
+    pid: i64,
+    victim: i64,
+    is_npc: bool,
+) -> Result<(), sqlx::Error> {
+    let Some(text) = sqlx::query_scalar::<_, String>("SELECT log_text FROM log_edit WHERE process_id=$1 ORDER BY id DESC LIMIT 1").bind(pid).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    sqlx::query("UPDATE log SET text=$3 WHERE user_id=$1 AND is_npc=$2")
+        .bind(victim)
+        .bind(is_npc)
+        .bind(text)
         .execute(pool)
         .await?;
     Ok(())
