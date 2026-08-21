@@ -825,7 +825,9 @@ async fn internet_navigate(
     sqlx::query("INSERT INTO internet_history(user_id,ip) VALUES($1,$2) ON CONFLICT(user_id,ip) DO UPDATE SET visited_at=now()").bind(u.0).bind(ip).execute(&s.pool).await?;
     let access:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_access WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
     let bookmarked:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_important WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"ip":ip,"kind":if t.is_npc {"npc"} else {"player"},"id":t.id,"name":t.name,"type":t.npc_type,"down":t.down,"access":access,"bookmarked":bookmarked})))
+    // A finished PORT_SCAN leaves a row here; the legacy read the same fact off the session.
+    let scanned:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_scan WHERE user_id=$1 AND ip=$2)").bind(u.0).bind(ip).fetch_one(&s.pool).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"ip":ip,"kind":if t.is_npc {"npc"} else {"player"},"id":t.id,"name":t.name,"type":t.npc_type,"down":t.down,"access":access,"bookmarked":bookmarked,"scanned":scanned})))
 }
 // Port of Internet::verifyLogin, the 'root' branch. The legacy 'download' and 'clan' users
 // depend on type 8 and type 10 NPCs, which are not ported yet.
