@@ -70,6 +70,10 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         match action {
             1 | 2 => transfer_effect(pool, user, victim, is_npc, soft, action).await?,
             3 => delete_effect(pool, user, victim, is_npc, soft).await?,
+            4 => hide_effect(pool, user, victim, is_npc, soft).await?,
+            5 => seek_effect(pool, user, victim, is_npc, soft).await?,
+            13 => install_effect(pool, user, victim, is_npc, soft).await?,
+            14 => uninstall_effect(pool, user, victim, is_npc, soft).await?,
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
@@ -165,8 +169,7 @@ async fn add_log(
     is_npc: bool,
     text: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE log SET text=to_char(now(),'YYYY-MM-DD HH24:MI')||' - '||$3||E'
-'||text WHERE user_id=$1 AND is_npc=$2")
+    sqlx::query("UPDATE log SET text=to_char(now(),'YYYY-MM-DD HH24:MI')||' - '||$3||chr(10)||text WHERE user_id=$1 AND is_npc=$2")
         .bind(owner).bind(is_npc).bind(text).execute(pool).await?;
     Ok(())
 }
@@ -321,5 +324,135 @@ async fn log_pair(
         )
         .await?;
     }
+    Ok(())
+}
+
+/// isVirus: the five types the legacy would not let you uninstall, because a virus is
+/// meant to be dug out with an antivirus rather than clicked away.
+fn is_virus(soft_type: i16) -> bool {
+    matches!(soft_type, 8 | 9 | 10 | 20 | 29)
+}
+
+/// isExecutable. A virus, a text file, a folder and a torrent are the things that have
+/// nothing to run.
+fn is_executable(soft_type: i16) -> bool {
+    !is_virus(soft_type) && !matches!(soft_type, 17 | 30 | 31)
+}
+
+/// Which machine a software process acts on. victim_id 0 means the player's own, which is
+/// how the legacy told a local action from a remote one.
+fn target_of(user: i64, victim: i64, victim_is_npc: bool) -> (i64, bool) {
+    if victim == 0 {
+        (user, false)
+    } else {
+        (victim, victim_is_npc)
+    }
+}
+
+/// Case 4 of completeProcess. A file is buried under the version of the best hider the
+/// player has running; SEEK later has to beat that number to dig it out.
+async fn hide_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let (owner, owner_is_npc) = target_of(user, victim, victim_is_npc);
+    let Some(f)=sqlx::query("SELECT soft_type FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(owner).bind(owner_is_npc).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    // "You cant hide a folder", and a running program cannot be hidden either.
+    let soft_type: i16 = f.get("soft_type");
+    if soft_type == 31 || soft_type == 29 {
+        return Ok(());
+    }
+    let installed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_running WHERE soft_id=$1)").bind(soft).fetch_one(pool).await?;
+    if installed {
+        return Ok(());
+    }
+    let hider:Option<i32>=sqlx::query_scalar("SELECT max(s.soft_version) FROM software s JOIN software_running r ON r.soft_id=s.id WHERE s.user_id=$1 AND NOT s.is_npc AND s.soft_type=5").bind(user).fetch_one(pool).await?;
+    let Some(hider) = hider else {
+        return Ok(());
+    };
+    sqlx::query("UPDATE software SET soft_hidden=TRUE,soft_hidden_with=$2 WHERE id=$1")
+        .bind(soft)
+        .bind(hider)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Case 5 of completeProcess. The seeker has to be at least as good as the hider that
+/// buried the file, which is the whole point of keeping soft_hidden_with around.
+async fn seek_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let (owner, owner_is_npc) = target_of(user, victim, victim_is_npc);
+    let seeker:Option<i32>=sqlx::query_scalar("SELECT max(s.soft_version) FROM software s JOIN software_running r ON r.soft_id=s.id WHERE s.user_id=$1 AND NOT s.is_npc AND s.soft_type=6").bind(user).fetch_one(pool).await?;
+    let Some(seeker) = seeker else {
+        return Ok(());
+    };
+    sqlx::query("UPDATE software SET soft_hidden=FALSE,soft_hidden_with=0 WHERE id=$1 AND user_id=$2 AND is_npc=$3 AND soft_hidden AND soft_hidden_with<=$4")
+        .bind(soft).bind(owner).bind(owner_is_npc).bind(seeker).execute(pool).await?;
+    Ok(())
+}
+
+/// Case 13 of completeProcess. Loading a program is what RAM is for: the legacy refused
+/// the install when calculateRamUsage had nothing left to give.
+async fn install_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let (owner, owner_is_npc) = target_of(user, victim, victim_is_npc);
+    let Some(f)=sqlx::query("SELECT soft_type,soft_ram,soft_hidden FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(owner).bind(owner_is_npc).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    let soft_type: i16 = f.get("soft_type");
+    let need: i32 = f.get("soft_ram");
+    if !is_executable(soft_type) || f.get::<bool, _>("soft_hidden") {
+        return Ok(());
+    }
+    let already:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_running WHERE soft_id=$1)").bind(soft).fetch_one(pool).await?;
+    if already {
+        return Ok(());
+    }
+    // calculateRamUsage: total ram of the machine against what is already loaded on it.
+    let total:Option<f32>=sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND is_npc=$2").bind(owner).bind(owner_is_npc).fetch_one(pool).await?;
+    let used:Option<i64>=sqlx::query_scalar("SELECT sum(s.soft_ram)::bigint FROM software s JOIN software_running r ON r.soft_id=s.id WHERE r.user_id=$1 AND r.is_npc=$2").bind(owner).bind(owner_is_npc).fetch_one(pool).await?;
+    if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + need as i64 {
+        return Ok(());
+    }
+    sqlx::query("INSERT INTO software_running(soft_id,user_id,is_npc) VALUES($1,$2,$3) ON CONFLICT DO NOTHING")
+        .bind(soft).bind(owner).bind(owner_is_npc).execute(pool).await?;
+    Ok(())
+}
+
+/// Case 14 of completeProcess. Everything but a virus can be unloaded again.
+async fn uninstall_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    victim_is_npc: bool,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let (owner, owner_is_npc) = target_of(user, victim, victim_is_npc);
+    let Some(f)=sqlx::query("SELECT soft_type FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(owner).bind(owner_is_npc).fetch_optional(pool).await? else {
+        return Ok(());
+    };
+    if is_virus(f.get::<i16, _>("soft_type")) {
+        return Ok(());
+    }
+    sqlx::query("DELETE FROM software_running WHERE soft_id=$1")
+        .bind(soft)
+        .execute(pool)
+        .await?;
     Ok(())
 }

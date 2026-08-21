@@ -404,7 +404,7 @@ async fn rows(s: &AppState, u: i64, sql: &str) -> Result<Vec<PgRow>, ApiError> {
     Ok(sqlx::query(sql).bind(u).fetch_all(&s.pool).await?)
 }
 async fn software(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
-    let v=rows(&s,u.0,"SELECT id,soft_name,soft_version,soft_size,soft_ram,soft_type,soft_hidden,is_folder FROM software WHERE user_id=$1 AND NOT is_npc ORDER BY soft_name").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"name":r.get::<String,_>("soft_name"),"version":r.get::<i32,_>("soft_version"),"size":r.get::<i32,_>("soft_size"),"ram":r.get::<i32,_>("soft_ram"),"type":r.get::<i16,_>("soft_type"),"hidden":r.get::<bool,_>("soft_hidden"),"folder":r.get::<bool,_>("is_folder")})).collect::<Vec<_>>();
+    let v=rows(&s,u.0,"SELECT s.id,s.soft_name,s.soft_version,s.soft_size,s.soft_ram,s.soft_type,s.soft_hidden,s.soft_hidden_with,s.is_folder,(r.soft_id IS NOT NULL) AS running FROM software s LEFT JOIN software_running r ON r.soft_id=s.id WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY s.soft_name").await?.into_iter().map(|r|serde_json::json!({"id":r.get::<i64,_>("id"),"name":r.get::<String,_>("soft_name"),"version":r.get::<i32,_>("soft_version"),"size":r.get::<i32,_>("soft_size"),"ram":r.get::<i32,_>("soft_ram"),"type":r.get::<i16,_>("soft_type"),"hidden":r.get::<bool,_>("soft_hidden"),"hidden_with":r.get::<i32,_>("soft_hidden_with"),"running":r.get::<bool,_>("running"),"folder":r.get::<bool,_>("is_folder")})).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(v))
 }
 async fn hardware(s: web::Data<AppState>, u: CurrentUser) -> Result<HttpResponse, ApiError> {
