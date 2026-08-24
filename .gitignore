@@ -2,5 +2,7 @@
 /frontend/node_modules/
 /frontend/dist/
 /frontend/*.tsbuildinfo
-/backend/.env
 *.log
+# backend/.env va versionado a proposito: es un entorno de desarrollo local y
+# tener sus credenciales en el repositorio es lo que hace que un clon arranque solo.
+

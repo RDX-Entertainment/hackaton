@@ -1,0 +1,5 @@
+# sqlx stores a checksum of each migration's bytes in _sqlx_migrations. A CRLF
+# checkout changes those bytes, so every already-applied migration looks edited
+# and the server refuses to start. This repo is worked on from both Linux and
+# Windows, so the migrations are pinned to LF everywhere.
+*.sql text eol=lf
