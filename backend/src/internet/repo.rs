@@ -11,6 +11,7 @@ use super::models::{
     HistoryRow,
     InternetTargetRow,
     NpcRemoteRow,
+    SiteRow,
     PlayerRemoteRow,
 };
 
@@ -61,7 +62,8 @@ pub async fn find_npc_by_ip(
             n.id,
             n.npc_type,
             n.down_until > now() AS down,
-            COALESCE(i.name, '') AS name
+            COALESCE(i.name, '') AS name,
+            i.web
         FROM npc n
         LEFT JOIN npc_info i
             ON i.npc_id = n.id
@@ -80,10 +82,13 @@ pub async fn find_player_by_ip(
     sqlx::query_as::<_, PlayerRemoteRow>(
         r#"
         SELECT
-            id,
-            login
-        FROM users
-        WHERE game_ip = $1
+            u.id,
+            u.login,
+            p.web
+        FROM users u
+        LEFT JOIN player_profiles p
+            ON p.user_id = u.id
+        WHERE u.game_ip = $1
         "#,
     )
     .bind(ip)
@@ -701,4 +706,60 @@ pub async fn history(
     .bind(user_id)
     .fetch_all(pool)
     .await
+}
+//
+// ==============================
+// SITIOS
+// ==============================
+//
+
+/// Todas las paginas que hay, sirvalas quien las sirva. El panel las edita igual.
+pub async fn all_sites(pool: &PgPool) -> Result<Vec<SiteRow>, sqlx::Error> {
+    sqlx::query_as::<_, SiteRow>(
+        r#"
+        SELECT
+            'npc'                  AS kind,
+            n.id,
+            n.npc_ip               AS ip,
+            COALESCE(i.name, '')   AS name,
+            COALESCE(i.web, '')    AS web
+        FROM npc n
+        LEFT JOIN npc_info i ON i.npc_id = n.id
+
+        UNION ALL
+
+        SELECT
+            'player'               AS kind,
+            u.id,
+            u.game_ip              AS ip,
+            u.login                AS name,
+            COALESCE(p.web, '')    AS web
+        FROM users u
+        LEFT JOIN player_profiles p ON p.user_id = u.id
+
+        ORDER BY kind, name
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn set_npc_site(pool: &PgPool, id: i64, web: &str) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query("UPDATE npc_info SET web = $2 WHERE npc_id = $1")
+        .bind(id)
+        .bind(web)
+        .execute(pool)
+        .await?;
+
+    Ok(done.rows_affected())
+}
+
+pub async fn set_player_site(pool: &PgPool, id: i64, web: &str) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query("UPDATE player_profiles SET web = $2, updated_at = now() WHERE user_id = $1")
+        .bind(id)
+        .bind(web)
+        .execute(pool)
+        .await?;
+
+    Ok(done.rows_affected())
 }

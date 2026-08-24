@@ -8,6 +8,9 @@ pub struct Remote {
     pub name: String,
     pub npc_type: i16,
     pub down: bool,
+
+    /// La pagina que sirve, si sirve alguna. Los jugadores no tienen.
+    pub web: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -16,12 +19,14 @@ pub struct NpcRemoteRow {
     pub npc_type: i16,
     pub down: bool,
     pub name: String,
+    pub web: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow)]
 pub struct PlayerRemoteRow {
     pub id: i64,
     pub login: String,
+    pub web: Option<String>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -58,4 +63,13 @@ pub struct HistoryRow {
 pub struct BestAnalyzerRow {
     pub id: i64,
     pub soft_version: i32,
+}
+/// Un sitio del panel: da igual quien lo sirva, se edita igual.
+#[derive(Debug, Clone, FromRow)]
+pub struct SiteRow {
+    pub kind: String,
+    pub id: i64,
+    pub ip: i64,
+    pub name: String,
+    pub web: String,
 }

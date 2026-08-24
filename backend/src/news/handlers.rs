@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -34,7 +34,7 @@ pub fn configure(
 
 pub async fn news(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::news_feed(

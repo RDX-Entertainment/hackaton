@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::models::{
     AnalyzeResultRow,
+    SiteRow,
     BookmarkRow,
     HistoryRow,
     InternetTargetRow,
@@ -78,6 +79,10 @@ pub struct InternetNavigateResponse {
     pub bookmarked: bool,
     pub scanned: bool,
     pub analysis: Option<HardwareAnalysisResponse>,
+
+    /// El HTML que sirve esta maquina. El cliente lo pinta en un marco aislado y sin
+    /// permisos: es decoracion, no puede ejecutar nada.
+    pub web: Option<String>,
 }
 
 //
@@ -214,4 +219,35 @@ impl From<HistoryRow> for InternetHistoryResponse {
             visited_at: value.visited_at,
         }
     }
+}
+//
+// ==============================
+// SITIOS
+// ==============================
+//
+
+#[derive(Debug, Serialize)]
+pub struct SiteResponse {
+    pub kind: String,
+    pub id: i64,
+    pub ip: i64,
+    pub name: String,
+    pub web: String,
+}
+
+impl From<SiteRow> for SiteResponse {
+    fn from(value: SiteRow) -> Self {
+        Self {
+            kind: value.kind,
+            id: value.id,
+            ip: value.ip,
+            name: value.name,
+            web: value.web,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SiteUpdate {
+    pub web: String,
 }

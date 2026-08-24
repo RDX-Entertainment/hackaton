@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -62,11 +62,11 @@ pub fn configure(
 
 pub async fn bank_accounts(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::accounts(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -78,12 +78,12 @@ pub async fn bank_accounts(
 
 pub async fn create_bank_account(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<CreateBankAccountRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::open_account(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -102,12 +102,12 @@ pub async fn create_bank_account(
 
 pub async fn bank_transfer(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<BankTransferRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::transfer(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -126,11 +126,11 @@ pub async fn bank_transfer(
 
 pub async fn bitcoin_wallets(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::wallets(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -142,11 +142,11 @@ pub async fn bitcoin_wallets(
 
 pub async fn create_bitcoin_wallet(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::create_wallet(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -158,12 +158,12 @@ pub async fn create_bitcoin_wallet(
 
 pub async fn bitcoin_transfer(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<BitcoinTransferRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::transfer_bitcoin(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;

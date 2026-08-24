@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -57,7 +57,7 @@ pub fn configure(
 //
 
 pub async fn process_actions(
-    _: CurrentUser,
+    _: Ctx,
 ) -> HttpResponse {
     HttpResponse::Ok()
         .json(services::action_catalog())
@@ -71,11 +71,11 @@ pub async fn process_actions(
 
 pub async fn processes(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::processes(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -93,12 +93,12 @@ pub async fn processes(
 
 pub async fn start_process(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<StartProcessRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::start(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -117,12 +117,12 @@ pub async fn start_process(
 
 pub async fn delete_process(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     services::delete(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;
@@ -141,12 +141,12 @@ pub async fn delete_process(
 
 pub async fn pause_process(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::pause(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;
@@ -159,12 +159,12 @@ pub async fn pause_process(
 
 pub async fn resume_process(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::resume(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;

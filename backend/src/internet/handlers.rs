@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     software::{
         dtos::TransferRequest,
@@ -111,7 +111,7 @@ pub fn configure(
 
 pub async fn internet_targets(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_targets(
@@ -130,13 +130,13 @@ pub async fn internet_targets(
 
 pub async fn internet_navigate(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     ip: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_navigate(
             &state.pool,
-            user.0,
+            ctx.id,
             ip.into_inner(),
         )
         .await?;
@@ -152,13 +152,13 @@ pub async fn internet_navigate(
 
 pub async fn internet_login(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<InternetLoginRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_login(
             &state.pool,
-            user.0,
+            ctx.id,
             input.into_inner(),
         )
         .await?;
@@ -174,13 +174,13 @@ pub async fn internet_login(
 
 pub async fn internet_hack(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<InternetHackRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_hack(
             &state.pool,
-            user.0,
+            ctx.id,
             input.into_inner(),
         )
         .await?;
@@ -199,13 +199,13 @@ pub async fn internet_hack(
 
 pub async fn internet_analyze(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<IpRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_analyze(
             &state.pool,
-            user.0,
+            ctx.id,
             input.into_inner(),
         )
         .await?;
@@ -224,7 +224,7 @@ pub async fn internet_analyze(
 
 pub async fn remote_software(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     ip: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let ip = ip.into_inner();
@@ -238,7 +238,7 @@ pub async fn remote_software(
 
     services::require_access(
         &state.pool,
-        user.0,
+        ctx.id,
         ip,
     )
     .await?;
@@ -256,7 +256,7 @@ pub async fn remote_software(
 
 pub async fn transfer_software(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     ip: web::Path<i64>,
     input: web::Json<TransferRequest>,
 ) -> Result<HttpResponse, ApiError> {
@@ -271,7 +271,7 @@ pub async fn transfer_software(
 
     services::require_access(
         &state.pool,
-        user.0,
+        ctx.id,
         ip,
     )
     .await?;
@@ -279,7 +279,7 @@ pub async fn transfer_software(
     let response =
         software_services::transfer_software(
             &state.pool,
-            user.0,
+            ctx.id,
             target.id,
             target.is_npc,
             input.into_inner(),
@@ -294,7 +294,7 @@ pub async fn transfer_software(
 
 pub async fn delete_remote_software(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
     let (ip, software_id) =
@@ -309,7 +309,7 @@ pub async fn delete_remote_software(
 
     services::require_access(
         &state.pool,
-        user.0,
+        ctx.id,
         ip,
     )
     .await?;
@@ -317,7 +317,7 @@ pub async fn delete_remote_software(
     let response =
         software_services::delete_remote_software(
             &state.pool,
-            user.0,
+            ctx.id,
             target.id,
             target.is_npc,
             software_id,
@@ -338,13 +338,13 @@ pub async fn delete_remote_software(
 
 pub async fn remote_log(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     ip: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::remote_log(
             &state.pool,
-            user.0,
+            ctx.id,
             ip.into_inner(),
         )
         .await?;
@@ -354,14 +354,14 @@ pub async fn remote_log(
 
 pub async fn edit_remote_log(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     ip: web::Path<i64>,
     input: web::Json<LogEditRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::edit_remote_log(
             &state.pool,
-            user.0,
+            ctx.id,
             ip.into_inner(),
             input.into_inner(),
         )
@@ -381,12 +381,12 @@ pub async fn edit_remote_log(
 
 pub async fn internet_bookmarks(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_bookmarks(
             &state.pool,
-            user.0,
+            ctx.id,
         )
         .await?;
 
@@ -395,13 +395,13 @@ pub async fn internet_bookmarks(
 
 pub async fn add_bookmark(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<IpRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::add_bookmark(
             &state.pool,
-            user.0,
+            ctx.id,
             input.into_inner(),
         )
         .await?;
@@ -414,12 +414,12 @@ pub async fn add_bookmark(
 
 pub async fn remove_bookmark(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     ip: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     services::remove_bookmark(
         &state.pool,
-        user.0,
+        ctx.id,
         ip.into_inner(),
     )
     .await?;
@@ -435,14 +435,47 @@ pub async fn remove_bookmark(
 
 pub async fn internet_history(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_history(
             &state.pool,
-            user.0,
+            ctx.id,
         )
         .await?;
 
     Ok(HttpResponse::Ok().json(response))
+}
+//
+// ==============================
+// SITIOS · PANEL
+// ==============================
+//
+
+/// Se montan dentro del scope `/admin`, que main envuelve en `AdminOnly`.
+pub fn configure_admin(cfg: &mut web::ServiceConfig) {
+    cfg.route("/sites", web::get().to(admin_sites))
+        .route("/sites/{kind}/{id}", web::put().to(admin_set_site));
+}
+
+pub async fn admin_sites(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::all_sites(&state.pool, ctx).await?;
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
+pub async fn admin_set_site(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    path: web::Path<(String, i64)>,
+    input: web::Json<super::dtos::SiteUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let (kind, id) = path.into_inner();
+
+    services::set_site(&state.pool, ctx, &kind, id, &input.web).await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }

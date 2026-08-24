@@ -4,13 +4,21 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
 
 use super::{
-    dtos::BuyPartRequest,
+    dtos::{
+        BuyMachineRequest,
+        BuyPartRequest,
+        ChipsetInput,
+        GrantRequest,
+        InstallRequest,
+        PartInput,
+        RenameMachineRequest,
+    },
     services,
 };
 
@@ -29,6 +37,38 @@ pub fn configure(
             web::get().to(hardware),
         )
         .route(
+            "/hardware/machines",
+            web::get().to(machine_detail),
+        )
+        .route(
+            "/hardware/machines",
+            web::post().to(buy_machine),
+        )
+        .route(
+            "/hardware/machines/quote",
+            web::get().to(machine_quote),
+        )
+        .route(
+            "/hardware/machines/{id}",
+            web::put().to(rename_machine),
+        )
+        .route(
+            "/hardware/machines/{id}",
+            web::delete().to(scrap_machine),
+        )
+        .route(
+            "/hardware/components",
+            web::get().to(components),
+        )
+        .route(
+            "/hardware/components/{id}/install",
+            web::post().to(install_component),
+        )
+        .route(
+            "/hardware/components/{id}/install",
+            web::delete().to(uninstall_component),
+        )
+        .route(
             "/hardware/shop",
             web::get().to(hardware_shop),
         )
@@ -42,6 +82,47 @@ pub fn configure(
         );
 }
 
+/// Rutas del panel para el catalogo de piezas. Se montan dentro del scope `/admin`, que
+/// main envuelve en `AdminOnly`: ningun handler de aqui comprueba permisos por su cuenta
+/// porque para quien no es administrador estas rutas no existen.
+pub fn configure_admin(
+    cfg: &mut web::ServiceConfig,
+) {
+    cfg
+        .route(
+            "/parts",
+            web::get().to(admin_parts),
+        )
+        .route(
+            "/parts",
+            web::post().to(admin_create_part),
+        )
+        .route(
+            "/parts/{id}",
+            web::put().to(admin_edit_part),
+        )
+        .route(
+            "/parts/{id}",
+            web::delete().to(admin_delete_part),
+        )
+        .route(
+            "/components",
+            web::post().to(admin_grant),
+        )
+        .route(
+            "/chipsets",
+            web::get().to(admin_chipsets),
+        )
+        .route(
+            "/chipsets",
+            web::post().to(admin_create_chipset),
+        )
+        .route(
+            "/chipsets/{id}",
+            web::delete().to(admin_delete_chipset),
+        );
+}
+
 //
 // ==============================
 // MACHINES
@@ -50,11 +131,154 @@ pub fn configure(
 
 pub async fn hardware(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::machines(
         &state.pool,
-        user.0,
+        ctx.id,
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+/// Cada maquina con su placa, sus piezas y sus ranuras libres.
+pub async fn machine_detail(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::machine_detail(
+        &state.pool,
+        ctx.id,
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn machine_quote(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::machine_quote(
+        &state.pool,
+        ctx.id,
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn buy_machine(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<BuyMachineRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::buy_machine(
+        &state.pool,
+        ctx.id,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn rename_machine(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<RenameMachineRequest>,
+) -> Result<HttpResponse, ApiError> {
+    services::rename_machine(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn scrap_machine(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::scrap_machine(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+//
+// ==============================
+// COMPONENTS
+// ==============================
+//
+
+pub async fn components(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::components(
+        &state.pool,
+        ctx.id,
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn install_component(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<InstallRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::install(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn uninstall_component(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::uninstall(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
     )
     .await?;
 
@@ -71,20 +295,26 @@ pub async fn hardware(
 //
 
 pub async fn hardware_shop(
-    _: CurrentUser,
-) -> HttpResponse {
-    HttpResponse::Ok()
-        .json(services::shop())
+    state: web::Data<AppState>,
+    _: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response =
+        services::shop(&state.pool).await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
 }
 
 pub async fn buy_hardware(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<BuyPartRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::buy(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -97,13 +327,103 @@ pub async fn buy_hardware(
 
 //
 // ==============================
+// ADMIN
+// ==============================
+//
+
+pub async fn admin_parts(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::list_parts(
+        &state.pool,
+        ctx,
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn admin_create_part(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<PartInput>,
+) -> Result<HttpResponse, ApiError> {
+    let id = services::create_part(
+        &state.pool,
+        ctx,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(serde_json::json!({ "id": id })),
+    )
+}
+
+pub async fn admin_edit_part(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<PartInput>,
+) -> Result<HttpResponse, ApiError> {
+    services::edit_part(
+        &state.pool,
+        ctx,
+        id.into_inner(),
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn admin_delete_part(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::remove_part(
+        &state.pool,
+        ctx,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn admin_grant(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<GrantRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let made = services::grant(
+        &state.pool,
+        ctx,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(serde_json::json!({ "components": made })),
+    )
+}
+
+//
+// ==============================
 // SERVER STATS
 // ==============================
 //
 
 pub async fn server_stats(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::server_stats(&state.pool)
@@ -113,4 +433,50 @@ pub async fn server_stats(
         HttpResponse::Ok()
             .json(response),
     )
+}
+
+pub async fn admin_chipsets(
+    state: web::Data<AppState>,
+    _: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response =
+        services::chipsets(&state.pool).await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn admin_create_chipset(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<ChipsetInput>,
+) -> Result<HttpResponse, ApiError> {
+    let id = services::create_chipset(
+        &state.pool,
+        ctx,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(serde_json::json!({ "id": id })),
+    )
+}
+
+pub async fn admin_delete_chipset(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::remove_chipset(
+        &state.pool,
+        ctx,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }

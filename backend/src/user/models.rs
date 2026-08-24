@@ -20,17 +20,28 @@ pub struct SettingsRow {
 }
 
 #[derive(Debug, Clone, FromRow)]
+// Solo lo que el juego mantiene de verdad.
+//
+// users_stats tiene ocho contadores mas -- mission_count, money_earned, money_transfered,
+// money_research, ddos_count, profile_views, time_playing -- y cache tiene reputation.
+// Ninguno tiene una sola escritura en todo el backend: son columnas del esquema heredado
+// que este port aun no ha cableado. Se quedan en la tabla, que es donde aterrizaran cuando
+// se porten, pero fuera de aqui: devolver un cero permanente con nombre de estadistica es
+// mentir con mas pasos.
 pub struct ProfileRow {
     pub id: i64,
     pub login: String,
     pub game_ip: i64,
     pub biography: String,
-    pub visible: bool,
-    pub reputation: i64,
+    pub web: String,
     pub rank: i32,
-    pub mission_count: i32,
     pub hack_count: i32,
-    pub money_earned: i64,
+    pub money_hardware: i64,
+    pub exp: i64,
+
+    // Los contadores valen 0 si falta la fila del LEFT JOIN, pero una fecha de alta
+    // inventada mentiria, asi que va opcional.
+    pub date_joined: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize)]
@@ -101,4 +112,17 @@ impl CertificationDefinition {
     pub fn all() -> impl Iterator<Item = Self> {
         (1..=5).filter_map(Self::by_level)
     }
+}
+/// Una linea del listado del panel. Ademas de la cuenta lleva cuantas piezas tiene, que es
+/// lo que un administrador quiere saber antes de regalarle mas.
+#[derive(Debug, Clone, FromRow)]
+pub struct AdminUserRow {
+    pub id: i64,
+    pub login: String,
+    pub email: String,
+    pub game_ip: i64,
+    pub is_admin: bool,
+    pub premium: bool,
+    pub last_login: DateTime<Utc>,
+    pub components: i64,
 }

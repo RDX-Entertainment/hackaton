@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -80,7 +80,7 @@ pub fn configure(
 //
 
 pub async fn software_type_catalog(
-    _: CurrentUser,
+    _: Ctx,
 ) -> HttpResponse {
     HttpResponse::Ok().json(
         services::software_type_catalog(),
@@ -95,11 +95,11 @@ pub async fn software_type_catalog(
 
 pub async fn software(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::software(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -111,12 +111,12 @@ pub async fn software(
 
 pub async fn create_software(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<NewSoftwareRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::create_software(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -135,11 +135,11 @@ pub async fn create_software(
 
 pub async fn research(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::research(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -151,12 +151,12 @@ pub async fn research(
 
 pub async fn start_research(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<ResearchStartRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::start_research(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;

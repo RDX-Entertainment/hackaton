@@ -6,10 +6,11 @@ use bcrypt::{
 use serde_json::Value;
 use sqlx::PgPool;
 
-use crate::error::ApiError;
+use crate::{auth::Ctx, error::ApiError};
 
 use super::{
     dtos::{
+        AdminUserResponse,
         CertificationCompletedResponse,
         CertificationItemResponse,
         CertificationStartRequest,
@@ -464,13 +465,14 @@ pub async fn save_profile(
         ));
     }
 
-    repo::upsert_profile(
-        pool,
-        user_id,
-        biography,
-        input.visible,
-    )
-    .await?;
+    // La regla de que puede llevar una pagina vive en `internet::sanitize`, que es la
+    // misma que aplica el panel: si aqui fuera otra, un jugador podria guardar algo que
+    // el catalogo rechaza.
+    if let Some(web) = input.web.as_deref() {
+        crate::internet::sanitize::check(web)?;
+    }
+
+    repo::upsert_profile(pool, user_id, biography, input.web.as_deref()).await?;
 
     Ok(SavedResponse {
         saved: true,
@@ -544,6 +546,50 @@ pub async fn delete_compromised_list(
 
     if !deleted {
         return Err(ApiError::NotFound);
+    }
+
+    Ok(())
+}
+//
+// ==============================
+// ADMIN
+// ==============================
+//
+
+pub async fn all_users(
+    pool: &PgPool,
+) -> Result<Vec<AdminUserResponse>, ApiError> {
+    let users = repo::find_all_users(pool)
+        .await?
+        .into_iter()
+        .map(AdminUserResponse::from)
+        .collect();
+
+    Ok(users)
+}
+
+/// Dar o quitar la marca de administrador.
+///
+/// No deja quitartela a ti mismo: si fueras el ultimo, el panel quedaria sin nadie que
+/// pueda entrar y habria que arreglarlo a mano en la base de datos.
+pub async fn set_admin(
+    pool: &PgPool,
+    ctx: Ctx,
+    target: i64,
+    admin: bool,
+) -> Result<(), ApiError> {
+    ctx.require_admin()?;
+
+    if target == ctx.id && !admin {
+        return Err(ApiError::BadRequest(
+            "no puedes quitarte a ti mismo el permiso".into(),
+        ));
+    }
+
+    let changed = repo::set_admin(pool, target, admin).await?;
+
+    if changed == 0 {
+        return Err(ApiError::BadRequest("unknown user".into()));
     }
 
     Ok(())

@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -50,11 +50,11 @@ pub fn configure(
 
 pub async fn mails(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::inbox(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -72,12 +72,12 @@ pub async fn mails(
 
 pub async fn mail(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::read(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;
@@ -96,12 +96,12 @@ pub async fn mail(
 
 pub async fn compose_mail(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<ComposeMailRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::compose(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -120,12 +120,12 @@ pub async fn compose_mail(
 
 pub async fn delete_mail(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     services::delete(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;

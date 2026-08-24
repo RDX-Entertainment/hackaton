@@ -1,0 +1,11 @@
+-- `player_profiles.visible` prometia algo que el juego no hace.
+--
+-- La columna se guardaba y se devolvia, y la interfaz ofrecia una casilla para cambiarla,
+-- pero no existe -- ni ha existido nunca en este port -- ninguna forma de mirar el perfil
+-- de otro jugador: la unica ruta es GET /profile, que devuelve siempre el tuyo. Un ajuste
+-- de privacidad sobre algo que nadie puede ver no es un ajuste: es un adorno que miente.
+--
+-- Se borra en vez de dejarla escondida. Si algun dia se porta el perfil publico, la
+-- columna vuelve junto con el endpoint que la haga significar algo, y mientras tanto el
+-- esquema no afirma una capacidad que no hay.
+ALTER TABLE player_profiles DROP COLUMN visible;

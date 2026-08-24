@@ -482,19 +482,18 @@ async fn uninstall_effect(
 /// The port has neither the uptime column nor the reset timers that price depends on, so
 /// the reset is free here until those exist.
 async fn reset_ip_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sqlx::Error> {
-    for _ in 0..16 {
-        let candidate:i64=sqlx::query_scalar("SELECT (floor(random()*4294967294)+1)::bigint").fetch_one(pool).await?;
-        let taken:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE game_ip=$1) OR EXISTS(SELECT 1 FROM npc WHERE npc_ip=$1)").bind(candidate).fetch_one(pool).await?;
-        if taken {
-            continue;
-        }
-        sqlx::query("UPDATE users SET game_ip=$2 WHERE id=$1")
-            .bind(user)
-            .bind(candidate)
-            .execute(pool)
-            .await?;
-        return Ok(());
-    }
+    // El sorteo y la comprobacion de que este libre viven en `random_free_ip()`, para que
+    // el worker y el alta de usuarios repartan direcciones con la misma regla.
+    let candidate: i64 = sqlx::query_scalar("SELECT random_free_ip()")
+        .fetch_one(pool)
+        .await?;
+
+    sqlx::query("UPDATE users SET game_ip=$2 WHERE id=$1")
+        .bind(user)
+        .bind(candidate)
+        .execute(pool)
+        .await?;
+
     Ok(())
 }
 

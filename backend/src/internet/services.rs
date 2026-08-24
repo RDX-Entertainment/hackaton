@@ -52,6 +52,7 @@ pub async fn resolve_ip(
             name: npc.name,
             npc_type: npc.npc_type,
             down: npc.down,
+            web: npc.web,
         });
     }
 
@@ -66,6 +67,7 @@ pub async fn resolve_ip(
         name: player.login,
         npc_type: 0,
         down: false,
+        web: player.web,
     })
 }
 
@@ -187,6 +189,7 @@ pub async fn internet_navigate(
         bookmarked,
         scanned,
         analysis,
+        web: target.web,
     })
 }
 
@@ -628,4 +631,55 @@ pub async fn internet_history(
         .map(InternetHistoryResponse::from)
         .collect(),
     )
+}
+//
+// ==============================
+// SITIOS
+// ==============================
+//
+
+/// Todas las paginas, con su contenido.
+///
+/// Va entero y no por trozos porque el panel deja saltar de una a otra editandolas, y
+/// pedir cada una al hacer clic convertiria eso en una espera por sitio. Son decenas de
+/// paginas de un par de kilobytes; el dia que sean miles, se pagina.
+pub async fn all_sites(
+    pool: &PgPool,
+    ctx: crate::auth::Ctx,
+) -> Result<Vec<crate::internet::dtos::SiteResponse>, ApiError> {
+    ctx.require_admin()?;
+
+    let sites = repo::all_sites(pool)
+        .await?
+        .into_iter()
+        .map(crate::internet::dtos::SiteResponse::from)
+        .collect();
+
+    Ok(sites)
+}
+
+/// Cambiar la pagina de cualquiera. Pasa por la misma regla que el perfil de un jugador:
+/// ser administrador da permiso para editar sitios ajenos, no para meter un guion.
+pub async fn set_site(
+    pool: &PgPool,
+    ctx: crate::auth::Ctx,
+    kind: &str,
+    id: i64,
+    web: &str,
+) -> Result<(), ApiError> {
+    ctx.require_admin()?;
+
+    super::sanitize::check(web)?;
+
+    let changed = match kind {
+        "npc" => repo::set_npc_site(pool, id, web).await?,
+        "player" => repo::set_player_site(pool, id, web).await?,
+        _ => return Err(ApiError::BadRequest("kind must be npc or player".into())),
+    };
+
+    if changed == 0 {
+        return Err(ApiError::BadRequest("unknown site".into()));
+    }
+
+    Ok(())
 }

@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     dtos::{LoginRequest, RegisterRequest},
-    models::CurrentUser,
+    middleware::Ctx,
     services,
 };
 
@@ -92,11 +92,11 @@ pub async fn register(
 
 pub async fn me(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::me(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 

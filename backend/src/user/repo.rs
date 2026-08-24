@@ -5,6 +5,7 @@ use sqlx::{
 };
 
 use super::models::{
+    AdminUserRow,
     CompromisedListEntry,
     DashboardUserRow,
     PlayerLogEntry,
@@ -464,17 +465,15 @@ pub async fn find_profile(
             u.login,
             u.game_ip,
             p.biography,
-            p.visible,
-            COALESCE(c.reputation, 0) AS reputation,
-            COALESCE(rk.rank, -1) AS rank,
-            st.mission_count,
-            st.hack_count,
-            st.money_earned
+            p.web,
+            COALESCE(rk.rank, -1)          AS rank,
+            COALESCE(st.hack_count, 0)     AS hack_count,
+            COALESCE(st.money_hardware, 0) AS money_hardware,
+            COALESCE(st.exp, 0)            AS exp,
+            st.date_joined
         FROM users u
         JOIN player_profiles p
             ON p.user_id = u.id
-        LEFT JOIN cache c
-            ON c.user_id = u.id
         LEFT JOIN ranking_user rk
             ON rk.user_id = u.id
         LEFT JOIN users_stats st
@@ -487,31 +486,32 @@ pub async fn find_profile(
     .await
 }
 
+/// `web` en None deja la pagina como esta: guardar la biografia no la borra.
 pub async fn upsert_profile(
     pool: &PgPool,
     user_id: i64,
     biography: &str,
-    visible: bool,
+    web: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         INSERT INTO player_profiles(
             user_id,
             biography,
-            visible
+            web
         )
-        VALUES($1, $2, $3)
+        VALUES($1, $2, COALESCE($3, ''))
 
         ON CONFLICT(user_id)
         DO UPDATE SET
             biography = EXCLUDED.biography,
-            visible = EXCLUDED.visible,
+            web = COALESCE($3, player_profiles.web),
             updated_at = now()
         "#,
     )
     .bind(user_id)
     .bind(biography)
-    .bind(visible)
+    .bind(web)
     .execute(pool)
     .await?;
 
@@ -594,4 +594,49 @@ pub async fn delete_compromised_list(
     .await?;
 
     Ok(result.rows_affected() > 0)
+}
+//
+// ==============================
+// ADMIN
+// ==============================
+//
+
+pub async fn find_all_users(
+    pool: &PgPool,
+) -> Result<Vec<AdminUserRow>, sqlx::Error> {
+    sqlx::query_as::<_, AdminUserRow>(
+        r#"
+        SELECT
+            u.id,
+            u.login,
+            u.email,
+            u.game_ip,
+            u.is_admin,
+            u.premium,
+            u.last_login,
+            (
+                SELECT count(*)
+                FROM hardware_components c
+                WHERE c.user_id = u.id
+            ) AS components
+        FROM users u
+        ORDER BY u.id
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn set_admin(
+    pool: &PgPool,
+    id: i64,
+    admin: bool,
+) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1")
+        .bind(id)
+        .bind(admin)
+        .execute(pool)
+        .await?;
+
+    Ok(done.rows_affected())
 }

@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use super::models::{
     DashboardUserRow,
+    AdminUserRow,
     ProfileRow,
     SettingsRow,
 };
@@ -146,12 +147,14 @@ pub struct ProfileResponse {
     pub login: String,
     pub game_ip: i64,
     pub biography: String,
-    pub visible: bool,
-    pub reputation: i64,
+
+    /// La pagina que sirve su maquina. Se pinta en un marco aislado, nunca en linea.
+    pub web: String,
     pub rank: i32,
-    pub missions: i32,
     pub hacks: i32,
-    pub money_earned: i64,
+    pub money_hardware: i64,
+    pub exp: i64,
+    pub date_joined: Option<DateTime<Utc>>,
 }
 
 impl From<ProfileRow> for ProfileResponse {
@@ -161,12 +164,12 @@ impl From<ProfileRow> for ProfileResponse {
             login: value.login,
             game_ip: value.game_ip,
             biography: value.biography,
-            visible: value.visible,
-            reputation: value.reputation,
+            web: value.web,
             rank: value.rank,
-            missions: value.mission_count,
             hacks: value.hack_count,
-            money_earned: value.money_earned,
+            money_hardware: value.money_hardware,
+            exp: value.exp,
+            date_joined: value.date_joined,
         }
     }
 }
@@ -174,7 +177,10 @@ impl From<ProfileRow> for ProfileResponse {
 #[derive(Debug, Deserialize)]
 pub struct ProfileUpdate {
     pub biography: String,
-    pub visible: bool,
+
+    /// Opcional: guardar solo la biografia no borra la pagina.
+    #[serde(default)]
+    pub web: Option<String>,
 }
 
 //
@@ -189,4 +195,41 @@ pub struct CreateCompromisedListEntryRequest {
     pub login: String,
     pub password: String,
     pub virus_id: Option<i64>,
+}
+//
+// ==============================
+// ADMIN
+// ==============================
+//
+
+#[derive(Debug, Serialize)]
+pub struct AdminUserResponse {
+    pub id: i64,
+    pub login: String,
+    pub email: String,
+    pub game_ip: i64,
+    pub is_admin: bool,
+    pub premium: bool,
+    pub last_login: DateTime<Utc>,
+    pub components: i64,
+}
+
+impl From<AdminUserRow> for AdminUserResponse {
+    fn from(value: AdminUserRow) -> Self {
+        Self {
+            id: value.id,
+            login: value.login,
+            email: value.email,
+            game_ip: value.game_ip,
+            is_admin: value.is_admin,
+            premium: value.premium,
+            last_login: value.last_login,
+            components: value.components,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminFlagUpdate {
+    pub admin: bool,
 }

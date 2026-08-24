@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -50,7 +50,7 @@ pub fn configure(
 
 pub async fn forum_topics(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::topics(&state.pool).await?;
@@ -69,7 +69,7 @@ pub async fn forum_topics(
 
 pub async fn forum_topic(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::thread(
@@ -92,12 +92,12 @@ pub async fn forum_topic(
 
 pub async fn create_forum_topic(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<NewTopicRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::create_topic(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -110,13 +110,13 @@ pub async fn create_forum_topic(
 
 pub async fn create_forum_post(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
     input: web::Json<NewPostRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::create_post(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
         input.into_inner(),
     )

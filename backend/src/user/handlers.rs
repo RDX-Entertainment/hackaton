@@ -4,13 +4,14 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     AppState,
 };
 
 use super::{
     dtos::{
+        AdminFlagUpdate,
         CertificationStartRequest,
         CreateCompromisedListEntryRequest,
         ProfileUpdate,
@@ -110,7 +111,7 @@ pub fn configure(
 
 pub async fn dashboard(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     //
     // IMPORTANTE:
@@ -130,7 +131,7 @@ pub async fn dashboard(
 
     let response = services::dashboard(
         &state.pool,
-        user.0,
+        ctx.id,
         actions,
     )
     .await?;
@@ -149,11 +150,11 @@ pub async fn dashboard(
 
 pub async fn player_log(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::player_log(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -171,11 +172,11 @@ pub async fn player_log(
 
 pub async fn settings(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::settings(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -187,12 +188,12 @@ pub async fn settings(
 
 pub async fn save_settings(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<SettingsUpdate>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::save_settings(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -211,11 +212,11 @@ pub async fn save_settings(
 
 pub async fn certifications(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::certifications(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -227,13 +228,13 @@ pub async fn certifications(
 
 pub async fn start_certification(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     level: web::Path<i16>,
     input: web::Json<CertificationStartRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::start_certification(
         &state.pool,
-        user.0,
+        ctx.id,
         level.into_inner(),
         input.into_inner(),
     )
@@ -247,12 +248,12 @@ pub async fn start_certification(
 
 pub async fn complete_certification(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     level: web::Path<i16>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::complete_certification(
         &state.pool,
-        user.0,
+        ctx.id,
         level.into_inner(),
     )
     .await?;
@@ -271,11 +272,11 @@ pub async fn complete_certification(
 
 pub async fn profile(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::profile(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -287,12 +288,12 @@ pub async fn profile(
 
 pub async fn save_profile(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<ProfileUpdate>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::save_profile(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -311,12 +312,12 @@ pub async fn save_profile(
 
 pub async fn compromised_lists(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::compromised_lists(
             &state.pool,
-            user.0,
+            ctx.id,
         )
         .await?;
 
@@ -328,13 +329,13 @@ pub async fn compromised_lists(
 
 pub async fn add_compromised_list(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<CreateCompromisedListEntryRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::add_compromised_list(
             &state.pool,
-            user.0,
+            ctx.id,
             input.into_inner(),
         )
         .await?;
@@ -347,12 +348,12 @@ pub async fn add_compromised_list(
 
 pub async fn delete_compromised_list(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     services::delete_compromised_list(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;
@@ -361,4 +362,54 @@ pub async fn delete_compromised_list(
         HttpResponse::NoContent()
             .finish(),
     )
+}
+//
+// ==============================
+// ADMIN
+// ==============================
+//
+
+/// Rutas del panel para las cuentas. Cuelgan del scope `/admin` que monta main.
+pub fn configure_admin(
+    cfg: &mut web::ServiceConfig,
+) {
+    cfg
+        .route(
+            "/users",
+            web::get().to(admin_users),
+        )
+        .route(
+            "/users/{id}/admin",
+            web::put().to(admin_set_flag),
+        );
+}
+
+pub async fn admin_users(
+    state: web::Data<AppState>,
+    _: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let response =
+        services::all_users(&state.pool).await?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn admin_set_flag(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<AdminFlagUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    services::set_admin(
+        &state.pool,
+        ctx,
+        id.into_inner(),
+        input.admin,
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }

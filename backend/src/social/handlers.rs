@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -78,7 +78,7 @@ pub fn configure(
 
 pub async fn ranking(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::ranking(&state.pool).await?;
@@ -97,11 +97,11 @@ pub async fn ranking(
 
 pub async fn friends(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::friends(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -113,12 +113,12 @@ pub async fn friends(
 
 pub async fn request_friend(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<FriendRequestRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::request_friend(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner().user_id,
     )
     .await?;
@@ -131,12 +131,12 @@ pub async fn request_friend(
 
 pub async fn accept_friend(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::accept_friend(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;
@@ -155,7 +155,7 @@ pub async fn accept_friend(
 
 pub async fn clans(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::clans(&state.pool).await?;
@@ -168,11 +168,11 @@ pub async fn clans(
 
 pub async fn my_clan(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::my_clan(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -192,12 +192,12 @@ pub async fn my_clan(
 
 pub async fn create_clan(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     input: web::Json<CreateClanRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::create_clan(
         &state.pool,
-        user.0,
+        ctx.id,
         input.into_inner(),
     )
     .await?;
@@ -216,13 +216,13 @@ pub async fn create_clan(
 
 pub async fn request_clan_join(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
     input: web::Json<ClanJoinRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::request_join(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
         input.into_inner(),
     )
@@ -236,11 +236,11 @@ pub async fn request_clan_join(
 
 pub async fn clan_requests(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::requests(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -252,12 +252,12 @@ pub async fn clan_requests(
 
 pub async fn accept_clan_request(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::accept_request(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
     )
     .await?;

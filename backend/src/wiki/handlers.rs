@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -50,7 +50,7 @@ pub fn configure(
 
 pub async fn wiki_index(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::wiki_index(
@@ -72,7 +72,7 @@ pub async fn wiki_index(
 
 pub async fn wiki_page(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
     slug: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let slug = slug.into_inner();
@@ -98,14 +98,14 @@ pub async fn wiki_page(
 
 pub async fn save_wiki_page(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     slug: web::Path<String>,
     input: web::Json<WikiEditRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::save_wiki_page(
             &state.pool,
-            user.0,
+            ctx.id,
             slug.into_inner(),
             input.into_inner(),
         )
@@ -125,7 +125,7 @@ pub async fn save_wiki_page(
 
 pub async fn wiki_revisions(
     state: web::Data<AppState>,
-    _: CurrentUser,
+    _: Ctx,
     slug: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let slug = slug.into_inner();

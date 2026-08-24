@@ -10,6 +10,8 @@ use super::models::{CredentialsRow, UserRow};
 
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {
+    // Nombre de usuario o correo, indiferentemente. El campo conserva el nombre
+    // `username` para no romper el contrato con clientes ya escritos.
     pub username: String,
     pub password: String,
 }

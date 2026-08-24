@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
 };
 
@@ -20,12 +20,12 @@ pub fn configure(
 }
 
 pub async fn page_data(
-    user: CurrentUser,
+    ctx: Ctx,
     page: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::page_data(
-            user.0,
+            ctx.id,
             page.into_inner(),
         )?;
 

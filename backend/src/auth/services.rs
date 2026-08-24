@@ -56,7 +56,7 @@ pub async fn login(
     input: LoginRequest,
 ) -> Result<SessionResponse, ApiError> {
     let credentials =
-        repo::find_credentials_by_login(
+        repo::find_credentials_by_identifier(
             pool,
             input.username.trim(),
         )
@@ -143,8 +143,12 @@ pub async fn register(
         ));
     }
 
-    let game_ip = rand::rng()
-        .random_range(1_i64..=u32::MAX as i64);
+    // La direccion la sortea la base de datos: `random_free_ip()` conoce los bloques
+    // publicos y comprueba que no la tenga ya nadie. Ver 0018_public_ips.sql.
+    let game_ip: i64 =
+        sqlx::query_scalar("SELECT random_free_ip()")
+            .fetch_one(pool)
+            .await?;
 
     let game_pass: String = rand::rng()
         .sample_iter(Alphanumeric)
@@ -224,4 +228,71 @@ fn valid_name(name: &str) -> bool {
                     b'.' | b'_' | b'-'
                 )
         })
+}
+
+//
+// ==============================
+// ADMIN BOOTSTRAP
+// ==============================
+//
+
+/// Deja lista la cuenta de administrador que declara el `.env`.
+///
+/// Corre al arrancar y es idempotente: si la cuenta no existe la crea con el alta normal
+/// -- maquina, piezas y todo lo demas -- y si ya existe solo se asegura de que la
+/// contrasena y la marca de administrador sean las que dice el fichero. Asi el panel es
+/// alcanzable en un entorno recien clonado sin tocar la base a mano.
+///
+/// Sin las dos variables no hace nada, que es lo que debe pasar fuera de desarrollo.
+pub async fn ensure_admin(
+    pool: &PgPool,
+    jwt_secret: &str,
+) -> Result<(), ApiError> {
+    let (Ok(email), Ok(password)) = (
+        std::env::var("ADMIN_EMAIL"),
+        std::env::var("ADMIN_PASSWORD"),
+    ) else {
+        return Ok(());
+    };
+
+    let login = std::env::var("ADMIN_LOGIN")
+        .unwrap_or_else(|_| "adm".to_owned());
+
+    let existing =
+        repo::find_credentials_by_identifier(pool, &email)
+            .await?;
+
+    let id = match existing {
+        Some(found) => found.id,
+        None => {
+            let session = register(
+                pool,
+                jwt_secret,
+                RegisterRequest {
+                    username: login.clone(),
+                    password: password.clone(),
+                    email: Some(email.clone()),
+                },
+            )
+            .await?;
+
+            session.user.id
+        }
+    };
+
+    let password_hash = hash(&password, BCRYPT_COST)
+        .map_err(|_| {
+            ApiError::BadRequest(
+                "cannot hash admin password".into(),
+            )
+        })?;
+
+    repo::promote_admin(pool, id, &password_hash)
+        .await?;
+
+    tracing::info!(
+        "cuenta de administrador lista: {email}"
+    );
+
+    Ok(())
 }

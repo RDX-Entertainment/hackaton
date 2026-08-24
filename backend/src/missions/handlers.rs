@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    auth::CurrentUser,
+    auth::Ctx,
     error::ApiError,
     state::AppState,
 };
@@ -42,11 +42,11 @@ pub fn configure(
 
 pub async fn missions(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::missions(
         &state.pool,
-        user.0,
+        ctx.id,
     )
     .await?;
 
@@ -64,13 +64,13 @@ pub async fn missions(
 
 pub async fn mission_command(
     state: web::Data<AppState>,
-    user: CurrentUser,
+    ctx: Ctx,
     id: web::Path<i64>,
     input: web::Json<MissionCommandRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let response = services::command(
         &state.pool,
-        user.0,
+        ctx.id,
         id.into_inner(),
         input.into_inner().action,
     )

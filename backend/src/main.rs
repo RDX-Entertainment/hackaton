@@ -2,6 +2,7 @@ mod auth;
 mod error;
 mod hardware;
 mod internet;
+mod kits;
 mod legacy;
 mod mails;
 mod finances;
@@ -66,6 +67,14 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("unable to apply PostgreSQL migrations");
 
+    if let Err(error) =
+        auth::services::ensure_admin(&pool, &jwt_secret).await
+    {
+        return Err(std::io::Error::other(format!(
+            "no se pudo preparar la cuenta de administrador: {error}"
+        )));
+    }
+
     let state = web::Data::new(AppState {
         pool,
         jwt_secret,
@@ -86,13 +95,22 @@ async fn main() -> std::io::Result<()> {
                     .configure(internet::handlers::configure)
                     .configure(news::handlers::configure)
                     .configure(hardware::handlers::configure)
+                    .configure(kits::handlers::configure)
                     .configure(mails::handlers::configure)
                     .configure(missions::handlers::configure)
                     .configure(forum::handlers::configure)
                     .configure(process::handlers::configure)
                     .configure(finances::handlers::configure)
                     .configure(social::handlers::configure)
-                    .configure(pages::handlers::configure),
+                    .configure(pages::handlers::configure)
+                    .service(
+                        web::scope("/admin")
+                            .wrap(auth::AdminOnly)
+                            .configure(hardware::handlers::configure_admin)
+                            .configure(kits::handlers::configure_admin)
+                            .configure(internet::handlers::configure_admin)
+                            .configure(user::handlers::configure_admin),
+                    ),
             )
     })
     .bind((host, port))?
