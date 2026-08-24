@@ -1,28 +1,64 @@
-.compose { 
-    display: grid;
-    gap: .7rem;
-    margin: 0 0 1.5rem;
-    max-width: 650px;
+/*
+ * The `.compose` form, used by every screen that submits something. Its label
+ * styling lives in base.css alongside the auth form's, since the two share it.
+ */
+.compose {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.1rem 1.2rem;
+  margin: 1rem 0 1.6rem;
+  max-width: var(--content-max-width);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-left: 2px solid var(--color-accent-dim);
 }
-.compose label {
-    display: grid;
-    gap: .3rem; 
+
+.compose input,
+.compose textarea,
+.compose select {
+  padding: 0.55rem 0.7rem;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.86rem;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
 }
-.compose input, .compose textarea {
-    padding: .65rem; 
-    color: inherit; 
-    background: #101b17; 
-    border: 1px solid #426154; 
+
+.compose textarea {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.55;
 }
-.compose textarea { 
-    min-height: 8rem; 
-    resize: vertical; 
+
+.compose button {
+  justify-self: start;
 }
-.compose button { 
-    justify-self: start; 
-    padding: .6rem 1rem; 
-    border: 0; 
-    background: #75bd54; 
-    color: #07100e; 
-    font-weight: bold; 
+
+/* A select outside a .compose form still belongs to the same family. */
+select {
+  padding: 0.55rem 0.7rem;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.86rem;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+}
+
+/* Checkboxes are the one control that keeps a native look, tinted green. */
+input[type="checkbox"] {
+  accent-color: var(--color-accent);
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* The status line under a form: an echoed reply, not a label. */
+.compose .muted,
+.compose span {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.compose span:not(:empty)::before {
+  content: "\2192  ";
+  color: var(--color-accent-dim);
 }

@@ -1,170 +1,321 @@
-:root{
-    font-family:Arial,sans-serif;
-    color:#d7e4df;
-    background:#07100e
+/*
+ * Page frame, the sign-in screen and the authenticated shell.
+ *
+ * Two rules hold the look together: edges are hard everywhere except the macOS
+ * window on the sign-in screen, and the terminal furniture (prompts, brackets,
+ * carets) is drawn in CSS rather than typed into the markup, so a screen stays
+ * readable as JSX.
+ */
+
+:root {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  /* Ligatures off: this is a UI, not a code editor. */
+  font-variant-ligatures: none;
 }
-*{
-    box-sizing:border-box
+
+* {
+  box-sizing: border-box;
 }
-body{
-    margin:0
+
+/*
+ * Hard edges everywhere. Targeted rather than a universal reset, because the
+ * macOS window frame and its traffic lights are a deliberate exception and
+ * should not have to fight a `*` rule to keep their curves.
+ */
+input,
+textarea,
+select,
+button,
+table,
+fieldset,
+.table-wrap,
+.cards,
+.cards article,
+.compose,
+.forum-post,
+.wiki-content {
+  border-radius: 0;
 }
-.auth{
-    width:min(440px,90vw);
-    margin:12vh auto;
-    text-align:center
+
+body {
+  margin: 0;
 }
-.auth h1{
-    font-family:monospace;
-    font-size:2.4rem;
-    color:#8fe36a
+
+/*
+ * The backdrop: a grid so faint it reads as texture, plus a green bloom behind
+ * where the window sits. The first version drew the grid at full border colour
+ * and it fought the content for attention.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.14;
 }
-.auth p{
-    color:#93aaa0
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 42%,
+    rgba(0, 230, 118, 0.055),
+    transparent 70%
+  );
 }
-.auth form{
-    display:grid;
-    gap:1rem;
-    text-align:left;
-    margin:2rem 0
+
+h2,
+h3 {
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
-.auth label{
-    display:grid;
-    gap:.4rem
+
+/* Section headings read as commands you just ran. */
+.game h2::before {
+  content: "$ ";
+  color: var(--color-accent);
+  font-weight: 400;
 }
-.auth input{
-    padding:.7rem;
-    background:#101b17;
-    border:1px solid #426154;
-    color:inherit
+
+.game h3::before {
+  content: "## ";
+  color: var(--color-text-subtle);
+  font-weight: 400;
 }
-.auth button,header button{
-    padding:.7rem;
-    border:0;
-    background:#75bd54;
-    color:#07100e;
-    font-weight:bold;
-    cursor:pointer
+
+/* ---------- Sign in and register ---------- */
+
+/*
+ * The stage. Both modes live in one flex row, centred: normal mode shows the
+ * hero next to the window, console mode collapses the hero to nothing.
+ *
+ * The window never moves itself — it slides because the thing beside it stops
+ * taking up room. One source of truth for where things are, and the motion
+ * falls out of it.
+ */
+.auth {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 4vh 1.5rem;
 }
-.auth output,.error{
-    color:#ff8d8d
+
+.auth__window {
+  flex: 0 0 auto;
 }
-.shell{
-    display:grid;
-    grid-template-columns:
-    190px 1fr;
-    min-height:100vh
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
-.shell header{
-    grid-column:1/-1;
-    display:flex;
-    align-items:center;
-    gap:1rem;
-    padding:1rem 1.5rem;
-    background:#0d1914;
-    border-bottom:1px solid #294334
+
+.compose label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.shell header a{
-    font-weight:bold;
-    color:#8fe36a;
-    text-decoration:none
+
+.compose label::before {
+  content: "> ";
+  color: var(--color-accent-dim);
 }
-.shell header span{
-    margin-left:auto
+
+.compose input:focus,
+.compose textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent-glow);
 }
-.shell aside{
-    padding:1rem;
-    background:#0b1511;
-    border-right:1px solid #294334;
-    display:flex;
-    flex-direction:column;
-    gap:.25rem
+
+/* ---------- Buttons: commands in brackets ---------- */
+
+button {
+  padding: 0.5rem 0.9rem;
+  margin: 0 0.35rem 0.35rem 0;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  background: transparent;
+  border: var(--border-width) solid var(--color-border-strong);
+  cursor: pointer;
 }
-.shell aside a{
-    padding:.55rem .65rem;
-    color:#b7c9bd;
-    text-decoration:none
+
+button::before {
+  content: "[ ";
+  color: var(--color-text-subtle);
 }
-.shell aside a:hover{
-    background:#1c3326;
-    color:white
+
+button::after {
+  content: " ]";
+  color: var(--color-text-subtle);
 }
-.game{
-    padding:2rem
+
+button:hover:not(:disabled) {
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
-.cards{
-    display:flex;
-    gap:1rem;
-    flex-wrap:wrap
+
+button:hover:not(:disabled)::before,
+button:hover:not(:disabled)::after {
+  color: var(--color-bg);
 }
-.cards article{
-    min-width:160px;
-    padding:1.2rem;
-    background:#102019;
-    border:1px solid #294334
+
+button:disabled {
+  color: var(--color-text-subtle);
+  border-color: var(--color-border);
+  cursor: not-allowed;
 }
-.cards b,.cards small{
-    display:block
+
+/* The button that commits: lime, so it reads before the plain green ones. */
+.compose button {
+  color: var(--color-highlight);
+  border-color: var(--color-highlight-dim);
 }
-.cards b{
-    font-size:1.5rem;
-    color:#8fe36a
+
+.compose button:hover {
+  color: var(--color-bg);
+  background: var(--color-highlight);
+  border-color: var(--color-highlight);
 }
-.cards small,.muted{
-    color:#8ba195
+
+.error {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  color: var(--color-danger);
+  font-size: 0.82rem;
+  background: rgba(255, 95, 86, 0.07);
+  border-left: 2px solid var(--color-danger);
 }
-.compose{
-    display:grid;
-    gap:.7rem;
-    max-width:680px;
-    margin:1rem 0
+
+.error::before {
+  content: "! ";
 }
-.compose label{
-    display:grid;
-    gap:.3rem
+
+/* ---------- Shared blocks ---------- */
+
+/* One-pixel gaps on a border-coloured bed: the cards read as one grid. */
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin: 1rem 0 1.6rem;
+  background: var(--color-border-strong);
+  border: var(--border-width) solid var(--color-border-strong);
 }
-.compose input,.compose textarea{
-    padding:.65rem;
-    background:#101b17;
-    border:1px solid #426154;
-    color:inherit
+
+.cards article {
+  flex: 1 1 150px;
+  min-width: 150px;
+  padding: 1rem 1.1rem;
+  background: var(--color-surface);
 }
-.compose textarea{
-    min-height:8rem;
-    resize:vertical
+
+.cards b,
+.cards small {
+  display: block;
 }
-.compose button{
-    justify-self:start;
-    padding:.6rem 1rem;
-    border:0;
-    background:#75bd54;
-    color:#07100e;
-    font-weight:bold
+
+.cards b {
+  font-size: 1.45rem;
+  color: var(--color-accent);
+  text-shadow: 0 0 16px var(--color-accent-glow);
 }
-.wiki-content,.forum-post{
-    padding:1rem;
-    margin:1rem 0;
-    background:#102019;
-    border:1px solid #294334
+
+.cards small {
+  margin-top: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
-.wiki-content pre,.forum-post pre{
-    white-space:pre-wrap;
-    font:inherit;
-    line-height:1.45
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
 }
-.game a{
-    color:#9add7d
+
+.wiki-content,
+.forum-post {
+  padding: 0.9rem 1.1rem;
+  margin: 0.7rem 0;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-left: 2px solid var(--color-border-strong);
 }
-@media(max-width:700px){
-    .shell{
-        grid-template-columns:1fr
-    }
-    .shell aside{
-        border-right:0;
-        flex-direction:row;
-        overflow:auto
-    }
-    .game{
-        padding:1rem
-    }
+
+.forum-post:hover {
+  border-left-color: var(--color-accent-dim);
+}
+
+.forum-post b {
+  color: var(--color-text);
+}
+
+.forum-post small {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+}
+
+.forum-post p {
+  margin: 0.4rem 0 0.7rem;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+}
+
+.wiki-content pre,
+.forum-post pre {
+  margin: 0.5rem 0;
+  color: var(--color-text-nav);
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 700px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .shell aside {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.4rem;
+    border-right: 0;
+    border-bottom: var(--border-width) solid var(--color-border-strong);
+  }
+
+  .shell aside a {
+    white-space: nowrap;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .game {
+    padding: 1.2rem;
+  }
 }

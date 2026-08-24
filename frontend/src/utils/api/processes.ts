@@ -1,0 +1,37 @@
+import { del, get, post } from './client';
+import type { CreatedRecord, ProcessAction, ProcessCommand, UnknownRow } from './types';
+
+export function listProcesses(): Promise<UnknownRow[]> {
+  return get<UnknownRow[]>('/processes');
+}
+
+/**
+ * Queues one of the numbered legacy actions. Which of the optional arguments
+ * matter depends on the action: a hack needs a victim, a software verb needs a
+ * file, and a few carry a free-text note instead.
+ */
+export function startProcess(
+  action: number,
+  victimId?: number,
+  softwareId?: number,
+  info?: string,
+): Promise<CreatedRecord> {
+  return post<CreatedRecord>('/processes', {
+    action,
+    victim_id: victimId,
+    software_id: softwareId,
+    info,
+  });
+}
+
+export function getProcessActions(): Promise<ProcessAction[]> {
+  return get<ProcessAction[]>('/game/process-actions');
+}
+
+export function commandProcess(id: number, command: ProcessCommand): Promise<void> {
+  if (command === 'delete') {
+    return del<void>(`/processes/${id}`);
+  }
+
+  return post<void>(`/processes/${id}/${command}`);
+}

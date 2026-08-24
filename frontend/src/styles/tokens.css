@@ -1,0 +1,51 @@
+/*
+ * The palette. Every other stylesheet reads from here, so retheming the whole
+ * game is this one file.
+ *
+ * Built rather than borrowed: the backgrounds are not neutral greys but greens
+ * bled almost to black, so the hue is the same from the floor to the accent and
+ * the screen reads as one material instead of grey with a green sticker on it.
+ * Hue sits at 155° throughout; only lightness and saturation move.
+ */
+:root {
+  /* Backgrounds: near-black, with green in them rather than next to them. */
+  --color-bg: #040907;
+  --color-surface: #071310;
+  --color-surface-sunken: #050e0b;
+  --color-surface-raised: #0a1a15;
+  --color-field: #030b08;
+  --color-hover: #0d2119;
+
+  /* Borders. Hard, thin, and green enough to belong. */
+  --color-border: #102b21;
+  --color-border-strong: #1a4234;
+  --color-border-field: #16382c;
+
+  /* Text, cooled towards the same hue. */
+  --color-text: #cfe8dc;
+  --color-text-muted: #5f8375;
+  --color-text-subtle: #3c5b4f;
+  --color-text-nav: #8fb3a3;
+
+  /* The signal green. */
+  --color-accent: #00e676;
+  --color-accent-bright: #5cffab;
+  --color-accent-dim: #14875a;
+  --color-accent-glow: rgba(0, 230, 118, 0.16);
+
+  /* The second voice: acid lime, for whatever commits or needs answering. */
+  --color-highlight: #c6ff3d;
+  --color-highlight-dim: #6f8f22;
+
+  /* Errors and refusals. Desaturated so it does not fight the greens. */
+  --color-danger: #ff6b5b;
+
+  /* Type. Monospace throughout — this is a game about a terminal. */
+  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "Cascadia Code",
+    "Fira Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+
+  /* Layout. */
+  --sidebar-width: 224px;
+  --content-max-width: 680px;
+  --border-width: 1px;
+}

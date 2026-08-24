@@ -1,0 +1,210 @@
+/*
+ * The two things that share the window with the shell: the mode switch in the
+ * title bar, and the plain sign-in form behind it.
+ */
+
+/* ---------- Mode switch ---------- */
+
+.mode-switch {
+  display: flex;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: 4px;
+}
+
+.mode-switch button {
+  padding: 0.16rem 0.55rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+/* These are tabs, not commands: no bracket decoration. */
+.mode-switch button::before,
+.mode-switch button::after {
+  content: none;
+}
+
+.mode-switch button + button {
+  border-left: var(--border-width) solid var(--color-border-strong);
+}
+
+.mode-switch button:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.mode-switch button.is-active,
+.mode-switch button.is-active:hover {
+  color: var(--color-bg);
+  background: var(--color-accent);
+}
+
+/* ---------- The plain form ---------- */
+
+/* The window has a fixed height now, so the form centres inside it. */
+.login {
+  width: 100%;
+  max-width: 23rem;
+  padding: 2rem;
+  margin: auto;
+}
+
+.login__brand {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.login__brand b {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.login__lead {
+  margin: 0.3rem 0 1.6rem;
+  color: var(--color-text-subtle);
+  font-size: 0.76rem;
+}
+
+.login__form {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.login__form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.login__form input {
+  padding: 0.6rem 0.7rem;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.84rem;
+  letter-spacing: normal;
+  text-transform: none;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+}
+
+.login__form input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent-glow);
+}
+
+.login__form label small {
+  color: var(--color-text-subtle);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.login__error {
+  display: block;
+  padding: 0.5rem 0.65rem;
+  color: var(--color-danger);
+  font-size: 0.76rem;
+  background: rgba(255, 107, 91, 0.08);
+  border-left: 2px solid var(--color-danger);
+}
+
+.login__error::before {
+  content: "! ";
+}
+
+.login__submit {
+  justify-self: stretch;
+  margin: 0.4rem 0 0;
+  padding: 0.62rem 1rem;
+  color: var(--color-bg);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.login__submit::before,
+.login__submit::after {
+  content: none;
+}
+
+.login__submit:hover:not(:disabled) {
+  background: var(--color-accent-bright);
+  border-color: var(--color-accent-bright);
+}
+
+.login__submit:disabled {
+  color: var(--color-text-muted);
+  background: transparent;
+  border-color: var(--color-border-strong);
+}
+
+.login__swap {
+  margin: 1.4rem 0 0;
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+}
+
+/* A button that has to read as a link, because it changes nothing but the form. */
+.login__link {
+  padding: 0;
+  margin: 0;
+  color: var(--color-highlight);
+  font: inherit;
+  font-size: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--color-highlight-dim);
+  cursor: pointer;
+}
+
+.login__link::before,
+.login__link::after {
+  content: none;
+}
+
+.login__link:hover {
+  color: var(--color-accent);
+  background: none;
+  border-bottom-color: var(--color-accent);
+}
+
+/*
+ * The switch retires once a session exists. Collapsing rather than unmounting
+ * is what makes it animate: an element that is gone from the tree has nothing
+ * left to transition.
+ */
+.mode-switch-slot {
+  display: flex;
+  max-width: 12rem;
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    max-width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms ease-out;
+}
+
+.mode-switch-slot.is-gone {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-switch-slot {
+    transition: none;
+  }
+}

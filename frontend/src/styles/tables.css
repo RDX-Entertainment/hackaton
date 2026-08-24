@@ -1,4 +1,53 @@
-.table-wrap { overflow: auto; border: 1px solid #294334; background: #0b1511; }
-table { border-collapse: collapse; width: 100%; font-size: .9rem; }
-th, td { padding: .65rem; text-align: left; border-bottom: 1px solid #1d3427; white-space: nowrap; }
-th { color: #8fe36a; background: #102019; }
+/*
+ * Tables read as console output: a header row in green, hard rules between
+ * rows, no zebra striping and no rounding.
+ */
+.table-wrap {
+  overflow-x: auto;
+  margin: 0.8rem 0 1.6rem;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+th,
+td {
+  padding: 0.5rem 0.8rem;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+th {
+  color: var(--color-accent);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border-strong);
+}
+
+td {
+  color: var(--color-text-nav);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody tr:hover td {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+/* A button inside a cell is an inline action, not a block. */
+td button {
+  margin: 0;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.76rem;
+}

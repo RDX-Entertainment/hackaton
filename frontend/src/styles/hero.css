@@ -1,0 +1,136 @@
+/*
+ * The hero beside the window, and the transition that gets rid of it.
+ *
+ * Collapsing `max-width` to zero is what moves the window: the flex row is
+ * centred, so when the hero stops occupying space the window drifts to the
+ * middle on its own. `margin-right` collapses with it so the gap does not
+ * survive as a phantom offset.
+ */
+
+.hero {
+  flex: 0 0 auto;
+  max-width: 26rem;
+  margin-right: 3.5rem;
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    max-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-right 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 280ms ease-out,
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* A fixed inner width stops the text reflowing while the column narrows. */
+.hero__inner {
+  width: 26rem;
+  padding-right: 1rem;
+}
+
+.auth--console .hero {
+  max-width: 0;
+  margin-right: 0;
+  opacity: 0;
+  transform: translateX(-2.5rem);
+  /* Fades out before the collapse finishes, so nothing is squashed on the way. */
+  transition:
+    max-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-right 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease-in,
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero__eyebrow {
+  margin: 0 0 1.1rem;
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.hero__title {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: clamp(2.4rem, 4.2vw, 3.4rem);
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.hero__title-top {
+  color: var(--color-text);
+}
+
+/* The second line carries the colour and a glow, so the pair reads as a logo. */
+.hero__title-bottom {
+  color: var(--color-accent);
+  text-shadow: 0 0 40px var(--color-accent-glow);
+}
+
+.hero__slogan {
+  margin: 1.5rem 0 0;
+  padding-left: 0.9rem;
+  color: var(--color-text-nav);
+  font-size: 1.02rem;
+  line-height: 1.45;
+  border-left: 2px solid var(--color-accent-dim);
+}
+
+.hero__slogan b {
+  color: var(--color-highlight);
+  font-weight: 600;
+}
+
+.hero__note {
+  margin: 1.5rem 0 0;
+  max-width: 24rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.hero__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.6rem;
+  padding: 1.1rem 0 0;
+  margin: 1.6rem 0 0;
+  list-style: none;
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.hero__facts li {
+  color: var(--color-text-subtle);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.hero__facts b {
+  color: var(--color-accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* ---------- Narrow screens ---------- */
+
+/*
+ * Below this the hero and the window cannot sit side by side, so normal mode
+ * drops the hero entirely rather than shrinking both into illegibility.
+ */
+@media (max-width: 1180px) {
+  .auth--normal .hero {
+    max-width: 0;
+    margin-right: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero,
+  .auth--console .hero {
+    transition: none;
+    transform: none;
+  }
+}
