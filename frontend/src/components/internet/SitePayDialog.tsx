@@ -10,13 +10,15 @@ type SitePayDialogProps = {
 };
 
 /**
- * Lo que sale cuando un sitio ofrece cobrar.
+ * Lo que sale cuando un sitio cualquiera ofrece cobrar.
  *
- * La página solo declara la intención: el importe, la cuenta que recibe y un concepto. Quien
- * pide el PIN es el juego, aquí fuera, y nunca el sitio. Esa separación es lo que convierte
- * un cobro en una decisión del jugador en vez de en un robo automático.
+ * Va **con el aspecto del juego y no con el de la página**, y eso es a propósito: así se ve
+ * de un vistazo que quien pide el PIN es el sistema y no la tienda que estás mirando. Un
+ * banco sí puede llevarse esta interfaz dentro de su web y vestirla con sus colores, porque
+ * para eso hay que ser un banco; una tienda no.
  *
- * Que el concepto sea mentira es asunto de quien lo escribió: eso es el juego.
+ * La página solo declara la intención: el importe, la cuenta que recibe y un concepto. Que
+ * el concepto sea mentira es asunto de quien lo escribió: eso es el juego.
  */
 export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -82,11 +84,19 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
     <div className="site-pay">
       <form onSubmit={pay}>
         <header>
-          <b>{kind} · {concept}</b>
+          <b>
+            <span className="site-pay__seal">SISTEMA</span> Verificando con el banco
+          </b>
           <button type="button" onClick={onClose}>
             cerrar
           </button>
         </header>
+
+        <p className="site-pay__note">
+          <b>{concept}</b> — lo pide {kind === 'Cobro' ? 'un cobro' : 'un pago'} de esta página.
+          Comprueba el importe y la cuenta antes de autorizar: el PIN se lo das al juego, nunca
+          al sitio.
+        </p>
 
         <dl>
           <div>

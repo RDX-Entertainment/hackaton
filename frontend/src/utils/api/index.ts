@@ -25,3 +25,4 @@ export * as softwareApi from './software';
 export * as wikiApi from './wiki';
 
 export * from './types';
+export type { BankAccess, BankMovement, Charge } from './bank';

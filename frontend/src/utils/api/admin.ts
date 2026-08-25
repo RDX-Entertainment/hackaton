@@ -1,7 +1,9 @@
 import { del, get, post, put } from './client';
 import type {
+  ActionInfo,
   AdminUser,
   BankAccount,
+  SiteGrant,
   Chipset,
   CreatedRecord,
   Kit,
@@ -113,6 +115,12 @@ export function listSites(): Promise<Site[]> {
 export function saveSite(kind: Site['kind'], id: number, web: string): Promise<void> {
   return put<void>(`/admin/sites/${kind}/${id}`, { web });
 }
+
+/** El catalogo de ordenes que un sitio puede llevar, con su familia. */
+export function listSiteActions(): Promise<ActionInfo[]> { return get<ActionInfo[]>('/admin/site-actions'); }
+export function listSiteGrants(): Promise<SiteGrant[]> { return get<SiteGrant[]>('/admin/site-grants'); }
+export function createSiteGrant(input: { action: string; family: string; scope: string; organization_id: number | null; npc_id: number | null }): Promise<CreatedRecord> { return post<CreatedRecord>('/admin/site-grants', input); }
+export function removeSiteGrant(id: number): Promise<void> { return del<void>(`/admin/site-grants/${id}`); }
 
 export function listOrganizations(): Promise<Organization[]> { return get<Organization[]>('/admin/organizations'); }
 export function createOrganization(input: OrganizationInput): Promise<CreatedRecord> { return post<CreatedRecord>('/admin/organizations', input); }

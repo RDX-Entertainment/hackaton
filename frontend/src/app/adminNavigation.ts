@@ -11,5 +11,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { path: '/admin/kits', label: 'Kits', icon: '▣' },
   { path: '/admin/organizaciones', label: 'Organizaciones', icon: '◉' },
   { path: '/admin/sitios', label: 'Sitios', icon: '◈' },
+  { path: '/admin/acciones', label: 'Acciones', icon: '⌁' },
   { path: '/admin/usuarios', label: 'Usuarios', icon: '⚇' },
 ];

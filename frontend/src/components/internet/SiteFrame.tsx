@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { formatIp } from '../../utils/ip';
-import { isSiteMessage, withRuntime, type SiteMessage } from './siteRuntime';
+import { isSiteMessage, withRuntime, type SiteFill, type SiteMessage } from './siteRuntime';
 
 /**
  * El contenedor donde se pinta la página que sirve una máquina.
@@ -45,11 +45,22 @@ type SiteFrameProps = {
   html: string | null;
   name: string;
   down: boolean;
-  /** Se llama al pulsar un elemento con `data-action`. Sin esto el marco es solo lectura. */
-  onAction?: (message: SiteMessage) => void;
+  /**
+   * Se llama al pulsar un elemento con `data-action`. Sin esto el marco es solo lectura.
+   * El segundo argumento devuelve datos al sitio para que rellene sus `data-bind`.
+   */
+  onAction?: (message: SiteMessage, reply: (fill: SiteFill) => void) => void;
+  /**
+   * Se llama cada vez que el marco termina de pintar una página.
+   *
+   * Cambiar de página reemplaza el documento entero, así que lo que se hubiera rellenado
+   * antes se va con él. Quien guarda el estado es el padre, y este aviso es su oportunidad
+   * de volver a ponerlo: sin esto, ir a movimientos y volver dejaba el saldo en blanco.
+   */
+  onReady?: (reply: (fill: SiteFill) => void) => void;
 };
 
-export function SiteFrame({ ip, html, name, down, onAction }: SiteFrameProps) {
+export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrameProps) {
   const [big, setBig] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -65,7 +76,7 @@ export function SiteFrame({ ip, html, name, down, onAction }: SiteFrameProps) {
         return;
       }
 
-      onAction(event.data);
+      onAction(event.data, (fill) => frame.current?.contentWindow?.postMessage(fill, '*'));
     };
 
     window.addEventListener('message', listener);
@@ -106,6 +117,9 @@ export function SiteFrame({ ip, html, name, down, onAction }: SiteFrameProps) {
         sandbox={onAction ? 'allow-scripts' : ''}
         loading="lazy"
         srcDoc={source}
+        onLoad={() =>
+          onReady?.((fill) => frame.current?.contentWindow?.postMessage(fill, '*'))
+        }
       />
     </div>
   );

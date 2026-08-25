@@ -1510,10 +1510,6 @@
   font-family: var(--font-mono);
 }
 
-.site-tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: 1rem; padding: .35rem .4rem; background: var(--color-surface-raised); border: var(--border-width) solid var(--color-border-strong); border-bottom: 0; }
-.site-tabs button { margin: 0; padding: .3rem .7rem; color: var(--color-text-muted); font-size: .68rem; background: transparent; border: var(--border-width) solid transparent; }
-.site-tabs button.is-active { color: var(--color-bg); background: var(--color-accent); border-color: var(--color-accent); }
-.site-tabs + .site { margin-top: 0; }
 
 
 .site-redirect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin-top: 1rem; padding: .6rem .8rem; color: var(--color-text-muted); font-size: .72rem; background: var(--color-surface-sunken); border: var(--border-width) solid var(--color-danger); border-left-width: 3px; }
@@ -1534,3 +1530,41 @@
 @media (max-width: 900px) {
   .site-pay dl { grid-template-columns: 1fr; }
 }
+
+
+.bank { margin-top: .6rem; color: var(--bank-text); background: var(--bank-bg); border: 1px solid var(--bank-surface); border-radius: 8px; overflow: hidden; }
+.bank__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; padding: .6rem .9rem; background: var(--bank-surface); }
+.bank__bar b { color: var(--bank-accent); font-size: .86rem; }
+.bank__bar nav { display: flex; flex-wrap: wrap; gap: .25rem; }
+.bank__bar nav button { margin: 0; padding: .28rem .7rem; color: var(--bank-muted); font-size: .68rem; text-transform: lowercase; background: transparent; border: 1px solid transparent; border-radius: 4px; }
+.bank__bar nav button:hover { color: var(--bank-text); }
+.bank__bar nav button.is-active { color: var(--bank-bg); background: var(--bank-accent); border-color: var(--bank-accent); }
+.bank__close { font-size: .72rem !important; }
+.bank__body { padding: 1rem 1.1rem; }
+.bank__lead { margin: 0 0 .8rem; color: var(--bank-muted); font-size: .76rem; line-height: 1.6; }
+.bank label { display: grid; gap: .3rem; margin-bottom: .7rem; color: var(--bank-muted); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; }
+.bank input { padding: .5rem .6rem; color: var(--bank-text); font: .8rem var(--font-mono); background: var(--bank-bg); border: 1px solid var(--bank-surface); border-radius: 6px; }
+.bank input:focus { outline: none; border-color: var(--bank-accent); }
+.bank__row { display: flex; flex-wrap: wrap; gap: .5rem; }
+.bank__go { margin: 0; padding: .5rem 1.2rem; color: var(--bank-bg); font-size: .74rem; font-weight: 700; background: var(--bank-accent); border: 0; border-radius: 6px; }
+.bank__ghost { margin: 0; padding: .5rem 1.2rem; color: var(--bank-text); font-size: .74rem; background: transparent; border: 1px solid var(--bank-surface); border-radius: 6px; }
+.bank__account { text-align: center; padding: 1rem 0 .4rem; }
+.bank__account small { display: block; color: var(--bank-muted); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; }
+.bank__account strong { display: block; margin: .3rem 0 .8rem; color: var(--bank-accent); font: 2rem var(--font-mono); }
+.bank__rows { display: grid; gap: .35rem; }
+.bank__rows > div { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 7rem; gap: .6rem; align-items: center; padding: .5rem .7rem; background: var(--bank-surface); border-radius: 6px; }
+.bank__rows b { font: .76rem var(--font-mono); }
+.bank__rows b.is-in { color: #5ce49b; }
+.bank__rows b.is-out { color: #f6465d; }
+.bank__rows span { color: var(--bank-muted); font-size: .72rem; }
+.bank__rows em { color: var(--bank-text); font: .74rem var(--font-mono); font-style: normal; text-align: right; }
+.bank__bad { margin: .6rem 0 0; color: #f6465d; font-size: .74rem; }
+.bank__done { margin: .6rem 0 0; color: var(--bank-accent); font-size: .74rem; }
+
+@media (max-width: 900px) {
+  .bank__rows > div { grid-template-columns: 1fr 1fr; }
+}
+
+.site-pay__seal { padding: .1rem .4rem; color: var(--color-bg); font-size: .56rem; letter-spacing: .14em; background: var(--color-accent); }
+.site-pay__note { margin: 0 0 .8rem; color: var(--color-text-muted); font-size: .72rem; line-height: 1.55; }
+.site-pay__note b { color: var(--color-text); }

@@ -4,6 +4,7 @@ import type { Remote, SiteAction } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import { formatIp } from '../../utils/ip';
 import { SiteNavigator } from './SiteNavigator';
+import { useBankSession } from './useBankSession';
 import { SitePayDialog } from './SitePayDialog';
 
 type PublicTabProps = {
@@ -18,12 +19,22 @@ type PublicTabProps = {
  */
 export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps) {
   const [paying, setPaying] = useState<SiteAction | null>(null);
+  const { holder: client, handle: onBank, restore: onRestore } = useBankSession(remote.bank);
   const rows = [
     { key: 'dirección', value: formatIp(remote.ip) },
     { key: 'titular', value: remote.kind === 'npc' ? `servidor NPC · tipo ${remote.type}` : 'jugador' },
     { key: 'estado', value: remote.down ? 'caído' : 'responde' },
     { key: 'puertos', value: remote.scanned ? 'escaneados' : 'sin escanear' },
-    { key: 'acceso', value: remote.access ? 'sesión abierta' : 'sin sesión' },
+    {
+      key: 'acceso',
+      // Entrar en el banco no es entrar en la máquina: una cosa es ser cliente y otra tener
+      // una sesión en el servidor. Se dicen las dos porque no son la misma.
+      value: client
+        ? `cliente · ${client}`
+        : remote.access
+          ? 'sesión abierta'
+          : 'sin sesión',
+    },
   ];
 
   return (
@@ -60,8 +71,11 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
         down={remote.down}
         html={remote.web}
         site={remote.site}
+        allowed={remote.allowed}
         onVisit={onVisit}
         onPay={setPaying}
+        onBank={onBank}
+        onRestore={onRestore}
       />
 
       <SitePayDialog action={paying} onClose={() => setPaying(null)} />

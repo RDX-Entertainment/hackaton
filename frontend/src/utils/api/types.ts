@@ -105,6 +105,13 @@ export type Remote = {
   web: string | null;
   /** Presente solo cuando el sitio declara navegación o acciones. */
   site: SiteDocument | null;
+  /** El banco al que pertenece esta máquina, si es de alguno. Lo dice el servidor. */
+  bank: { id: number; name: string } | null;
+  /**
+   * Las órdenes que esta web tiene permitido usar. Sale de las concesiones del juego, no de
+   * la página: escribir una acción en el HTML no sirve de nada si no está concedida.
+   */
+  allowed: string[];
 };
 
 export type HackResult = {
@@ -549,4 +556,22 @@ export type OrganizationComputerConfiguration = {
 };
 export type OrganizationServerCreated = {
   npc_id: number; ip: number; password: string; machine_id: number; kit_id: number; components: number[];
+};
+
+/** Una orden del catálogo de sitios, tal como la ve el panel. */
+export type ActionInfo = {
+  verb: string;
+  family: string;
+  help: string;
+};
+
+/** Quién puede usar una orden: la familia, el alcance y a quién alcanza. */
+export type SiteGrant = {
+  id: number;
+  action: string;
+  family: string;
+  scope: string;
+  organization_id: number | null;
+  npc_id: number | null;
+  target_name: string | null;
 };
