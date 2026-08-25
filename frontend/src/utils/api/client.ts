@@ -30,9 +30,23 @@ function buildHeaders(hasBody: boolean): HeadersInit {
   return headers;
 }
 
-async function errorFrom(response: Response): Promise<Error> {
+/**
+ * A failed request keeps its status code. Some screens answer differently to a 404
+ * than to any other failure, and a bare Error throws that away.
+ */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+async function errorFrom(response: Response): Promise<HttpError> {
   const body = (await response.json().catch(() => ({}))) as { error?: string };
-  return new Error(body.error || `Request failed (${response.status})`);
+  return new HttpError(body.error || `Request failed (${response.status})`, response.status);
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {

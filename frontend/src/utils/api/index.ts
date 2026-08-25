@@ -7,6 +7,7 @@
 export * as accountApi from './account';
 export * as adminApi from './admin';
 export * as authApi from './auth';
+export * as bankApi from './bank';
 export * as bitcoinApi from './bitcoin';
 export * as certificationsApi from './certifications';
 export * as clansApi from './clans';

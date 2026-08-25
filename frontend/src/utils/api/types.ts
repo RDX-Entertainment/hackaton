@@ -63,6 +63,33 @@ export type RemoteAnalysis = {
   ram_max: number;
 };
 
+/** Lo que una página declara que se puede hacer, leído del bloque `<action>`. */
+export type SiteAction = {
+  kind: string;
+  target: string;
+  label: string;
+  params?: Record<string, string>;
+};
+
+export type SitePage = {
+  id: string;
+  title: string;
+  html: string;
+  actions: SiteAction[];
+};
+
+/**
+ * El sitio ya leído por el servidor: sus páginas y lo que ofrece hacer. Viaja aparte del
+ * HTML porque el marco donde se pinta está aislado y no puede avisar de un clic, así que la
+ * navegación la dibuja el juego por fuera.
+ *
+ * No confundir con `Site`, que es la ficha con la que el panel administra las páginas.
+ */
+export type SiteDocument = {
+  pages: SitePage[];
+  redirect: string | null;
+};
+
 export type Remote = {
   ip: number;
   kind: 'npc' | 'player';
@@ -76,6 +103,8 @@ export type Remote = {
   analysis: RemoteAnalysis | null;
   /** The page this machine serves. Rendered in a sandboxed frame, never inline. */
   web: string | null;
+  /** Presente solo cuando el sitio declara navegación o acciones. */
+  site: SiteDocument | null;
 };
 
 export type HackResult = {
@@ -333,8 +362,25 @@ export type ClanRequest = {
 
 export type Wallet = {
   address: string;
-  amount: string;
+  /** Satoshis: entero de siete decimales. Se formatea al pintarlo. */
+  amount: number;
   created_at?: string;
+};
+
+export type Bank = {
+  id: number;
+  slug: string;
+  name: string;
+};
+
+export type BankAccount = {
+  id: number;
+  account: number;
+  bank_id: number;
+  bank_name: string;
+  cash: number;
+  /** Falsa mientras el titular no haya elegido PIN. El PIN nunca viaja. */
+  pin_set: boolean;
 };
 
 export type ListEntry = {

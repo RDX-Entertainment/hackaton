@@ -1,18 +1,23 @@
-import type { Remote } from '../../utils/api';
+import { useState } from 'react';
+
+import type { Remote, SiteAction } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import { formatIp } from '../../utils/ip';
-import { SiteFrame } from './SiteFrame';
+import { SiteNavigator } from './SiteNavigator';
+import { SitePayDialog } from './SitePayDialog';
 
 type PublicTabProps = {
   remote: Remote;
   onToggleBookmark: () => void;
+  onVisit: (ip: number) => void;
 };
 
 /**
  * Lo que cualquiera ve al llamar a una puerta: quién vive ahí y si contesta.
  * Nada de esto exige haber entrado, y por eso es la pestaña que siempre carga.
  */
-export function PublicTab({ remote, onToggleBookmark }: PublicTabProps) {
+export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps) {
+  const [paying, setPaying] = useState<SiteAction | null>(null);
   const rows = [
     { key: 'dirección', value: formatIp(remote.ip) },
     { key: 'titular', value: remote.kind === 'npc' ? `servidor NPC · tipo ${remote.type}` : 'jugador' },
@@ -49,7 +54,17 @@ export function PublicTab({ remote, onToggleBookmark }: PublicTabProps) {
         </button>
       </div>
 
-      <SiteFrame ip={remote.ip} html={remote.web} name={remote.name} down={remote.down} />
+      <SiteNavigator
+        ip={remote.ip}
+        name={remote.name}
+        down={remote.down}
+        html={remote.web}
+        site={remote.site}
+        onVisit={onVisit}
+        onPay={setPaying}
+      />
+
+      <SitePayDialog action={paying} onClose={() => setPaying(null)} />
 
       <dl className="page__facts">
         {rows.map((row) => (

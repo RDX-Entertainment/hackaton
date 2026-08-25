@@ -15,6 +15,7 @@ import {
   type Target,
   type Visited,
 } from '../utils/api';
+import { isNotFound } from '../utils/errors';
 import { formatIp, parseIp } from '../utils/ip';
 import { useBrowserHistory } from '../utils/useBrowserHistory';
 import { useStatusMessage } from '../utils/useStatusMessage';
@@ -38,6 +39,7 @@ export function InternetPage() {
   const [history, setHistory] = useState<Visited[]>([]);
   const [bookmarks, setBookmarks] = useState<Visited[]>([]);
   const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState<number>();
 
   const loadSides = useCallback(() => {
     internetApi.listTargets().then(setTargets).catch(() => {});
@@ -75,6 +77,7 @@ export function InternetPage() {
       setFiles([]);
       setLog('');
       setLoading(true);
+      setNotFound(undefined);
       status.clear();
 
       try {
@@ -93,7 +96,14 @@ export function InternetPage() {
         }
       } catch (error) {
         setRemote(undefined);
-        status.reportError(error);
+
+        // Que no haya nadie en esa IP lo cuenta la portada con su 404: repetirlo arriba en
+        // rojo seria decir dos veces lo mismo. Los demas fallos si necesitan el aviso.
+        if (isNotFound(error)) {
+          setNotFound(ip);
+        } else {
+          status.reportError(error);
+        }
       } finally {
         setLoading(false);
       }
@@ -243,6 +253,7 @@ export function InternetPage() {
               }
               onAnalyze={() => void announce(internetApi.analyze(remote.ip), 'Análisis')}
               onToggleBookmark={() => void toggleBookmark()}
+              onVisit={(target) => void open(target)}
               onDownload={(file) =>
                 void announce(internetApi.transferFile(remote.ip, file.id, 'download'), 'Descarga')
               }
@@ -257,7 +268,7 @@ export function InternetPage() {
               }
             />
           ) : (
-            <StartPage history={history} onVisit={(ip) => void open(ip)} />
+            <StartPage history={history} notFound={notFound} onVisit={(ip) => void open(ip)} />
           )}
         </div>
 

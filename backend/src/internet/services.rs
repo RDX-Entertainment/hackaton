@@ -22,6 +22,7 @@ use super::{
     },
     models::Remote,
     repo,
+    webscript,
 };
 
 const HACK_SECONDS: i32 = 60;
@@ -189,6 +190,12 @@ pub async fn internet_navigate(
         bookmarked,
         scanned,
         analysis,
+
+        // El sitio se lee aqui y no en el cliente para que el lenguaje tenga un solo
+        // interprete. Cuando no declara nada, no se manda nada: el navegador pinta el HTML
+        // tal cual y se ahorra el rodeo.
+        site: target.web.as_deref().map(webscript::parse).filter(|site| !site.is_plain()),
+
         web: target.web,
     })
 }

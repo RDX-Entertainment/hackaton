@@ -8,6 +8,7 @@ use super::models::{
     HistoryRow,
     InternetTargetRow,
 };
+use super::webscript::Site;
 
 //
 // ==============================
@@ -83,6 +84,12 @@ pub struct InternetNavigateResponse {
     /// El HTML que sirve esta maquina. El cliente lo pinta en un marco aislado y sin
     /// permisos: es decoracion, no puede ejecutar nada.
     pub web: Option<String>,
+
+    /// El mismo sitio, ya leido: sus paginas y sus enlaces. Viaja aparte del HTML porque el
+    /// marco esta aislado y no puede avisar de un clic, asi que la navegacion la pinta el
+    /// navegador del juego por fuera. Va en `None` cuando el sitio no declara nada y basta
+    /// con pintar `web` tal cual.
+    pub site: Option<Site>,
 }
 
 //

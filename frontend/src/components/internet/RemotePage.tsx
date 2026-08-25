@@ -28,6 +28,8 @@ type RemotePageProps = {
   onDelete: (file: RemoteFile) => void;
   onRewriteLog: (text: string) => void;
   onWipeLog: () => void;
+  /** Ir a otra máquina: lo piden los enlaces que declara un sitio. */
+  onVisit: (ip: number) => void;
 };
 
 export function RemotePage({
@@ -46,6 +48,7 @@ export function RemotePage({
   onDelete,
   onRewriteLog,
   onWipeLog,
+  onVisit,
 }: RemotePageProps) {
   return (
     <section className="viewport">
@@ -79,7 +82,9 @@ export function RemotePage({
       </header>
 
       <div className="viewport__body">
-        {tab === 'public' && <PublicTab remote={remote} onToggleBookmark={onToggleBookmark} />}
+        {tab === 'public' && (
+          <PublicTab remote={remote} onToggleBookmark={onToggleBookmark} onVisit={onVisit} />
+        )}
 
         {tab === 'access' && (
           <AccessTab

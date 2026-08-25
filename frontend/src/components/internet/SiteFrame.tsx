@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { formatIp } from '../../utils/ip';
+import { isSiteMessage, withRuntime, type SiteMessage } from './siteRuntime';
 
 /**
  * El contenedor donde se pinta la página que sirve una máquina.
  *
- * Va en un `iframe` con `sandbox` y sin ninguna autorización: sin scripts, sin acceso al
- * mismo origen, sin formularios. El HTML de una máquina es decoración y no puede tocar
- * nada de la aplicación que lo rodea, venga del catálogo o lo haya escrito un jugador.
+ * Va en un `iframe` con `sandbox`. La única autorización que lleva es `allow-scripts`, y
+ * **nunca `allow-same-origin`**: sin lo segundo el documento queda en un origen opaco, así
+ * que no alcanza el DOM de la aplicación, ni su almacenamiento, ni sus cookies.
+ *
+ * Los scripts hacen falta para un solo guion, el que inyecta el juego para enterarse de los
+ * clics en los botones de un sitio. El HTML del autor sigue sin poder traer código: el
+ * servidor rechaza `<script>` y los `on…=` al guardar.
  *
  * El aislamiento va en las dos direcciones, y eso es lo que hace que funcione: cada sitio
  * trae su propio CSS —fondos claros, tipografías con serifa, lo que sea— sin pisar el del
@@ -40,10 +45,32 @@ type SiteFrameProps = {
   html: string | null;
   name: string;
   down: boolean;
+  /** Se llama al pulsar un elemento con `data-action`. Sin esto el marco es solo lectura. */
+  onAction?: (message: SiteMessage) => void;
 };
 
-export function SiteFrame({ ip, html, name, down }: SiteFrameProps) {
+export function SiteFrame({ ip, html, name, down, onAction }: SiteFrameProps) {
   const [big, setBig] = useState(false);
+  const frame = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (!onAction) {
+      return;
+    }
+
+    const listener = (event: MessageEvent) => {
+      // Solo se atiende a nuestro propio marco: cualquier otra ventana que mande un mensaje
+      // parecido se ignora.
+      if (event.source !== frame.current?.contentWindow || !isSiteMessage(event.data)) {
+        return;
+      }
+
+      onAction(event.data);
+    };
+
+    window.addEventListener('message', listener);
+    return () => window.removeEventListener('message', listener);
+  }, [onAction]);
 
   if (down) {
     return (
@@ -56,8 +83,9 @@ export function SiteFrame({ ip, html, name, down }: SiteFrameProps) {
     );
   }
 
-  const source = html && html.trim() ? html : blankPage(ip);
   const served = Boolean(html && html.trim());
+  const page = served ? (html as string) : blankPage(ip);
+  const source = onAction ? withRuntime(page) : page;
 
   return (
     <div className={big ? 'site is-big' : 'site'}>
@@ -72,9 +100,10 @@ export function SiteFrame({ ip, html, name, down }: SiteFrameProps) {
       </div>
 
       <iframe
+        ref={frame}
         className="site__frame"
         title={`Página de ${name || formatIp(ip)}`}
-        sandbox=""
+        sandbox={onAction ? 'allow-scripts' : ''}
         loading="lazy"
         srcDoc={source}
       />

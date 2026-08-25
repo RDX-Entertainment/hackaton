@@ -8,10 +8,14 @@
 //! Por eso la regla se aplica al escribir. Lo que hay guardado en la base es lo que se
 //! puede servir, y no depende de quien lo mire.
 //!
-//! Un sitio es texto, estructura y CSS. Nada mas:
+//! Un sitio es texto, estructura, CSS y las ordenes del juego. Nada mas:
 //!
 //!   * SIN GUIONES     ni etiqueta, ni manejadores en linea, ni URLs `javascript:`
 //!   * SIN CARGAS      nada que traiga un recurso de fuera
+//!
+//! Las ordenes del juego viven en `<action>` y no en `<script>`, que sigue prohibido. Asi
+//! no hay que debilitar ninguna regla para que un sitio pueda navegar: lo que hay dentro de
+//! un `<action>` no es codigo sino una lista de destinos, y lo comprueba [`super::webscript`].
 //!
 //! Lo segundo no es paranoia sobrante: una imagen alojada fuera es un contador de
 //! visitas. En un juego donde la direccion IP es la moneda, poner un pixel en tu pagina
@@ -22,7 +26,8 @@ use crate::error::ApiError;
 /// Doce mil caracteres dan para una pagina con su hoja dentro y no para un vertedero.
 pub const MAX_LENGTH: usize = 16_384;
 
-/// Etiquetas que no entran. `<style>` no esta aqui a proposito: es el punto.
+/// Etiquetas que no entran. `<style>` no esta aqui a proposito: es el punto. `<action>`
+/// tampoco, pero eso no es un hueco: lo que lleva dentro lo revisa `webscript`.
 const FORBIDDEN_TAGS: [&str; 10] = [
     "script", "iframe", "object", "embed", "applet", "form", "base", "link", "meta",
     "noscript",
@@ -73,6 +78,10 @@ pub fn check(html: &str) -> Result<(), ApiError> {
             "HANDLER_NOT_ALLOWED: {handler} es un manejador de eventos, y eso es codigo"
         )));
     }
+
+    // Lo ultimo, cuando ya se sabe que no hay nada peligroso suelto: que lo que haya dentro
+    // de un `<action>` sean ordenes del juego y no otra cosa.
+    super::webscript::check(html)?;
 
     Ok(())
 }

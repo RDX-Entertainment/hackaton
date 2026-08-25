@@ -1481,3 +1481,56 @@
   color: var(--color-danger);
   font-weight: 600;
 }
+
+.start__lost {
+  margin: 0 0 1.4rem;
+  padding: 1rem 1.1rem;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-danger);
+  border-left-width: 3px;
+}
+
+.start__404 {
+  margin: 0 0 0.7rem;
+  color: var(--color-danger);
+  font-size: 0.95rem;
+  line-height: 1.1;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.start__lost p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.start__lost b {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+.site-tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: 1rem; padding: .35rem .4rem; background: var(--color-surface-raised); border: var(--border-width) solid var(--color-border-strong); border-bottom: 0; }
+.site-tabs button { margin: 0; padding: .3rem .7rem; color: var(--color-text-muted); font-size: .68rem; background: transparent; border: var(--border-width) solid transparent; }
+.site-tabs button.is-active { color: var(--color-bg); background: var(--color-accent); border-color: var(--color-accent); }
+.site-tabs + .site { margin-top: 0; }
+
+
+.site-redirect { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin-top: 1rem; padding: .6rem .8rem; color: var(--color-text-muted); font-size: .72rem; background: var(--color-surface-sunken); border: var(--border-width) solid var(--color-danger); border-left-width: 3px; }
+.site-redirect b { color: var(--color-text); font-family: var(--font-mono); }
+.site-redirect button { margin: 0 0 0 .4rem; padding: .28rem .7rem; font-size: .66rem; }
+
+.site-pay { margin-top: .6rem; padding: .9rem 1rem; background: var(--color-surface-sunken); border: var(--border-width) solid var(--color-accent); }
+.site-pay header { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+.site-pay header b { color: var(--color-accent); font-size: .8rem; }
+.site-pay header button { margin: 0; padding: .2rem .55rem; font-size: .62rem; }
+.site-pay dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin: 0 0 .7rem; }
+.site-pay dt { color: var(--color-text-subtle); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; }
+.site-pay dd { margin: .15rem 0 0; color: var(--color-text); font: .74rem var(--font-mono); word-break: break-word; }
+.site-pay label { display: grid; gap: .25rem; margin-bottom: .5rem; color: var(--color-text-subtle); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; }
+.site-pay input, .site-pay select { padding: .35rem .5rem; color: var(--color-text); font: .75rem var(--font-mono); background: var(--color-field); border: var(--border-width) solid var(--color-border-field); }
+.site-pay__done { margin: 0; color: var(--color-accent); font-size: .75rem; }
+
+@media (max-width: 900px) {
+  .site-pay dl { grid-template-columns: 1fr; }
+}
