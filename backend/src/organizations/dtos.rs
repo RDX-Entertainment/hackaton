@@ -137,7 +137,6 @@ pub struct NetworkNpcInput {
 
 #[derive(Debug, Deserialize)]
 pub struct NodeInput {
-    pub zone: String,
     pub map_x: i32,
     pub map_y: i32,
 

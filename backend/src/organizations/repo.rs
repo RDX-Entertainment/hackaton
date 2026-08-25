@@ -75,26 +75,32 @@ pub async fn find_network_npcs(
             COALESCE(i.name, '') AS npc_name,
             m.role,
             m.source_kit_id,
-            CASE WHEN EXISTS (
-                SELECT 1
-                FROM hardware_components c
-                JOIN hardware h ON h.server_id = c.installed_in
-                JOIN hardware_parts p ON p.id = c.part_id
-                WHERE h.is_npc AND h.user_id = n.id AND p.kind = 'net'
-            ) THEN 'public' ELSE 'internal' END AS zone,
+            -- Publico e interno no se guardan: los dice la interfaz de red instalada, y esa
+            -- lectura vive una sola vez en `npc_internet_exposure`.
+            CASE WHEN e.is_public THEN 'public' ELSE 'internal' END AS zone,
             m.map_x,
             m.map_y,
-            COALESCE((SELECT p.net_slots FROM hardware h JOIN hardware_components c ON c.installed_in = h.server_id JOIN hardware_parts p ON p.id = c.part_id WHERE h.is_npc AND h.user_id = n.id AND p.kind = 'mobo' LIMIT 1), 0)
+            -- Ranuras de la placa menos los cables ya tendidos, menos la que gasta la salida
+            -- a Internet cuando el nodo es publico.
+            mobo.net_slots
               - (SELECT count(*) FROM organization_node_links l WHERE n.id IN (l.from_npc_id, l.to_npc_id))
-              - CASE WHEN EXISTS (
-                  SELECT 1 FROM hardware_components c JOIN hardware h ON h.server_id = c.installed_in JOIN hardware_parts p ON p.id = c.part_id
-                  WHERE h.is_npc AND h.user_id = n.id AND p.kind = 'net'
-                ) THEN 1 ELSE 0 END AS lan_available,
-            COALESCE((SELECT p.net_slots FROM hardware h JOIN hardware_components c ON c.installed_in = h.server_id JOIN hardware_parts p ON p.id = c.part_id WHERE h.is_npc AND h.user_id = n.id AND p.kind = 'mobo' LIMIT 1), 0)::bigint AS lan_total,
+              - CASE WHEN e.is_public THEN 1 ELSE 0 END AS lan_available,
+            mobo.net_slots::bigint AS lan_total,
             COALESCE((SELECT count(*) FROM hardware_components c JOIN hardware h ON h.server_id = c.installed_in WHERE h.is_npc AND h.user_id = n.id), 0) AS computer_components
         FROM organization_network_npcs m
         JOIN npc n ON n.id = m.npc_id
+        JOIN npc_internet_exposure e ON e.npc_id = n.id
         LEFT JOIN npc_info i ON i.npc_id = n.id
+        CROSS JOIN LATERAL (
+            SELECT COALESCE((
+                SELECT p.net_slots
+                FROM hardware h
+                JOIN hardware_components c ON c.installed_in = h.server_id
+                JOIN hardware_parts p ON p.id = c.part_id
+                WHERE h.is_npc AND h.user_id = n.id AND p.kind = 'mobo'
+                LIMIT 1
+            ), 0) AS net_slots
+        ) AS mobo
         WHERE m.network_id = ANY($1)
         ORDER BY n.npc_ip
         "#,
@@ -199,21 +205,40 @@ pub async fn update(
     Ok(done.rows_affected())
 }
 
+/// Deja los comportamientos que pide la lista, y solo toca lo que cambia.
+///
+/// Antes borraba todos y los reinsertaba. Eso dejo de valer en cuanto `banking` gano una
+/// clave ajena desde `bank_accounts`: el borrado saltaba el RESTRICT aunque el mismo
+/// comportamiento volviera a entrar una linea despues, y una organizacion que fuera banco con
+/// cuentas abiertas no se podia ni renombrar. Borrar solo lo que sobra deja el RESTRICT para
+/// cuando de verdad se le quita el `banking` a un banco en uso, que es lo que debe proteger.
 pub async fn replace_behaviors(
     tx: &mut Transaction<'_, Postgres>,
     organization: i64,
     behaviors: &[(String, String)],
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM organization_behaviors WHERE organization_id = $1")
-        .bind(organization)
-        .execute(&mut **tx)
-        .await?;
+    let codes: Vec<String> =
+        behaviors.iter().map(|(code, _)| code.clone()).collect();
+
+    sqlx::query(
+        r#"
+        DELETE FROM organization_behaviors
+        WHERE organization_id = $1
+          AND code <> ALL($2)
+        "#,
+    )
+    .bind(organization)
+    .bind(&codes)
+    .execute(&mut **tx)
+    .await?;
 
     for (code, config) in behaviors {
         sqlx::query(
             r#"
             INSERT INTO organization_behaviors(organization_id, code, config)
             VALUES($1, $2, $3::jsonb)
+            ON CONFLICT(organization_id, code)
+            DO UPDATE SET config = EXCLUDED.config
             "#,
         )
         .bind(organization)
@@ -321,8 +346,8 @@ pub async fn assign_npc(
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        INSERT INTO organization_network_npcs(network_id, npc_id, role, zone)
-        VALUES($1, $2, $3, (SELECT zone FROM organization_networks WHERE id = $1))
+        INSERT INTO organization_network_npcs(network_id, npc_id, role)
+        VALUES($1, $2, $3)
         ON CONFLICT(npc_id)
         DO UPDATE SET network_id = EXCLUDED.network_id, role = EXCLUDED.role
         "#,
@@ -336,16 +361,18 @@ pub async fn assign_npc(
     Ok(())
 }
 
+/// La zona no se escribe: la decide el hardware del nodo. Aqui solo viajan el sitio en el
+/// mapa y el rol, que son las dos cosas que el administrador si elige a mano.
 pub async fn update_node(
-    pool: &PgPool, organization: i64, network: i64, npc: i64, zone: &str, map_x: i32, map_y: i32, role: &str,
+    pool: &PgPool, organization: i64, network: i64, npc: i64, map_x: i32, map_y: i32, role: &str,
 ) -> Result<u64, sqlx::Error> {
     let done = sqlx::query(
         r#"UPDATE organization_network_npcs AS m
-           SET zone = $4, map_x = $5, map_y = $6, role = $7
+           SET map_x = $4, map_y = $5, role = $6
            FROM organization_networks AS n
            WHERE m.network_id = $2 AND m.npc_id = $3 AND n.id = m.network_id AND n.organization_id = $1"#,
     )
-    .bind(organization).bind(network).bind(npc).bind(zone).bind(map_x).bind(map_y).bind(role)
+    .bind(organization).bind(network).bind(npc).bind(map_x).bind(map_y).bind(role)
     .execute(pool).await?;
     Ok(done.rows_affected())
 }
@@ -353,6 +380,27 @@ pub async fn update_node(
 pub async fn node_belongs_to(pool: &PgPool, organization: i64, network: i64, npc: i64) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM organization_network_npcs m JOIN organization_networks n ON n.id = m.network_id WHERE n.organization_id = $1 AND m.network_id = $2 AND m.npc_id = $3)")
         .bind(organization).bind(network).bind(npc).fetch_one(pool).await
+}
+
+/// Corta todos los cables que llegan a este nodo. Va antes de sacarlo de la red: un enlace a un
+/// nodo que ya no esta en el mapa se dibujaria contra la nada.
+pub async fn delete_node_links(tx: &mut Transaction<'_, Postgres>, organization: i64, npc: i64) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query("DELETE FROM organization_node_links WHERE organization_id = $1 AND (from_npc_id = $2 OR to_npc_id = $2)")
+        .bind(organization).bind(npc).execute(&mut **tx).await?;
+    Ok(done.rows_affected())
+}
+
+/// Saca el nodo de su red. El NPC sobrevive a proposito: pudo entrar desde el catalogo con
+/// `assign_npc`, y borrarlo alli destruiria una ficha que este panel no creo.
+pub async fn delete_node(tx: &mut Transaction<'_, Postgres>, organization: i64, network: i64, npc: i64) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query(
+        r#"DELETE FROM organization_network_npcs AS m
+           USING organization_networks AS n
+           WHERE m.network_id = $2 AND m.npc_id = $3 AND n.id = m.network_id AND n.organization_id = $1"#,
+    )
+    .bind(organization).bind(network).bind(npc)
+    .execute(&mut **tx).await?;
+    Ok(done.rows_affected())
 }
 
 pub async fn set_node_source_kit(tx: &mut Transaction<'_, Postgres>, network: i64, npc: i64, kit: Option<i64>) -> Result<(), sqlx::Error> {
@@ -367,19 +415,7 @@ pub async fn computer_configuration(pool: &PgPool, network: i64, npc: i64) -> Re
     Ok((kit, items))
 }
 
-pub async fn connect_node_to_web(pool: &PgPool, organization: i64, network: i64, npc: i64) -> Result<u64, sqlx::Error> {
-    let done = sqlx::query(
-        "UPDATE organization_network_npcs m SET zone = 'public' FROM organization_networks n WHERE n.id = m.network_id AND n.organization_id = $1 AND m.network_id = $2 AND m.npc_id = $3 AND m.zone <> 'public'",
-    )
-    .bind(organization).bind(network).bind(npc).execute(pool).await?;
-    Ok(done.rows_affected())
-}
 
-pub async fn disconnect_node_from_web(pool: &PgPool, organization: i64, network: i64, npc: i64) -> Result<u64, sqlx::Error> {
-    let done = sqlx::query("UPDATE organization_network_npcs m SET zone = 'internal' FROM organization_networks n WHERE n.id = m.network_id AND n.organization_id = $1 AND m.network_id = $2 AND m.npc_id = $3 AND m.zone = 'public'")
-        .bind(organization).bind(network).bind(npc).execute(pool).await?;
-    Ok(done.rows_affected())
-}
 
 pub async fn insert_npc(
     tx: &mut Transaction<'_, Postgres>,
@@ -436,8 +472,8 @@ pub async fn assign_npc_with_kit(
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        INSERT INTO organization_network_npcs(network_id, npc_id, role, source_kit_id, zone)
-        VALUES($1, $2, $3, $4, (SELECT zone FROM organization_networks WHERE id = $1))
+        INSERT INTO organization_network_npcs(network_id, npc_id, role, source_kit_id)
+        VALUES($1, $2, $3, $4)
         "#,
     )
     .bind(network)

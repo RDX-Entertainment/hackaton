@@ -234,7 +234,9 @@ pub async fn create(pool: &PgPool, ctx: Ctx, input: OrganizationInput) -> Result
     .await
     .map_err(|error| unique_error(error, "slug or name"))?;
 
-    repo::replace_behaviors(&mut tx, id, &behaviors).await?;
+    repo::replace_behaviors(&mut tx, id, &behaviors)
+        .await
+        .map_err(behaviors_in_use)?;
     tx.commit().await?;
 
     Ok(id)
@@ -266,7 +268,9 @@ pub async fn edit(
         return Err(ApiError::NotFound);
     }
 
-    repo::replace_behaviors(&mut tx, id, &behaviors).await?;
+    repo::replace_behaviors(&mut tx, id, &behaviors)
+        .await
+        .map_err(behaviors_in_use)?;
     tx.commit().await?;
 
     Ok(())
@@ -387,17 +391,37 @@ pub async fn assign_network_npc(
     Ok(())
 }
 
+/// Mueve el nodo por el mapa y le cambia el rol. La zona no se toca: sale del hardware, y
+/// para pasar a Internet se le instala una interfaz de red desde el editor de PC.
 pub async fn edit_node(pool: &PgPool, ctx: Ctx, organization: i64, network: i64, npc: i64, input: NodeInput) -> Result<(), ApiError> {
     ctx.require_admin()?;
-    if !ZONES.contains(&input.zone.as_str()) || !is_code(input.role.trim(), 40) {
-        return Err(ApiError::BadRequest("invalid node zone or role".into()));
+    if !is_code(input.role.trim(), 40) {
+        return Err(ApiError::BadRequest("invalid node role".into()));
     }
     if !(-10_000..=10_000).contains(&input.map_x) || !(-10_000..=10_000).contains(&input.map_y) {
         return Err(ApiError::BadRequest("node coordinates are outside the map".into()));
     }
-    if repo::update_node(pool, organization, network, npc, &input.zone, input.map_x, input.map_y, input.role.trim()).await? == 0 {
+    if repo::update_node(pool, organization, network, npc, input.map_x, input.map_y, input.role.trim()).await? == 0 {
         return Err(ApiError::NotFound);
     }
+    Ok(())
+}
+
+/// Quita un nodo del mapa: primero sus enlaces LAN, despues su sitio en la red. El NPC y su
+/// hardware siguen existiendo, asi que el nodo se puede volver a asignar mas tarde.
+pub async fn remove_node(pool: &PgPool, ctx: Ctx, organization: i64, network: i64, npc: i64) -> Result<(), ApiError> {
+    ctx.require_admin()?;
+
+    let mut tx = pool.begin().await?;
+    repo::delete_node_links(&mut tx, organization, npc).await?;
+    let deleted = repo::delete_node(&mut tx, organization, network, npc).await?;
+
+    if deleted == 0 {
+        // Sin commit: si el nodo no era de esta organizacion, sus cables tampoco se tocan.
+        return Err(ApiError::NotFound);
+    }
+
+    tx.commit().await?;
     Ok(())
 }
 
@@ -448,21 +472,7 @@ pub async fn computer_configuration(pool: &PgPool, ctx: Ctx, organization: i64, 
 
 /// WEB is a virtual edge node. A public node reserves one physical LAN port for it;
 /// it is never stored as an NPC or exposed as a hackable machine.
-pub async fn connect_web(pool: &PgPool, ctx: Ctx, organization: i64, network: i64, npc: i64) -> Result<(), ApiError> {
-    ctx.require_admin()?;
-    if repo::available_lan_ports(pool, organization, npc).await? < 1 {
-        return Err(ApiError::BadRequest("LAN_PORT_UNAVAILABLE: this node has no free LAN port".into()));
-    }
-    if repo::connect_node_to_web(pool, organization, network, npc).await? == 0 {
-        return Err(ApiError::NotFound);
-    }
-    Ok(())
-}
 
-pub async fn disconnect_web(pool: &PgPool, ctx: Ctx, organization: i64, network: i64, npc: i64) -> Result<(), ApiError> {
-    ctx.require_admin()?;
-    if repo::disconnect_node_from_web(pool, organization, network, npc).await? == 0 { Err(ApiError::NotFound) } else { Ok(()) }
-}
 
 pub async fn create_link(pool: &PgPool, ctx: Ctx, organization: i64, input: NodeLinkInput) -> Result<i64, ApiError> { ctx.require_admin()?; if input.from_npc_id <= 0 || input.to_npc_id <= 0 || input.from_npc_id == input.to_npc_id { return Err(ApiError::BadRequest("select two different nodes".into())); } if repo::available_lan_ports(pool, organization, input.from_npc_id).await? < 1 || repo::available_lan_ports(pool, organization, input.to_npc_id).await? < 1 { return Err(ApiError::BadRequest("LAN_PORT_UNAVAILABLE: one of the nodes has no free LAN port".into())); } Ok(repo::insert_link(pool, organization, input.from_npc_id, input.to_npc_id).await?) }
 pub async fn remove_link(pool: &PgPool, ctx: Ctx, organization: i64, link: i64) -> Result<(), ApiError> { ctx.require_admin()?; if repo::delete_link(pool, organization, link).await? == 0 { Err(ApiError::NotFound) } else { Ok(()) } }
@@ -536,6 +546,24 @@ pub async fn create_server(
         kit_id: kit.id,
         components,
     })
+}
+
+/// Un banco con cuentas abiertas no puede dejar de serlo: la clave ajena de `bank_accounts`
+/// apunta al comportamiento `banking`, y quitarlo dejaria esas cuentas sin banco. La base lo
+/// impide; aqui se traduce, porque un 500 no le dice al administrador que cierre las cuentas.
+fn behaviors_in_use(error: sqlx::Error) -> ApiError {
+    let culpable = match &error {
+        sqlx::Error::Database(inner) => inner.constraint(),
+        _ => None,
+    };
+
+    if culpable == Some("bank_accounts_bank_is_a_bank_fkey") {
+        return ApiError::BadRequest(
+            "BANK_IN_USE: tiene cuentas abiertas; cierralas antes de dejar de ser banco".into(),
+        );
+    }
+
+    ApiError::from(error)
 }
 
 fn unique_error(error: sqlx::Error, field: &str) -> ApiError {

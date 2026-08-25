@@ -35,16 +35,13 @@ pub async fn targets(
         FROM npc n
         LEFT JOIN npc_info i
             ON i.npc_id = n.id
-        LEFT JOIN organization_network_npcs m
-            ON m.npc_id = n.id
-        LEFT JOIN organization_networks net
-            ON net.id = m.network_id
-        LEFT JOIN organizations org
-            ON org.id = net.organization_id
+        JOIN npc_internet_exposure e
+            ON e.npc_id = n.id
         WHERE n.down_until <= now()
           -- Los NPCs antiguos sin infraestructura siguen publicos. Uno asignado solo
-          -- aparece si esta en el segmento publico de una organizacion activa.
-          AND (m.npc_id IS NULL OR (m.zone = 'public' AND org.active))
+          -- aparece si tiene interfaz de red y su organizacion esta activa. Quien lo
+          -- decide es la vista: la regla vive en un sitio, no repartida por consultas.
+          AND e.reachable
         ORDER BY
             n.npc_type,
             n.npc_ip
@@ -76,16 +73,14 @@ pub async fn find_npc_by_ip(
         FROM npc n
         LEFT JOIN npc_info i
             ON i.npc_id = n.id
-        LEFT JOIN organization_network_npcs m
-            ON m.npc_id = n.id
-        LEFT JOIN organization_networks net
-            ON net.id = m.network_id
-        LEFT JOIN organizations org
-            ON org.id = net.organization_id
+        JOIN npc_internet_exposure e
+            ON e.npc_id = n.id
         WHERE n.npc_ip = $1
           -- Hasta que exista pivoting, las redes internas son invisibles incluso si se
           -- conoce la IP. El motor de rutas sustituira esta condicion mas adelante.
-          AND (m.npc_id IS NULL OR (m.zone = 'public' AND org.active))
+          -- Quitarle la interfaz de red a un nodo lo apaga de Internet aqui mismo: su
+          -- web deja de servirse porque su IP deja de resolver.
+          AND e.reachable
         "#,
     )
     .bind(ip)

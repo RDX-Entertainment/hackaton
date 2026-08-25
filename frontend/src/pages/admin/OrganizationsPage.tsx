@@ -1,5 +1,6 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { AccountsBoard } from '../../components/admin/AccountsBoard';
 import { AdminCard } from '../../components/admin/AdminCard';
 import { ComputerEditorDialog } from '../../components/admin/ComputerEditorDialog';
 import { OrganizationNodeMap } from '../../components/admin/OrganizationNodeMap';
@@ -8,6 +9,7 @@ import { Loading } from '../../components/Notice';
 import { StatusMessage } from '../../components/StatusMessage';
 import {
   adminApi,
+  type BankAccount,
   type CreateOrganizationServerInput,
   type Kit,
   type NetworkZone,
@@ -15,12 +17,14 @@ import {
   type OrganizationBehavior,
   type OrganizationInput,
   type OrganizationNetwork,
+  type OrganizationNetworkInput,
   type OrganizationNetworkNpc,
   type OrganizationNpcCatalog,
   type Site,
   type Part,
   type OrganizationComputerConfiguration,
 } from '../../utils/api';
+import { formatMoney } from '../../utils/format';
 import { formatIp } from '../../utils/ip';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 
@@ -35,6 +39,24 @@ const emptyOrganization = (): OrganizationInput => ({
   slug: '', name: '', category: '', description: '', active: true, behaviors: [],
 });
 
+/**
+ * El comportamiento que convierte a una organización en banco. No es una etiqueta: la clave
+ * ajena de `bank_accounts` lo exige para dejar abrir una cuenta, y lo protege mientras haya
+ * alguna abierta.
+ */
+const BANKING = 'banking';
+
+function isBank(behaviors: OrganizationBehavior[]) {
+  return behaviors.some((behavior) => behavior.code === BANKING);
+}
+
+function withBanking(behaviors: OrganizationBehavior[], wanted: boolean): OrganizationBehavior[] {
+  if (wanted === isBank(behaviors)) return behaviors;
+  return wanted
+    ? [...behaviors, { code: BANKING, config: {} }]
+    : behaviors.filter((behavior) => behavior.code !== BANKING);
+}
+
 /** Categories and slugs are stable identifiers, so the UI writes the server format for the admin. */
 function toCode(value: string) {
   return value
@@ -43,6 +65,14 @@ function toCode(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function behaviorsOrEmpty(text: string): OrganizationBehavior[] {
+  try {
+    return behaviorFromText(text);
+  } catch {
+    return [];
+  }
 }
 
 function behaviorText(behaviors: OrganizationBehavior[]) {
@@ -151,6 +181,7 @@ export function OrganizationsPage() {
               <label>Slug<input required pattern="[a-z0-9-]+" value={form.slug} onChange={(e) => setForm({ ...form, slug: toCode(e.target.value) })} placeholder="banco-central" /></label>
               <label>Categoría<input required pattern="[a-z0-9-]+" value={form.category} onChange={(e) => setForm({ ...form, category: toCode(e.target.value) })} placeholder="finanzas" /><small>Se normaliza automáticamente: “Sector Público” → “sector-publico”.</small></label>
               <label className="org-check"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Activa en el juego</label>
+              <label className="org-check"><input type="checkbox" checked={isBank(behaviorsOrEmpty(behaviorJson))} onChange={(e) => setBehaviorJson(behaviorText(withBanking(behaviorsOrEmpty(behaviorJson), e.target.checked)))} /> Ofrece cuentas bancarias</label>
             </div>
             <label>Descripción<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Qué representa esta institución y cuál es su función." /></label>
             <details className="org-behaviors">
@@ -172,9 +203,44 @@ export function OrganizationsPage() {
         </AdminCard>
       </div>
 
+      {selected && <Accounts organization={selected} busy={busy} onRun={run} />}
       {selected && <Infrastructure organization={selected} kits={kits} parts={parts} npcs={npcs} sites={sites} busy={busy} onRun={run} />}
     </>
   );
+}
+
+/**
+ * Las cuentas que esta organización tiene abiertas, y el alta de otra. Una organización que
+ * no sea un banco también tiene dinero: el FBI cobra en Pinance sin ofrecer cuentas a nadie.
+ */
+function Accounts({ organization, busy, onRun }: { organization: Organization; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+
+  const load = useCallback(() => {
+    adminApi.listOrganizationAccounts(organization.id).then(setAccounts).catch(() => setAccounts([]));
+  }, [organization.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return <AdminCard prefix="03/" brand="cuentas" note={`${accounts.length} abiertas`} accent="lime">
+    <p className="org-infra__intro">Un banco es una organización con «Ofrece cuentas bancarias» marcado. Cualquier organización puede tener cuenta en uno.</p>
+    <AccountsBoard
+      accounts={accounts}
+      busy={busy}
+      emptyMessage="Esta organización no tiene ninguna cuenta."
+      onOpen={(bankId, pin) => void onRun(async () => {
+        const opened = await adminApi.openOrganizationAccount(organization.id, { bank_id: bankId, password: pin });
+        load();
+        return `Cuenta ${opened.account} abierta a nombre de ${organization.name}.`;
+      })}
+      onAdjust={(account, amount) => void onRun(async () => {
+        const { cash } = await adminApi.adjustAccountCash(account.id, amount);
+        load();
+        const verbo = amount > 0 ? 'Ingresados' : 'Retirados';
+        return `${verbo} ${formatMoney(Math.abs(amount))} en ${account.account}. Saldo: ${formatMoney(cash)}.`;
+      })}
+    />
+  </AdminCard>;
 }
 
 type InfrastructureProps = {
@@ -199,58 +265,85 @@ function Infrastructure(props: InfrastructureProps) {
       <p className="org-infra__intro">Una red es interna por defecto. Un nodo pasa a Internet al instalarle una interfaz de red desde Computer.</p>
       <OrganizationNodeMap organization={organization} kits={kits} busy={busy} onSelectNode={({ npc }) => setSelectedNodeId(npc.id)} onRun={onRun} />
       <div className="org-networks">
-      {selectedNode && <NodeInspector organization={organization} network={selectedNode.network} npc={selectedNode.npc} kits={kits} parts={parts} sites={sites} busy={busy} connectionSource={connectionSource} setConnectionSource={setConnectionSource} onRun={onRun} />}
+      {selectedNode && <NodeInspector organization={organization} network={selectedNode.network} npc={selectedNode.npc} kits={kits} parts={parts} sites={sites} busy={busy} connectionSource={connectionSource} setConnectionSource={setConnectionSource} onRun={onRun} onRemoved={() => setSelectedNodeId(null)} />}
         {!organization.networks.length && <p className="org-empty">Todavía no hay redes. Empieza por una red pública si el servicio tendrá web.</p>}
+        {organization.networks.map((network) => <NetworkRow key={network.id} organization={organization} network={network} busy={busy} onRun={onRun} />)}
+        <CreateNetworkForm organization={organization} busy={busy} onRun={onRun} />
       </div>
     </div>
   </AdminCard>;
 }
 
-function NodeMap({ organization, kits, busy, onSelectNode, onRun }: { organization: Organization; kits: Kit[]; busy: boolean; onSelectNode: (node: { network: OrganizationNetwork; npc: OrganizationNetworkNpc }) => void; onRun: (work: () => Promise<string>) => Promise<void> }) {
-  const canvas = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<{ network: number; npc: OrganizationNetworkNpc } | null>(null);
-  const [preview, setPreview] = useState<Record<number, { x: number; y: number }>>({});
-  const [source, setSource] = useState<{ network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null>(null);
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [newNode, setNewNode] = useState({ name: '', network: organization.networks[0]?.id ?? 0, kit: kits[0]?.id ?? 0 });
-  const nodes = organization.networks.flatMap((network, networkIndex) => network.npcs.map((npc, nodeIndex) => ({ network, npc, x: preview[npc.id]?.x ?? (npc.map_x || 120 + networkIndex * 230), y: preview[npc.id]?.y ?? (npc.map_y || 90 + nodeIndex * 105) })));
-  const position = (event: { clientX: number; clientY: number }) => {
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return null;
-    return { x: Math.round(Math.max(20, Math.min(rect.width - 170, event.clientX - rect.left - 80))), y: Math.round(Math.max(40, Math.min(rect.height - 80, event.clientY - rect.top - 28))) };
-  };
-  const drop = (event: { clientX: number; clientY: number }) => {
-    if (!dragging || !canvas.current) return;
-    const point = position(event);
-    if (!point) return;
-    const { network, npc } = dragging;
-    setDragging(null);
-    void onRun(async () => { await adminApi.editOrganizationNode(organization.id, network, npc.id, { zone: npc.zone, role: npc.role, map_x: point.x, map_y: point.y }); return `${npc.name} movido en el mapa.`; });
-  };
-  const beginLink = (event: React.MouseEvent, network: OrganizationNetwork, npc: OrganizationNetworkNpc) => { event.stopPropagation(); setSource({ network, npc }); setPointer(position(event)); };
-  const connect = (_network: OrganizationNetwork, npc: OrganizationNetworkNpc) => { if (!source || source.npc.id === npc.id) return; void onRun(async () => { await adminApi.createOrganizationLink(organization.id, { from_npc_id: source.npc.id, to_npc_id: npc.id }); setSource(null); setPointer(null); return 'Conexión LAN creada.'; }); };
-  const connectWeb = () => { if (!source) return; void onRun(async () => { await adminApi.connectOrganizationNodeToWeb(organization.id, source.network.id, source.npc.id); setSource(null); setPointer(null); return `${source.npc.name} conectado a WEB.`; }); };
-  // Kept temporarily while existing saved screens migrate to OrganizationNodeMap.
-  void [busy, pointer, creating, setCreating, newNode, setNewNode, beginLink, connect, connectWeb];
-  return <div className="org-node-map" ref={canvas}>
-    <span className="org-node-map__legend">Arrastra para mover · clic en un nodo para abrir su configuración</span>
-    <svg className="org-node-map__links" aria-hidden="true">{(organization.links ?? []).map((link) => { const from = nodes.find((node) => node.npc.id === link.from_npc_id); const to = nodes.find((node) => node.npc.id === link.to_npc_id); return from && to ? <line key={link.id} x1={from.x + 80} y1={from.y + 28} x2={to.x + 80} y2={to.y + 28} /> : null; })}</svg>
-    {nodes.map(({ network, npc, x, y }) => <button type="button" key={npc.id} className={`org-node org-node--${npc.zone}`} style={{ left: `${x}px`, top: `${y}px` }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setDragging({ network: network.id, npc }); }} onPointerMove={(event) => { if (dragging?.npc.id === npc.id) { const point = position(event); if (point) setPreview((old) => ({ ...old, [npc.id]: point })); } }} onPointerUp={(event) => drop(event)} onClick={() => onSelectNode({ network, npc })}><small>{npc.zone}</small><b>{npc.name}</b><span>{formatIp(npc.ip)} <i className="org-lan">{Array.from({ length: Math.max(0, npc.lan_available) }).map((_, index) => <em key={index} />)}</i></span></button>)}
-    {!nodes.length && <p className="org-empty">Crea una red y añade un servidor: aparecerá aquí como nodo.</p>}
-  </div>;
+/** Borrar no se deshace: el primer clic arma el boton y el segundo ejecuta. Se desarma solo. */
+function DangerButton({ label, busy, onConfirm }: { label: string; busy: boolean; onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  return <button type="button" className={armed ? 'org-danger is-armed' : 'org-danger'} disabled={busy} onClick={() => { if (armed) { setArmed(false); onConfirm(); } else { setArmed(true); } }}>{armed ? '¿Seguro?' : label}</button>;
 }
 
-void NodeMap;
+/** Renombrar una red, cambiarle la zona o eliminarla. El servidor la protege mientras tenga nodos. */
+function NetworkRow({ organization, network, busy, onRun }: { organization: Organization; network: OrganizationNetwork; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  const [name, setName] = useState(network.name);
+  const [zone, setZone] = useState<NetworkZone>(network.zone);
+  // La recarga tras guardar trae una red nueva: sin esto el formulario seguiria mostrando lo viejo.
+  useEffect(() => { setName(network.name); setZone(network.zone); }, [network]);
+  const dirty = name.trim() !== network.name || zone !== network.zone;
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    void onRun(async () => {
+      await adminApi.editOrganizationNetwork(organization.id, network.id, { name: name.trim(), zone });
+      return `Red ${name.trim()} actualizada.`;
+    });
+  };
+  const remove = () => void onRun(async () => {
+    await adminApi.removeOrganizationNetwork(organization.id, network.id);
+    return `Red ${network.name} eliminada.`;
+  });
+  return <form className="org-network-row" onSubmit={save}><input required value={name} onChange={(event) => setName(event.target.value)} /><select value={zone} onChange={(event) => setZone(event.target.value as NetworkZone)}>{ZONES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select><small>{network.npcs.length} {network.npcs.length === 1 ? 'nodo' : 'nodos'}</small><button disabled={busy || !dirty || !name.trim()}>Guardar</button><DangerButton label="Eliminar" busy={busy} onConfirm={remove} /></form>;
+}
 
-function NodeInspector({ organization, network, npc, kits, parts, sites, busy, connectionSource, setConnectionSource, onRun }: { organization: Organization; network: OrganizationNetwork; npc: OrganizationNetworkNpc; kits: Kit[]; parts: Part[]; sites: Site[]; busy: boolean; connectionSource: { network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null; setConnectionSource: (node: { network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null) => void; onRun: (work: () => Promise<string>) => Promise<void> }) {
+/** Sin una red no hay donde colgar un nodo: el desplegable del mapa se queda vacio y no deja crear. */
+function CreateNetworkForm({ organization, busy, onRun }: { organization: Organization; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  const [draft, setDraft] = useState<OrganizationNetworkInput>({ name: '', zone: 'internal' });
+  const create = (event: FormEvent) => {
+    event.preventDefault();
+    void onRun(async () => {
+      await adminApi.createOrganizationNetwork(organization.id, draft);
+      setDraft({ name: '', zone: 'internal' });
+      return `Red ${draft.name} creada.`;
+    });
+  };
+  return <form className="org-network-create" onSubmit={create}><b>Crear red</b><input required value={draft.name} placeholder="Nombre de la red" onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /><select value={draft.zone} onChange={(event) => setDraft((current) => ({ ...current, zone: event.target.value as NetworkZone }))}>{ZONES.map((zone) => <option value={zone.value} key={zone.value}>{zone.label}</option>)}</select><button className="is-primary" disabled={busy || !draft.name.trim()}>Crear red</button></form>;
+}
+
+function NodeInspector({ organization, network, npc, kits, parts, sites, busy, connectionSource, setConnectionSource, onRun, onRemoved }: { organization: Organization; network: OrganizationNetwork; npc: OrganizationNetworkNpc; kits: Kit[]; parts: Part[]; sites: Site[]; busy: boolean; connectionSource: { network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null; setConnectionSource: (node: { network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null) => void; onRun: (work: () => Promise<string>) => Promise<void>; onRemoved: () => void }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerConfiguration, setComputerConfiguration] = useState<OrganizationComputerConfiguration | null>(null);
+  const [role, setRole] = useState(npc.role);
+  // Al recargar tras guardar llega otro npc: el formulario tiene que seguir al nodo seleccionado.
+  useEffect(() => { setRole(npc.role); }, [npc]);
+  const nodeDirty = role.trim() !== npc.role;
+  const saveNode = (event: FormEvent) => {
+    event.preventDefault();
+    void onRun(async () => {
+      await adminApi.editOrganizationNode(organization.id, network.id, npc.id, { role: role.trim(), map_x: npc.map_x, map_y: npc.map_y });
+      return `${npc.name} actualizado.`;
+    });
+  };
+  const removeNode = () => void onRun(async () => {
+    await adminApi.removeOrganizationNode(organization.id, network.id, npc.id);
+    onRemoved();
+    return `${npc.name} eliminado del mapa.`;
+  });
   const site = sites.find((item) => item.kind === 'npc' && item.id === npc.id);
   const selectPort = () => { if (!connectionSource) { setConnectionSource({ network, npc }); return; } if (connectionSource.npc.id === npc.id) { setConnectionSource(null); return; } void onRun(async () => { await adminApi.createOrganizationLink(organization.id, { from_npc_id: connectionSource.npc.id, to_npc_id: npc.id }); setConnectionSource(null); return 'Conexión LAN creada.'; }); };
   const openComputer = () => void onRun(async () => { setComputerConfiguration(await adminApi.getOrganizationComputer(organization.id, network.id, npc.id)); setComputerOpen(true); return ''; });
-  return <section className="org-node-inspector"><header><span className={`org-zone org-zone--${npc.zone}`}>{npc.zone}</span><h3>{npc.name}</h3></header><dl><div><dt>IP</dt><dd>{formatIp(npc.ip)}</dd></div><div><dt>Red</dt><dd>{network.name}</dd></div><div><dt>Rol</dt><dd>{npc.role}</dd></div><div><dt>Equipo</dt><dd>{npc.computer_components ? `${npc.computer_components} piezas · ${npc.source_kit_id ? `kit #${npc.source_kit_id}` : 'personalizado'}` : 'Sin configurar'}</dd></div></dl><div className="org-node-inspector__ports"><small>Puertos LAN {connectionSource ? '· selecciona este puerto para conectar' : ''}</small>{Array.from({ length: Math.max(0, npc.lan_available) }).map((_, index) => <button type="button" className={connectionSource ? 'is-linkable' : ''} key={index} onClick={selectPort} aria-label={`Puerto LAN ${index + 1}`} />)}{!npc.lan_available && <em>Sin puertos libres</em>}</div><div className="org-node-inspector__menus"><button className="is-primary" type="button" onClick={openComputer}>Computer</button><button type="button" onClick={() => setEditorOpen(true)}>Web</button></div><ComputerEditorDialog open={computerOpen} title={npc.name} kits={kits} parts={parts} configuration={computerConfiguration} lanLinks={Math.max(0, npc.lan_total - npc.lan_available - (npc.zone === 'public' ? 1 : 0))} busy={busy} onClose={() => setComputerOpen(false)} onSave={(input) => void onRun(async () => { await adminApi.saveOrganizationComputer(organization.id, network.id, npc.id, input); setComputerOpen(false); return `PC de ${npc.name} instalado en modo creativo.`; })} /><SiteEditorDialog open={editorOpen} title={npc.name} initialWeb={site?.web ?? ''} busy={busy} onClose={() => setEditorOpen(false)} onSave={(web) => void onRun(async () => { await adminApi.saveSite('npc', npc.id, web); setEditorOpen(false); return `Web de ${npc.name} guardada.`; })} /></section>;
+  return <section className="org-node-inspector"><header><span className={`org-zone org-zone--${npc.zone}`}>{npc.zone}</span><h3>{npc.name}</h3></header><dl><div><dt>IP</dt><dd>{formatIp(npc.ip)}</dd></div><div><dt>Red</dt><dd>{network.name}</dd></div><div><dt>Rol</dt><dd>{npc.role}</dd></div><div><dt>Equipo</dt><dd>{npc.computer_components ? `${npc.computer_components} piezas · ${npc.source_kit_id ? `kit #${npc.source_kit_id}` : 'personalizado'}` : 'Sin configurar'}</dd></div></dl><div className="org-node-inspector__ports"><small>Puertos LAN {connectionSource ? '· selecciona este puerto para conectar' : ''}</small>{Array.from({ length: Math.max(0, npc.lan_available) }).map((_, index) => <button type="button" className={connectionSource ? 'is-linkable' : ''} key={index} onClick={selectPort} aria-label={`Puerto LAN ${index + 1}`} />)}{!npc.lan_available && <em>Sin puertos libres</em>}</div><form className="org-node-edit" onSubmit={saveNode}><label>rol<input value={role} maxLength={40} onChange={(event) => setRole(event.target.value)} /></label><small className="org-node-edit__hint">{npc.zone === 'public' ? 'En Internet porque tiene una interfaz de red instalada. Quítasela en Computer y dejará de responder.' : 'Fuera de Internet. Instálale una interfaz de red en Computer para exponerlo.'}</small><button disabled={busy || !nodeDirty || !role.trim()}>Guardar nodo</button><DangerButton label="Eliminar nodo" busy={busy} onConfirm={removeNode} /></form><div className="org-node-inspector__menus"><button className="is-primary" type="button" onClick={openComputer}>Computer</button><button type="button" onClick={() => setEditorOpen(true)}>Web</button></div><ComputerEditorDialog open={computerOpen} title={npc.name} kits={kits} parts={parts} configuration={computerConfiguration} lanLinks={Math.max(0, npc.lan_total - npc.lan_available - (npc.zone === 'public' ? 1 : 0))} busy={busy} onClose={() => setComputerOpen(false)} onSave={(input) => void onRun(async () => { await adminApi.saveOrganizationComputer(organization.id, network.id, npc.id, input); setComputerOpen(false); return `PC de ${npc.name} instalado en modo creativo.`; })} /><SiteEditorDialog open={editorOpen} title={npc.name} initialWeb={site?.web ?? ''} busy={busy} onClose={() => setEditorOpen(false)} onSave={(web) => void onRun(async () => { await adminApi.saveSite('npc', npc.id, web); setEditorOpen(false); return `Web de ${npc.name} guardada.`; })} /></section>;
 }
 
 function Network({ organization, network, kits, npcs, sites, busy, onRun }: { organization: Organization; network: OrganizationNetwork; kits: Kit[]; npcs: OrganizationNpcCatalog[]; sites: Site[]; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
@@ -260,7 +353,6 @@ function Network({ organization, network, kits, npcs, sites, busy, onRun }: { or
   const [networkName, setNetworkName] = useState(network.name);
   const [networkZone, setNetworkZone] = useState<NetworkZone>(network.zone);
   const [selectedNpcId, setSelectedNpcId] = useState<number | null>(network.npcs[0]?.id ?? null);
-  const [nodeZone, setNodeZone] = useState<NetworkZone>(network.npcs[0]?.zone ?? network.zone);
   const availableNpcs = npcs.filter((npc) => npc.network_id !== network.id);
   const selectedNpc = network.npcs.find((npc) => npc.id === selectedNpcId) ?? network.npcs[0] ?? null;
   const currentWeb = sites.find((item) => item.kind === 'npc' && item.id === selectedNpc?.id)?.web ?? '';
@@ -277,10 +369,10 @@ function Network({ organization, network, kits, npcs, sites, busy, onRun }: { or
     <header><div><span className={`org-zone org-zone--${network.zone}`}>{ZONES.find((zone) => zone.value === network.zone)?.label}</span><h3>{network.name}</h3></div><button className="org-danger" disabled={busy} onClick={() => void onRun(async () => { await adminApi.removeOrganizationNetwork(organization.id, network.id); return `${network.name} eliminada.`; })}>Eliminar red</button></header>
     <details className="org-network-edit"><summary>Modificar esta red</summary><form onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await adminApi.editOrganizationNetwork(organization.id, network.id, { name: networkName, zone: networkZone }); return `Red ${networkName} actualizada.`; }); }}><input required value={networkName} onChange={(event) => setNetworkName(event.target.value)} /><select value={networkZone} onChange={(event) => setNetworkZone(event.target.value as NetworkZone)}>{ZONES.map((zone) => <option value={zone.value} key={zone.value}>{zone.label}</option>)}</select><button disabled={busy}>Guardar red</button></form></details>
     <div className="org-network__machines">
-      {network.npcs.map((npc) => <button type="button" className={`org-machine ${npc.id === selectedNpc?.id ? 'is-active' : ''}`} onClick={() => { setSelectedNpcId(npc.id); setNodeZone(npc.zone); setWeb(sites.find((item) => item.kind === 'npc' && item.id === npc.id)?.web ?? ''); }} key={npc.id}><b>{npc.name}</b><span>{formatIp(npc.ip)} · {npc.role}{npc.source_kit_id ? ` · kit #${npc.source_kit_id}` : ''}</span></button>)}
+      {network.npcs.map((npc) => <button type="button" className={`org-machine ${npc.id === selectedNpc?.id ? 'is-active' : ''}`} onClick={() => { setSelectedNpcId(npc.id); setWeb(sites.find((item) => item.kind === 'npc' && item.id === npc.id)?.web ?? ''); }} key={npc.id}><b>{npc.name}</b><span>{formatIp(npc.ip)} · {npc.role}{npc.source_kit_id ? ` · kit #${npc.source_kit_id}` : ''}</span></button>)}
       {!network.npcs.length && <p className="org-empty">Sin equipos todavía.</p>}
     </div>
-    {selectedNpc && <form className="org-web-form" onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await Promise.all([adminApi.saveSite('npc', selectedNpc.id, web), adminApi.editOrganizationNode(organization.id, network.id, selectedNpc.id, { zone: nodeZone, role: selectedNpc.role, map_x: selectedNpc.map_x, map_y: selectedNpc.map_y })]); return `Web y zona de ${selectedNpc.name} guardadas.`; }); }}><div><b>Web de {selectedNpc.name}</b><small>{formatIp(selectedNpc.ip)} · HTML que verá quien visite este servidor.</small></div><select value={nodeZone} onChange={(event) => setNodeZone(event.target.value as NetworkZone)}>{ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select><textarea value={web} onChange={(event) => setWeb(event.target.value)} placeholder="<h1>Bienvenido</h1>" spellCheck={false} /><button className="is-primary" disabled={busy}>Guardar nodo</button></form>}
+    {selectedNpc && <form className="org-web-form" onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await adminApi.saveSite('npc', selectedNpc.id, web); return `Web de ${selectedNpc.name} guardada.`; }); }}><div><b>Web de {selectedNpc.name}</b><small>{formatIp(selectedNpc.ip)} · HTML que verá quien visite este servidor.</small></div><textarea value={web} onChange={(event) => setWeb(event.target.value)} placeholder="<h1>Bienvenido</h1>" spellCheck={false} /><button className="is-primary" disabled={busy}>Guardar nodo</button></form>}
     <div className="org-network__actions">
       <form className="org-server-form" onSubmit={createServer}><b>Crear servidor desde un kit</b><input required value={server.name} onChange={(e) => setServer({ ...server, name: e.target.value })} placeholder="Gateway público" /><select required value={server.kit_id} onChange={(e) => setServer({ ...server, kit_id: Number(e.target.value) })}><option value={0} disabled>Selecciona un kit</option>{kits.map((kit) => <option value={kit.id} key={kit.id}>{kit.name}</option>)}</select><input value={server.role} onChange={(e) => setServer({ ...server, role: e.target.value })} placeholder="Rol" /><textarea value={server.web} onChange={(e) => setServer({ ...server, web: e.target.value })} placeholder="Web inicial opcional: <h1>Servicio</h1>" spellCheck={false} /><button className="is-primary" disabled={busy || !kits.length}>Crear servidor</button>{!kits.length && <small>Antes crea un kit válido en la sección Kits.</small>}</form>
       <form className="org-npc-form" onSubmit={assignNpc}><b>Asignar NPC existente</b><select value={npcId} onChange={(e) => setNpcId(e.target.value)}><option value="">Selecciona un NPC</option>{availableNpcs.map((npc) => <option value={npc.id} key={npc.id}>{npc.name} · {formatIp(npc.ip)}{npc.zone ? ` · ${npc.zone}` : ''}</option>)}</select><input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Rol" /><button disabled={busy || !npcId}>Asignar</button></form>

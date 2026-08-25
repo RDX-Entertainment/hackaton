@@ -38,20 +38,16 @@ pub fn configure_admin(cfg: &mut web::ServiceConfig) {
             web::put().to(edit_node),
         )
         .route(
+            "/organizations/{id}/networks/{network}/npcs/{npc}",
+            web::delete().to(remove_node),
+        )
+        .route(
             "/organizations/{id}/networks/{network}/npcs/{npc}/computer",
             web::get().to(get_computer),
         )
         .route(
             "/organizations/{id}/networks/{network}/npcs/{npc}/computer",
             web::put().to(save_computer),
-        )
-        .route(
-            "/organizations/{id}/networks/{network}/npcs/{npc}/web",
-            web::post().to(connect_web),
-        )
-        .route(
-            "/organizations/{id}/networks/{network}/npcs/{npc}/web",
-            web::delete().to(disconnect_web),
         )
         .route(
             "/organizations/{id}/networks/{network}/servers",
@@ -67,6 +63,12 @@ async fn edit_node(state: web::Data<AppState>, ctx: Ctx, path: web::Path<(i64, i
     Ok(HttpResponse::NoContent().finish())
 }
 
+async fn remove_node(state: web::Data<AppState>, ctx: Ctx, path: web::Path<(i64, i64, i64)>) -> Result<HttpResponse, ApiError> {
+    let (organization, network, npc) = path.into_inner();
+    services::remove_node(&state.pool, ctx, organization, network, npc).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 async fn save_computer(state: web::Data<AppState>, ctx: Ctx, path: web::Path<(i64, i64, i64)>, input: web::Json<ComputerBuildInput>) -> Result<HttpResponse, ApiError> {
     let (organization, network, npc) = path.into_inner();
     services::save_computer(&state.pool, ctx, organization, network, npc, input.into_inner()).await?;
@@ -78,17 +80,7 @@ async fn get_computer(state: web::Data<AppState>, ctx: Ctx, path: web::Path<(i64
     Ok(HttpResponse::Ok().json(services::computer_configuration(&state.pool, ctx, organization, network, npc).await?))
 }
 
-async fn connect_web(state: web::Data<AppState>, ctx: Ctx, path: web::Path<(i64, i64, i64)>) -> Result<HttpResponse, ApiError> {
-    let (organization, network, npc) = path.into_inner();
-    services::connect_web(&state.pool, ctx, organization, network, npc).await?;
-    Ok(HttpResponse::NoContent().finish())
-}
 
-async fn disconnect_web(state: web::Data<AppState>, ctx: Ctx, path: web::Path<(i64, i64, i64)>) -> Result<HttpResponse, ApiError> {
-    let (organization, network, npc) = path.into_inner();
-    services::disconnect_web(&state.pool, ctx, organization, network, npc).await?;
-    Ok(HttpResponse::NoContent().finish())
-}
 
 async fn npc_catalog(state: web::Data<AppState>, ctx: Ctx) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(services::npc_catalog(&state.pool, ctx).await?))

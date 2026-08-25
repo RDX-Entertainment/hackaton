@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type Dispatch, type FormEvent, type MouseEvent, type PointerEvent, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type MouseEvent, type PointerEvent, type SetStateAction } from 'react';
 
 import { adminApi, type Kit, type Organization, type OrganizationNetwork, type OrganizationNetworkNpc } from '../../utils/api';
 import { formatIp } from '../../utils/ip';
@@ -26,6 +26,17 @@ export function OrganizationNodeMap({ organization, kits, busy, onSelectNode, on
   const [draggingWeb, setDraggingWeb] = useState(false);
   const [draft, setDraft] = useState({ name: '', network: organization.networks[0]?.id ?? 0, kit: kits[0]?.id ?? 0 });
   const [creating, setCreating] = useState(false);
+
+  // Redes y kits llegan del API despues del primer render, y el inicializador de useState solo
+  // corre una vez: sin esto el borrador se queda en 0 y el boton de crear no se despierta nunca.
+  // Tambien reengancha la seleccion cuando la red o el kit elegidos dejan de existir.
+  useEffect(() => {
+    setDraft((current) => {
+      const network = organization.networks.some((item) => item.id === current.network) ? current.network : organization.networks[0]?.id ?? 0;
+      const kit = kits.some((item) => item.id === current.kit) ? current.kit : kits[0]?.id ?? 0;
+      return network === current.network && kit === current.kit ? current : { ...current, network, kit };
+    });
+  }, [organization.networks, kits]);
 
   const nodes = useMemo<Node[]>(() => organization.networks.flatMap((network, networkIndex) => network.npcs.map((npc, nodeIndex) => ({
     network,
@@ -96,7 +107,7 @@ export function OrganizationNodeMap({ organization, kits, busy, onSelectNode, on
     setDragging(null);
     if (!next) return;
     void onRun(async () => {
-      await adminApi.editOrganizationNode(organization.id, node.network.id, node.npc.id, { zone: node.npc.zone, role: node.npc.role, map_x: next.x, map_y: next.y });
+      await adminApi.editOrganizationNode(organization.id, node.network.id, node.npc.id, { role: node.npc.role, map_x: next.x, map_y: next.y });
       return `${node.npc.name} movido en el mapa.`;
     });
   };
@@ -135,5 +146,12 @@ function WebGateway({ position, exposedNode, onStartDrag, onMoveDrag, onFinishDr
 }
 
 function CreateNodeForm({ draft, networks, kits, busy, onChange, onCancel, onSubmit }: { draft: { name: string; network: number; kit: number }; networks: OrganizationNetwork[]; kits: Kit[]; busy: boolean; onChange: Dispatch<SetStateAction<{ name: string; network: number; kit: number }>>; onCancel: () => void; onSubmit: (event: FormEvent) => void }) {
-  return <form className="org-node-create" onSubmit={onSubmit}><b>Crear nodo</b><input required value={draft.name} placeholder="Nombre" onChange={(event) => onChange((current) => ({ ...current, name: event.target.value }))} /><select value={draft.network} onChange={(event) => onChange((current) => ({ ...current, network: Number(event.target.value) }))}>{networks.map((network) => <option key={network.id} value={network.id}>{network.name}</option>)}</select><select value={draft.kit} onChange={(event) => onChange((current) => ({ ...current, kit: Number(event.target.value) }))}>{kits.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>)}</select><span><button type="button" onClick={onCancel}>Cancelar</button><button className="is-primary" disabled={busy || !draft.network || !draft.kit}>Crear</button></span></form>;
+  // Un select sin opciones no se despliega, asi que el motivo va escrito: callarlo deja un
+  // formulario que parece roto.
+  const blocked = !networks.length
+    ? 'Esta organización no tiene ninguna red todavía. Créala abajo, en Infraestructura.'
+    : !kits.length
+      ? 'No hay ningún kit. Crea uno en la sección Kits.'
+      : '';
+  return <form className="org-node-create" onSubmit={onSubmit}><b>Crear nodo</b><input required value={draft.name} placeholder="Nombre" onChange={(event) => onChange((current) => ({ ...current, name: event.target.value }))} /><select value={draft.network} disabled={!networks.length} onChange={(event) => onChange((current) => ({ ...current, network: Number(event.target.value) }))}>{networks.length ? networks.map((network) => <option key={network.id} value={network.id}>{network.name}</option>) : <option value={0}>Sin redes</option>}</select><select value={draft.kit} disabled={!kits.length} onChange={(event) => onChange((current) => ({ ...current, kit: Number(event.target.value) }))}>{kits.length ? kits.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>) : <option value={0}>Sin kits</option>}</select>{blocked && <small className="org-node-create__blocked">{blocked}</small>}<span><button type="button" onClick={onCancel}>Cancelar</button><button className="is-primary" disabled={busy || Boolean(blocked) || !draft.network || !draft.kit}>Crear</button></span></form>;
 }
