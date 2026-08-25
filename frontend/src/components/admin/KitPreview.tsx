@@ -5,13 +5,15 @@ import { PartIcon } from './PartIcon';
 type KitPreviewProps = {
   build: Build;
   price: number;
+  /** Physical node-to-node cables already attached to this machine. */
+  lanLinks?: number;
 };
 
 const SLOT_LABEL: Record<string, string> = {
   cpu: 'proceso',
   ram: 'memoria',
   hdd: 'disco',
-  net: 'red',
+  net: 'interfaz Internet',
 };
 
 function bar(used: number, total: number): string {
@@ -24,7 +26,7 @@ function bar(used: number, total: number): string {
   return '▓'.repeat(filled) + '░'.repeat(Math.max(0, 8 - filled));
 }
 
-export function KitPreview({ build, price }: KitPreviewProps) {
+export function KitPreview({ build, price, lanLinks = 0 }: KitPreviewProps) {
   const { board, slots, problems } = build;
 
   const saving = build.price > 0 ? Math.round((1 - price / build.price) * 100) : 0;
@@ -55,8 +57,11 @@ export function KitPreview({ build, price }: KitPreviewProps) {
 
       <dl className="kitprev__slots">
         {slots.map((slot) => {
-          const overSlots = slot.used > slot.total;
-          const overPower = slot.power > slot.max;
+          // A connected LAN cable activates the board's Internet interface visually.
+          const used = slot.kind === 'net' ? Math.min(slot.total, slot.used + lanLinks) : slot.used;
+          const power = slot.kind === 'net' && used > 0 ? Math.max(slot.power, slot.max) : slot.power;
+          const overSlots = used > slot.total;
+          const overPower = power > slot.max;
 
           return (
             <div
@@ -70,13 +75,13 @@ export function KitPreview({ build, price }: KitPreviewProps) {
 
               <dd>
                 <span className="kitprev__bar" aria-hidden="true">
-                  {bar(slot.used, slot.total)}
+                  {bar(used, slot.total)}
                 </span>
                 <span className="kitprev__count">
-                  {slot.used}/{slot.total || '—'}
+                  {used}/{slot.total || '—'}
                 </span>
                 <span className="kitprev__power">
-                  {formatCount(slot.power)}
+                  {formatCount(power)}
                   {slot.max ? ` / ${formatCount(slot.max)}` : ''} {KIND_UNIT[slot.kind]}
                 </span>
               </dd>
@@ -84,6 +89,10 @@ export function KitPreview({ build, price }: KitPreviewProps) {
           );
         })}
       </dl>
+
+      {board && <p className="kitprev__lan">LAN de placa: <b>{lanLinks}/{board.net_slots}</b> ocupados · <b>{Math.max(0, board.net_slots - lanLinks)}</b> libres</p>}
+
+      {build.networkInterfaces.length > 0 && <section className="kitprev__internet"><small>Interfaz a Internet</small>{build.networkInterfaces.map((network) => <span key={network.name}>{network.amount > 1 ? `${network.amount}× ` : ''}{network.name} · {formatCount(network.power)} Mbit</span>)}</section>}
 
       <div className="kitprev__money">
         <span className="kitprev__pieces">{build.pieces} piezas</span>

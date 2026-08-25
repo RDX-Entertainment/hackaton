@@ -73,6 +73,37 @@ pub async fn insert_machine(
     .await
 }
 
+pub async fn insert_npc_machine(
+    tx: &mut Transaction<'_, Postgres>,
+    npc_id: i64,
+    name: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO hardware(user_id, name, cpu, ram, hdd, net, is_npc)
+        VALUES($1, $2, 0, 0, 0, 0, TRUE)
+        RETURNING server_id
+        "#,
+    )
+    .bind(npc_id)
+    .bind(name)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// NPCs have at most one hardware record. Existing NPCs imported into a network may not
+/// have one yet, so the organization editor can create it lazily.
+pub async fn find_npc_machine(tx: &mut Transaction<'_, Postgres>, npc_id: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT server_id FROM hardware WHERE user_id = $1 AND is_npc LIMIT 1")
+        .bind(npc_id).fetch_optional(&mut **tx).await
+}
+
+pub async fn clear_machine_components(tx: &mut Transaction<'_, Postgres>, machine: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM hardware_components WHERE installed_in = $1")
+        .bind(machine).execute(&mut **tx).await?;
+    Ok(())
+}
+
 pub async fn rename_machine(
     pool: &PgPool,
     machine: i64,
@@ -147,6 +178,26 @@ pub async fn insert_installed(
     )
     .bind(part_id)
     .bind(user_id)
+    .bind(machine)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+pub async fn insert_npc_installed(
+    tx: &mut Transaction<'_, Postgres>,
+    part_id: i64,
+    npc_id: i64,
+    machine: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO hardware_components(part_id, user_id, is_npc, installed_in)
+        VALUES($1, $2, TRUE, $3)
+        RETURNING id
+        "#,
+    )
+    .bind(part_id)
+    .bind(npc_id)
     .bind(machine)
     .fetch_one(&mut **tx)
     .await
@@ -448,6 +499,7 @@ pub async fn find_components(
         SELECT {COMPONENT_COLUMNS}
         {COMPONENT_SOURCE}
         WHERE c.user_id = $1
+          AND NOT c.is_npc
         ORDER BY k.kind, k.power DESC, c.id
         "#
     ))
@@ -468,6 +520,7 @@ pub async fn lock_component(
         {COMPONENT_SOURCE}
         WHERE c.id = $1
           AND c.user_id = $2
+          AND NOT c.is_npc
         FOR UPDATE OF c
         "#
     ))
@@ -644,6 +697,7 @@ pub async fn total_capacity(
         FROM hardware_components c
         JOIN hardware_parts k ON k.id = c.part_id
         WHERE c.user_id = $1
+          AND NOT c.is_npc
           AND c.installed_in IS NOT NULL
           AND k.kind = $2
         "#,

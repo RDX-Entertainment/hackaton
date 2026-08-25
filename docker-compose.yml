@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hackaton-postgres
+    environment:
+      POSTGRES_DB: hacker_experience
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: hackaton_local_dev
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - hackaton-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hacker_experience"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hackaton-postgres-data:

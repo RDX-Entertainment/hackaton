@@ -35,7 +35,16 @@ pub async fn targets(
         FROM npc n
         LEFT JOIN npc_info i
             ON i.npc_id = n.id
+        LEFT JOIN organization_network_npcs m
+            ON m.npc_id = n.id
+        LEFT JOIN organization_networks net
+            ON net.id = m.network_id
+        LEFT JOIN organizations org
+            ON org.id = net.organization_id
         WHERE n.down_until <= now()
+          -- Los NPCs antiguos sin infraestructura siguen publicos. Uno asignado solo
+          -- aparece si esta en el segmento publico de una organizacion activa.
+          AND (m.npc_id IS NULL OR (m.zone = 'public' AND org.active))
         ORDER BY
             n.npc_type,
             n.npc_ip
@@ -67,7 +76,16 @@ pub async fn find_npc_by_ip(
         FROM npc n
         LEFT JOIN npc_info i
             ON i.npc_id = n.id
+        LEFT JOIN organization_network_npcs m
+            ON m.npc_id = n.id
+        LEFT JOIN organization_networks net
+            ON net.id = m.network_id
+        LEFT JOIN organizations org
+            ON org.id = net.organization_id
         WHERE n.npc_ip = $1
+          -- Hasta que exista pivoting, las redes internas son invisibles incluso si se
+          -- conoce la IP. El motor de rutas sustituira esta condicion mas adelante.
+          AND (m.npc_id IS NULL OR (m.zone = 'public' AND org.active))
         "#,
     )
     .bind(ip)

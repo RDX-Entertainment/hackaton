@@ -19,6 +19,7 @@ import './styles/internet.css';
 import './styles/adminshell.css';
 import './styles/admin.css';
 import './styles/kits.css';
+import './styles/organizations.css';
 import './styles/forms.css';
 
 const container = document.getElementById('root');

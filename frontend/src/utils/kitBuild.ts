@@ -33,6 +33,7 @@ export type Build = {
   ram: number;
   hdd: number;
   net: number;
+  networkInterfaces: { name: string; power: number; amount: number }[];
 };
 
 const SLOTTED: ComponentKind[] = ['cpu', 'ram', 'hdd', 'net'];
@@ -155,5 +156,6 @@ export function build(items: BuildItem[]): Build {
     ram: totals.ram,
     hdd: totals.hdd,
     net: totals.net,
+    networkInterfaces: items.filter((item) => item.part.kind === 'net').map((item) => ({ name: item.part.name, power: item.part.power, amount: item.amount })),
   };
 }

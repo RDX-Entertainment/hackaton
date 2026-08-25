@@ -353,6 +353,8 @@
   text-align: right;
 }
 
+.kitprev__lan { margin: 0; padding: .45rem .7rem; color: var(--color-text-subtle); font-size: .65rem; border-top: var(--border-width) solid var(--color-border); }.kitprev__lan b { color: var(--color-accent); }
+.kitprev__internet { display: grid; gap: .22rem; padding: .5rem .7rem; color: var(--color-highlight); border-top: var(--border-width) solid var(--color-border); }.kitprev__internet small { color: var(--color-text-subtle); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; }.kitprev__internet span { font-size: .66rem; }
 .kitprev__money {
   display: flex;
   flex-wrap: wrap;

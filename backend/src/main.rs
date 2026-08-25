@@ -9,6 +9,7 @@ mod finances;
 mod forum;
 mod missions;
 mod news;
+mod organizations;
 mod process;
 mod social;
 mod pages;
@@ -108,6 +109,7 @@ async fn main() -> std::io::Result<()> {
                             .wrap(auth::AdminOnly)
                             .configure(hardware::handlers::configure_admin)
                             .configure(kits::handlers::configure_admin)
+                            .configure(organizations::handlers::configure_admin)
                             .configure(internet::handlers::configure_admin)
                             .configure(user::handlers::configure_admin),
                     ),

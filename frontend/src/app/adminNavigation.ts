@@ -9,6 +9,7 @@ export type AdminSection = {
 export const ADMIN_SECTIONS: AdminSection[] = [
   { path: '/admin', label: 'Catálogo', icon: '▤', end: true },
   { path: '/admin/kits', label: 'Kits', icon: '▣' },
+  { path: '/admin/organizaciones', label: 'Organizaciones', icon: '◉' },
   { path: '/admin/sitios', label: 'Sitios', icon: '◈' },
   { path: '/admin/usuarios', label: 'Usuarios', icon: '⚇' },
 ];
