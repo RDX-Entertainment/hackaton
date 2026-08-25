@@ -5,8 +5,10 @@ use crate::error::ApiError;
 
 use super::{
     dtos::{
+        BankAccountAdjustedResponse,
         BankAccountOpenedResponse,
         BankAccountResponse,
+        BankResponse,
         BankTransferRequest,
         BankTransferResponse,
         BitcoinTransferRequest,
@@ -38,8 +40,70 @@ pub async fn accounts(
     Ok(accounts)
 }
 
+pub async fn banks(
+    pool: &PgPool,
+) -> Result<Vec<BankResponse>, ApiError> {
+    let banks = repo::find_banks(pool)
+        .await?
+        .into_iter()
+        .map(BankResponse::from)
+        .collect();
+
+    Ok(banks)
+}
+
 /// El PIN del legado eran seis caracteres alfanumericos, ni mas ni menos.
 const PIN_LEN: usize = 6;
+
+fn valid_pin(password: &str) -> bool {
+    password.len() == PIN_LEN
+        && password
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric())
+}
+
+/// El PIN que el jugador elige la primera vez que entra en Finanzas.
+///
+/// Una cuenta que ya tiene PIN no pasa por aqui: esto no es «cambiar el PIN», que exigiria
+/// traer el actual. Que la cuenta sea suya y siga sin PIN lo decide el UPDATE, asi que dos
+/// peticiones a la vez no pueden pisarse.
+pub async fn set_pin(
+    pool: &PgPool,
+    user_id: i64,
+    account_id: i64,
+    password: String,
+) -> Result<(), ApiError> {
+    if !valid_pin(&password) {
+        return Err(ApiError::BadRequest(
+            "el PIN son 6 caracteres alfanumericos".into(),
+        ));
+    }
+
+    if repo::set_pin_if_unset(
+        pool,
+        account_id,
+        user_id,
+        &password,
+    )
+    .await?
+        == 0
+    {
+        // No escribir nada tiene dos motivos muy distintos, y al jugador le importan. Si la
+        // cuenta es suya, es que ya tenia PIN: decirselo no le descubre nada que no sepa.
+        // Si no lo es, la cuenta no existe para el.
+        return Err(
+            if repo::account_belongs_to(pool, account_id, user_id).await? {
+                ApiError::BadRequest(
+                    "PIN_ALREADY_SET: esta cuenta ya tiene PIN".into(),
+                )
+            } else {
+                ApiError::NotFound
+            },
+        );
+    }
+
+    Ok(())
+}
 
 /// Cuantas veces se reintenta el sorteo del numero de cuenta antes de rendirse.
 const ACCOUNT_ATTEMPTS: u8 = 5;
@@ -49,28 +113,78 @@ pub async fn open_account(
     user_id: i64,
     input: CreateBankAccountRequest,
 ) -> Result<BankAccountOpenedResponse, ApiError> {
-    let valid_pin = input.password.len() == PIN_LEN
-        && input
-            .password
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric());
+    let opened = open_for(pool, Some(user_id), None, input).await?;
 
-    if !(1..=9999).contains(&input.bank_id)
-        || !valid_pin
-    {
+    repo::log_account_opened(
+        pool,
+        user_id,
+        &format!(
+            "Bank account {} opened",
+            opened.account
+        ),
+    )
+    .await?;
+
+    Ok(opened)
+}
+
+/// La clave ajena de la tabla es quien decide si una organizacion es un banco. Cuando dice
+/// que no, el jugador merece leer el motivo y no un 500.
+fn not_a_bank(error: sqlx::Error) -> ApiError {
+    let culpable = match &error {
+        sqlx::Error::Database(inner) => inner.constraint(),
+        _ => None,
+    };
+
+    if culpable == Some("bank_accounts_bank_is_a_bank_fkey") {
+        return ApiError::BadRequest(
+            "NOT_A_BANK: esa organizacion no ofrece cuentas".into(),
+        );
+    }
+
+    ApiError::from(error)
+}
+
+/// El alta de una cuenta, sea de quien sea. El titular llega como una de las dos opciones
+/// y la otra en `None`; que solo haya una lo obliga el CHECK de la tabla.
+///
+/// El numero se sortea, asi que puede chocar con uno ya dado: por eso los reintentos.
+async fn open_for(
+    pool: &PgPool,
+    user_id: Option<i64>,
+    organization_id: Option<i64>,
+    input: CreateBankAccountRequest,
+) -> Result<BankAccountOpenedResponse, ApiError> {
+    if !valid_pin(&input.password) {
         return Err(ApiError::BadRequest(
             "invalid bank account data".into(),
         ));
     }
 
-    // Una cuenta por banco y jugador.
-    let existing =
-        repo::count_accounts_at_bank(
-            pool,
-            user_id,
-            input.bank_id,
-        )
-        .await?;
+    // Una cuenta por banco y titular.
+    let existing = match (user_id, organization_id) {
+        (Some(user), _) => {
+            repo::count_accounts_at_bank(
+                pool,
+                user,
+                input.bank_id,
+            )
+            .await?
+        }
+        (_, Some(organization)) => {
+            repo::count_organization_accounts_at_bank(
+                pool,
+                organization,
+                input.bank_id,
+            )
+            .await?
+        }
+        _ => {
+            return Err(ApiError::BadRequest(
+                "an account needs an owner".into(),
+            ))
+        }
+    };
 
     if existing > 0 {
         return Err(ApiError::BadRequest(
@@ -85,39 +199,121 @@ pub async fn open_account(
                 111_111_111_i64..=999_999_999,
             );
 
-        let inserted =
-            repo::try_insert_account(
-                pool,
-                account,
-                &input.password,
-                input.bank_id,
-                user_id,
-            )
-            .await?;
+        let inserted = repo::try_insert_account(
+            pool,
+            account,
+            &input.password,
+            input.bank_id,
+            user_id,
+            organization_id,
+        )
+        .await
+        .map_err(not_a_bank)?;
 
         if inserted == 1 {
-            repo::log_account_opened(
-                pool,
-                user_id,
-                &format!(
-                    "Bank account {account} opened"
-                ),
-            )
-            .await?;
-
-            return Ok(
-                BankAccountOpenedResponse {
-                    account,
-                    bank_id: input.bank_id,
-                    cash: 0,
-                },
-            );
+            return Ok(BankAccountOpenedResponse {
+                account,
+                bank_id: input.bank_id,
+                cash: 0,
+            });
         }
     }
 
     Err(ApiError::Internal(
         sqlx::Error::RowNotFound,
     ))
+}
+
+/// Una organizacion tambien puede tener cuenta: el FBI la tiene en Pinance sin ser un banco.
+/// La abre el panel, no el jugador.
+pub async fn open_organization_account(
+    pool: &PgPool,
+    organization_id: i64,
+    input: CreateBankAccountRequest,
+) -> Result<BankAccountOpenedResponse, ApiError> {
+    open_for(pool, None, Some(organization_id), input).await
+}
+
+/// El panel tambien abre cuentas a un jugador: sin una cuenta no hay donde ingresarle nada.
+pub async fn open_user_account(
+    pool: &PgPool,
+    user_id: i64,
+    input: CreateBankAccountRequest,
+) -> Result<BankAccountOpenedResponse, ApiError> {
+    open_for(pool, Some(user_id), None, input).await
+}
+
+pub async fn user_accounts(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<Vec<BankAccountResponse>, ApiError> {
+    let accounts = repo::find_user_accounts(pool, user_id)
+        .await?
+        .into_iter()
+        .map(BankAccountResponse::from)
+        .collect();
+
+    Ok(accounts)
+}
+
+/// Ingresar o retirar desde el panel. Es dinero creado y destruido a mano, igual que el
+/// hardware del modo creativo: mientras el juego no tenga de donde salga el dinero, esta es
+/// la unica forma de que exista.
+///
+/// El delta se aplica sobre el saldo bloqueado, no sobre el que vio el navegador, y no puede
+/// dejar la cuenta en rojo: una cuenta a cero es un jugador sin fondos, una en negativo es
+/// una deuda que el juego no sabe cobrar.
+pub async fn adjust_cash(
+    pool: &PgPool,
+    account_id: i64,
+    amount: i64,
+) -> Result<BankAccountAdjustedResponse, ApiError> {
+    if amount == 0 {
+        return Err(ApiError::BadRequest(
+            "nothing to move".into(),
+        ));
+    }
+
+    let mut tx = pool.begin().await?;
+
+    let cash = repo::lock_cash_by_id(&mut tx, account_id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+
+    let updated = cash.checked_add(amount).ok_or_else(|| {
+        ApiError::BadRequest("amount is out of range".into())
+    })?;
+
+    if updated < 0 {
+        return Err(ApiError::BadRequest(
+            "INSUFFICIENT_FUNDS: la cuenta no tiene tanto".into(),
+        ));
+    }
+
+    repo::set_cash_by_id(&mut tx, account_id, updated).await?;
+    tx.commit().await?;
+
+    Ok(BankAccountAdjustedResponse {
+        id: account_id,
+        cash: updated,
+    })
+}
+
+pub async fn organization_accounts(
+    pool: &PgPool,
+    organization_id: i64,
+) -> Result<Vec<BankAccountResponse>, ApiError> {
+    let accounts =
+        repo::find_organization_accounts(
+            pool,
+            organization_id,
+        )
+        .await?
+        .into_iter()
+        .map(BankAccountResponse::from)
+        .collect();
+
+    Ok(accounts)
 }
 
 //
@@ -155,9 +351,11 @@ pub async fn transfer(
     .await?
     .ok_or(ApiError::NotFound)?;
 
-    // Ser el dueno no basta: hay que traer la clave de la cuenta.
-    if source.bank_user != user_id
-        || source.bank_pass != input.password
+    // Ser el dueno no basta: hay que traer la clave de la cuenta. Y una cuenta de una
+    // organizacion no tiene jugador detras, asi que ningun jugador la mueve desde aqui.
+    if source.bank_user != Some(user_id)
+        || source.bank_pass.as_deref()
+            != Some(input.password.as_str())
     {
         return Err(ApiError::Unauthorized);
     }
@@ -190,9 +388,6 @@ pub async fn transfer(
 // BITCOIN
 // ==============================
 //
-
-/// El bitcoin del juego se guarda con siete decimales.
-const SATOSHI: f64 = 10_000_000.0;
 
 const ADDRESS_LEN: usize = 34;
 const PRIVATE_KEY_LEN: usize = 64;
@@ -229,17 +424,24 @@ pub async fn create_wallet(
 
     Ok(WalletCreatedResponse {
         address,
-        amount: "0.0000000".to_owned(),
+        amount: 0,
     })
 }
 
+/// Las cantidades viajan en satoshis: enteros de siete decimales. Ni aqui ni en la base
+/// hay coma flotante, asi que sumar y restar saldos es exacto.
 pub async fn transfer_bitcoin(
     pool: &PgPool,
     user_id: i64,
     input: BitcoinTransferRequest,
 ) -> Result<BitcoinTransferResponse, ApiError> {
-    let amount = parse_amount(&input.amount)?;
-    let canonical = format_amount(amount);
+    let amount = input.amount;
+
+    if amount <= 0 {
+        return Err(ApiError::BadRequest(
+            "invalid bitcoin amount".into(),
+        ));
+    }
 
     if input.from == input.to {
         return Err(ApiError::BadRequest(
@@ -264,10 +466,7 @@ pub async fn transfer_bitcoin(
         return Err(ApiError::Unauthorized);
     }
 
-    let available = parse_amount(&source.amount)
-        .unwrap_or(0);
-
-    if available < amount {
+    if source.amount < amount {
         return Err(ApiError::BadRequest(
             "insufficient bitcoin funds".into(),
         ));
@@ -277,7 +476,7 @@ pub async fn transfer_bitcoin(
         &mut tx,
         &input.from,
         &input.to,
-        &canonical,
+        amount,
     )
     .await?;
 
@@ -286,42 +485,8 @@ pub async fn transfer_bitcoin(
     Ok(BitcoinTransferResponse {
         from: input.from,
         to: input.to,
-        amount: canonical,
+        amount,
     })
-}
-
-//
-// ==============================
-// AMOUNTS
-// ==============================
-//
-
-/// Las cantidades se manejan en enteros de siete decimales para no arrastrar errores de
-/// coma flotante entre monederos.
-fn parse_amount(
-    raw: &str,
-) -> Result<i64, ApiError> {
-    raw.parse::<f64>()
-        .ok()
-        .filter(|value| {
-            value.is_finite() && *value >= 0.0
-        })
-        .map(|value| {
-            (value * SATOSHI).round() as i64
-        })
-        .ok_or_else(|| {
-            ApiError::BadRequest(
-                "invalid bitcoin amount".into(),
-            )
-        })
-}
-
-fn format_amount(amount: i64) -> String {
-    format!(
-        "{}.{:07}",
-        amount / SATOSHI as i64,
-        amount % SATOSHI as i64
-    )
 }
 
 fn random_string(length: usize) -> String {

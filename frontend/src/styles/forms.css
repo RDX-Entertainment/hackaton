@@ -62,3 +62,22 @@ input[type="checkbox"] {
   content: "\2192  ";
   color: var(--color-accent-dim);
 }
+
+.pin-setup { display: grid; grid-template-columns: minmax(0, 1fr) 8rem 8rem auto; gap: .6rem; align-items: end; margin-bottom: 1rem; padding: .9rem 1rem; background: var(--color-surface-sunken); border: var(--border-width) solid var(--color-accent); border-left-width: 3px; }
+.pin-setup__lead { display: grid; gap: .25rem; }
+.pin-setup__lead b { color: var(--color-accent); font-size: .8rem; }
+.pin-setup__lead small { color: var(--color-text-muted); font-size: .68rem; line-height: 1.4; }
+.pin-setup label { display: grid; gap: .25rem; margin: 0; color: var(--color-text-subtle); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; }
+.pin-setup input { min-width: 0; padding: .38rem .5rem; color: var(--color-text); font: .78rem var(--font-mono); letter-spacing: .2em; background: var(--color-field); border: var(--border-width) solid var(--color-border-field); }
+.pin-setup button { margin: 0; }
+.pin-setup__error { grid-column: 1 / -1; color: var(--color-danger); font-size: .66rem; }
+
+@media (max-width: 900px) {
+  .pin-setup { grid-template-columns: 1fr; align-items: stretch; }
+}
+
+.account-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; padding: .9rem 1.1rem; background: var(--color-surface); border: var(--border-width) solid var(--color-border-strong); border-left: 3px solid var(--color-accent); }
+.account-card small { display: block; color: var(--color-text-subtle); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; }
+.account-card b { color: var(--color-text); font: 1rem var(--font-mono); }
+.account-card__cash { text-align: right; }
+.account-card__cash strong { color: var(--color-accent); font: 1.35rem var(--font-mono); }

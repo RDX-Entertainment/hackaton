@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod dtos;
 pub mod handlers;
 pub mod models;

@@ -3,6 +3,42 @@ export function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+/**
+ * El bitcoin viaja en satoshis: un entero de siete decimales. 10000001 son 1,0000001 BTC.
+ * El servidor no ve una coma en su vida; ponerla es cosa de aquí.
+ */
+const SATOSHI = 10_000_000;
+const BITCOIN_DECIMALS = 7;
+
+export function formatBitcoin(satoshis: number): string {
+  const whole = Math.trunc(satoshis / SATOSHI);
+  const rest = Math.abs(satoshis % SATOSHI);
+
+  return `${whole},${String(rest).padStart(BITCOIN_DECIMALS, '0')}`;
+}
+
+/**
+ * Lo tecleado, de vuelta a satoshis. Acepta coma o punto porque el jugador escribe la que
+ * tiene a mano, y devuelve null si lo escrito no es una cantidad.
+ */
+export function parseBitcoin(typed: string): number | null {
+  const clean = typed.trim().replace(',', '.');
+
+  if (!/^\d*\.?\d*$/.test(clean) || clean === '' || clean === '.') {
+    return null;
+  }
+
+  const [whole, decimals = ''] = clean.split('.');
+
+  if (decimals.length > BITCOIN_DECIMALS) {
+    return null;
+  }
+
+  const padded = decimals.padEnd(BITCOIN_DECIMALS, '0');
+
+  return Number(whole || '0') * SATOSHI + Number(padded || '0');
+}
+
 /** Turns an unknown cell coming from a generic endpoint into printable text. */
 export function formatCell(value: unknown): string {
   if (value === null || value === undefined) {

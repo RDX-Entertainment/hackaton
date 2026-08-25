@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
-import { DataTable } from '../components/DataTable';
 import { StatusMessage } from '../components/StatusMessage';
 import { bitcoinApi, type Wallet } from '../utils/api';
+import { formatBitcoin, parseBitcoin } from '../utils/format';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
 export function BitcoinPage() {
@@ -34,10 +34,17 @@ export function BitcoinPage() {
   const transfer = async (event: FormEvent) => {
     event.preventDefault();
 
+    const satoshis = parseBitcoin(amount);
+
+    if (satoshis === null || satoshis <= 0) {
+      status.report('Cantidad no válida. Hasta siete decimales, por ejemplo 1,0000001.');
+      return;
+    }
+
     try {
-      await bitcoinApi.transferBitcoin(from, to, amount);
+      await bitcoinApi.transferBitcoin(from, to, satoshis);
       setAmount('');
-      status.report('Bitcoin transfer complete.');
+      status.report('Transferencia completada.');
       load();
     } catch (error) {
       status.reportError(error);
@@ -82,7 +89,30 @@ export function BitcoinPage() {
       </form>
 
       <StatusMessage text={status.message} as="block" />
-      <DataTable rows={wallets} />
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Monedero</th>
+              <th>Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {wallets.map((wallet) => (
+              <tr key={wallet.address}>
+                <td>{wallet.address}</td>
+                <td>{formatBitcoin(wallet.amount)} BTC</td>
+              </tr>
+            ))}
+            {!wallets.length && (
+              <tr>
+                <td colSpan={2}>Sin monederos todavía.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

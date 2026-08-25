@@ -102,6 +102,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(forum::handlers::configure)
                     .configure(process::handlers::configure)
                     .configure(finances::handlers::configure)
+                    .configure(finances::handlers::configure_bank)
                     .configure(social::handlers::configure)
                     .configure(pages::handlers::configure)
                     .service(
@@ -110,6 +111,7 @@ async fn main() -> std::io::Result<()> {
                             .configure(hardware::handlers::configure_admin)
                             .configure(kits::handlers::configure_admin)
                             .configure(organizations::handlers::configure_admin)
+                            .configure(finances::handlers::configure_admin)
                             .configure(internet::handlers::configure_admin)
                             .configure(user::handlers::configure_admin),
                     ),

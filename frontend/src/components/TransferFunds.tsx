@@ -1,70 +1,113 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
-import { financesApi } from '../utils/api';
-import { useStatusMessage } from '../utils/useStatusMessage';
-import { StatusMessage } from './StatusMessage';
+import { financesApi, type BankAccount } from '../utils/api';
+import { messageFrom } from '../utils/errors';
+import { formatMoney } from '../utils/format';
 
 type TransferFundsProps = {
-  /** Called after a successful transfer so balances can be reloaded. */
+  /** Las cuentas del jugador: de una de ellas sale el dinero. */
+  accounts: BankAccount[];
+  /** Se llama tras una transferencia correcta, para recargar los saldos. */
   onSent: () => void;
 };
 
-export function TransferFunds({ onSent }: TransferFundsProps) {
-  const status = useStatusMessage();
+/** Lo que responde el servidor, traducido a algo que se pueda leer sin saber inglés. */
+function explain(error: unknown): string {
+  const raw = messageFrom(error);
 
-  const [from, setFrom] = useState('');
+  if (raw.includes('insufficient funds')) return 'No tienes tanto en esa cuenta.';
+  if (raw.includes('invalid transfer')) return 'Revisa el importe y que las cuentas sean distintas.';
+  if (raw.includes('not found')) return 'Esa cuenta de destino no existe.';
+  // El servidor responde 401 «authentication required» cuando la clave no cuadra: aquí, con
+  // la sesión ya abierta, eso solo puede ser el PIN de la cuenta.
+  if (raw.includes('authentication required')) return 'El PIN de la cuenta no es correcto.';
+
+  return raw;
+}
+
+export function TransferFunds({ accounts, onSent }: TransferFundsProps) {
+  const [from, setFrom] = useState(0);
   const [password, setPassword] = useState('');
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
+  const [failed, setFailed] = useState('');
+  const [done, setDone] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const usable = accounts.filter((account) => account.pin_set);
+  const source = usable.find((account) => account.account === from);
+  const wanted = Number(amount);
+  const overdraft = source && Number.isFinite(wanted) && wanted > source.cash;
+
+  useEffect(() => {
+    setFrom((current) => (usable.some((account) => account.account === current) ? current : usable[0]?.account ?? 0));
+    // Comparar por contenido y no por identidad: `usable` se rehace en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts]);
 
   const send = async (event: FormEvent) => {
     event.preventDefault();
+    setSending(true);
+    setFailed('');
+    setDone('');
 
     try {
-      await financesApi.transferFunds(Number(from), password, Number(to), Number(amount));
+      await financesApi.transferFunds(from, password, Number(to), wanted);
       setPassword('');
       setAmount('');
-      status.report('Transfer complete.');
+      setDone(`Enviados ${formatMoney(wanted)} a la cuenta ${to}.`);
       onSent();
     } catch (error) {
-      status.reportError(error);
+      setFailed(explain(error));
+    } finally {
+      setSending(false);
     }
   };
 
+  if (!usable.length) {
+    return null;
+  }
+
   return (
     <form className="compose" onSubmit={send}>
+      <h3>Transferir</h3>
+
       <label>
-        From account
-        <input
-          inputMode="numeric"
-          value={from}
-          onChange={(event) => setFrom(event.target.value)}
-          required
-        />
+        Cuenta de origen
+        <select value={from} onChange={(event) => setFrom(Number(event.target.value))} required>
+          {usable.map((account) => (
+            <option key={account.id} value={account.account}>
+              {account.account} · {account.bank_name} · {formatMoney(account.cash)}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label>
-        Account password
+        PIN de la cuenta
         <input
           type="password"
           value={password}
+          maxLength={6}
+          autoComplete="off"
           onChange={(event) => setPassword(event.target.value)}
           required
         />
       </label>
 
       <label>
-        Destination account
+        Cuenta de destino
         <input
           inputMode="numeric"
           value={to}
+          placeholder="9 dígitos"
           onChange={(event) => setTo(event.target.value)}
           required
         />
       </label>
 
       <label>
-        Amount
+        Importe
         <input
           inputMode="numeric"
           min="1"
@@ -74,8 +117,17 @@ export function TransferFunds({ onSent }: TransferFundsProps) {
         />
       </label>
 
-      <button>Transfer</button>
-      <StatusMessage text={status.message} />
+      <button disabled={sending || !from || overdraft || wanted <= 0}>
+        {sending ? 'Enviando…' : 'Transferir'}
+      </button>
+
+      {overdraft && source && (
+        <small className="error">
+          Solo tienes {formatMoney(source.cash)} en esa cuenta.
+        </small>
+      )}
+      {failed && <small className="error">{failed}</small>}
+      {done && <small className="muted">{done}</small>}
     </form>
   );
 }

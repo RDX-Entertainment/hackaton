@@ -1071,3 +1071,24 @@
   font-size: 0.74rem;
   text-align: center;
 }
+
+.accounts { display: grid; gap: .5rem; }
+.account { display: grid; grid-template-columns: 8rem minmax(0, 1fr) 7rem 7rem auto auto; gap: .5rem; align-items: center; padding: .45rem .75rem; background: var(--color-surface); border: var(--border-width) solid var(--color-border); }
+.account b { color: var(--color-accent); font: .74rem var(--font-mono); }
+.account span { color: var(--color-text-muted); font-size: .72rem; }
+.account em { color: var(--color-text); font: .74rem var(--font-mono); font-style: normal; text-align: right; }
+.account input { min-width: 0; padding: .3rem .45rem; color: var(--color-text); font: .72rem var(--font-mono); text-align: right; background: var(--color-field); border: var(--border-width) solid var(--color-border-field); }
+.account button { margin: 0; padding: .3rem .6rem; font-size: .66rem; }
+.account__take { color: var(--color-danger); border-color: var(--color-danger); }
+.account-create { display: grid; grid-template-columns: minmax(0, 1fr) 8rem auto; gap: .5rem; align-items: center; padding: .55rem .75rem; background: var(--color-surface); border: var(--border-width) solid var(--color-border); }
+.account-create b { grid-column: 1 / -1; color: var(--color-accent); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; }
+.account-create select, .account-create input { min-width: 0; padding: .35rem .5rem; color: var(--color-text); font: inherit; font-size: .72rem; background: var(--color-field); border: var(--border-width) solid var(--color-border-field); }
+.account-create button { margin: 0; padding: .32rem .65rem; font-size: .67rem; }
+.account-create small { grid-column: 1 / -1; color: var(--color-text-subtle); font-size: .62rem; }
+.users-table tbody tr { cursor: pointer; }
+.users-table tbody tr.is-active { background: var(--color-surface-raised); }
+
+@media (max-width: 900px) {
+  .account { grid-template-columns: 1fr 1fr; }
+  .account-create { grid-template-columns: 1fr; }
+}

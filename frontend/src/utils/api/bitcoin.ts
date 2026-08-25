@@ -9,7 +9,7 @@ export function createWallet(): Promise<Wallet> {
   return post<Wallet>('/bitcoin/wallets');
 }
 
-/** Amounts travel as strings: bitcoin has more decimals than a float keeps. */
-export function transferBitcoin(from: string, to: string, amount: string): Promise<void> {
+/** El importe viaja en satoshis, ya convertido: la API no sabe de comas. */
+export function transferBitcoin(from: string, to: string, amount: number): Promise<void> {
   return post<void>('/bitcoin/transfers', { from, to, amount });
 }

@@ -172,6 +172,15 @@ const BOOTSTRAP: &[&str] = &[
     "INSERT INTO users_learning(user_id) VALUES($1)",
     "INSERT INTO users_language(user_id) VALUES($1)",
     "INSERT INTO player_profiles(user_id) VALUES($1)",
+    // La cuenta del banco, con la misma filosofia que el kit de arriba: si no hay ningun
+    // banco configurado esto no inserta nada y el alta sigue adelante. Un juego al que
+    // todavia no se le ha creado la banca no puede impedir que alguien se registre.
+    //
+    // Nace sin PIN —`bank_pass` a NULL— porque lo elige el jugador la primera vez que entra
+    // en Finanzas. Ver 0033_account_on_signup.sql.
+    "INSERT INTO bank_accounts(bank_acc,bank_pass,bank_id,bank_user)
+     SELECT random_free_bank_account(),NULL,default_bank(),$1
+     WHERE default_bank() IS NOT NULL",
 ];
 
 pub async fn bootstrap_player(
