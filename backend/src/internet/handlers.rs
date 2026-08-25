@@ -455,7 +455,13 @@ pub async fn internet_history(
 /// Se montan dentro del scope `/admin`, que main envuelve en `AdminOnly`.
 pub fn configure_admin(cfg: &mut web::ServiceConfig) {
     cfg.route("/sites", web::get().to(admin_sites))
-        .route("/sites/{kind}/{id}", web::put().to(admin_set_site));
+        .route("/sites/{kind}/{id}", web::put().to(admin_set_site))
+        // Quien puede usar cada orden de un sitio. Es lo que hace que la banca integrada
+        // sea una concesion y no una regla escrita en Rust.
+        .route("/site-actions", web::get().to(site_actions))
+        .route("/site-grants", web::get().to(list_grants))
+        .route("/site-grants", web::post().to(create_grant))
+        .route("/site-grants/{id}", web::delete().to(remove_grant));
 }
 
 pub async fn admin_sites(
@@ -476,6 +482,47 @@ pub async fn admin_set_site(
     let (kind, id) = path.into_inner();
 
     services::set_site(&state.pool, ctx, &kind, id, &input.web).await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+
+//
+// ==============================
+// CONCESIONES DE ORDENES
+// ==============================
+//
+
+/// El catalogo entero, para que el panel sepa que existe y de que familia es cada cosa.
+pub async fn site_actions(ctx: Ctx) -> Result<HttpResponse, ApiError> {
+    ctx.require_admin()?;
+
+    Ok(HttpResponse::Ok().json(super::grants::catalog_actions()))
+}
+
+pub async fn list_grants(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(super::grants::list(&state.pool, ctx).await?))
+}
+
+pub async fn create_grant(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<super::grants::GrantInput>,
+) -> Result<HttpResponse, ApiError> {
+    let id = super::grants::create(&state.pool, ctx, input.into_inner()).await?;
+
+    Ok(HttpResponse::Created().json(serde_json::json!({ "id": id })))
+}
+
+pub async fn remove_grant(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    super::grants::remove(&state.pool, ctx, path.into_inner()).await?;
 
     Ok(HttpResponse::NoContent().finish())
 }

@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use super::catalog::{self, Effect, Spec, Target};
+use super::catalog::{self, Effect, Kind, Spec, Target};
 
 /// Una orden ya leida, todavia sin juzgar si es valida.
 pub struct Line {
@@ -92,7 +92,7 @@ fn read_clean(clean: &str) -> Result<Line, String> {
     let label = pieces.next().unwrap_or("").trim().to_owned();
     let params = read_params(pieces.collect::<Vec<_>>().join("|").trim())?;
 
-    if target.is_empty() {
+    if target.is_empty() && spec.target != Target::None {
         return Err(format!(
             "ACTION_TARGET: `{}` necesita un destino. {}",
             spec.verb, spec.help
@@ -135,6 +135,7 @@ fn read_params(text: &str) -> Result<BTreeMap<String, String>, String> {
 
 pub fn check_target(spec: &Spec, target: &str) -> Result<(), String> {
     match spec.target {
+        Target::None => Ok(()),
         Target::Ip => parse_ip(target).map(|_| ()).ok_or_else(|| {
             format!(
                 "ACTION_IP: «{target}» no es una direccion. Se escriben como 45.123.10.5"
@@ -178,16 +179,7 @@ fn check_params(
                     spec.verb, declared.name, spec.help
                 ));
             }
-            Some(value) if declared.numeric => {
-                let number: Result<i64, _> = value.parse();
-
-                if number.is_err() || number.unwrap_or(0) <= 0 {
-                    return Err(format!(
-                        "ACTION_PARAM: `{}=` tiene que ser un numero mayor que cero",
-                        declared.name
-                    ));
-                }
-            }
+            Some(value) => check_value(declared.name, declared.kind, value)?,
             _ => {}
         }
     }
@@ -202,6 +194,44 @@ fn check_params(
     }
 
     Ok(())
+}
+
+/// Comprueba el valor de un parametro segun lo que su ficha diga que tiene que ser.
+pub fn check_value(name: &str, kind: Kind, value: &str) -> Result<(), String> {
+    match kind {
+        Kind::Text => Ok(()),
+        Kind::Number => {
+            let number: Result<i64, _> = value.parse();
+
+            if number.is_err() || number.unwrap_or(0) <= 0 {
+                return Err(format!(
+                    "ACTION_PARAM: `{name}` tiene que ser un numero mayor que cero"
+                ));
+            }
+
+            Ok(())
+        }
+        Kind::Ident => {
+            let ok = !value.is_empty()
+                && value.chars().count() <= MAX_IDENT
+                && value
+                    .chars()
+                    .all(|one| one.is_ascii_alphanumeric() || one == '-' || one == '_');
+
+            ok.then_some(()).ok_or_else(|| {
+                format!("ACTION_PARAM: `{name}` tiene que ser un nombre de pagina")
+            })
+        }
+        Kind::Color => {
+            let raw = value.strip_prefix('#').unwrap_or(value);
+            let ok = matches!(raw.len(), 3 | 6)
+                && raw.chars().all(|one| one.is_ascii_hexdigit());
+
+            ok.then_some(()).ok_or_else(|| {
+                format!("ACTION_PARAM: `{name}` tiene que ser un color, como #fcd535")
+            })
+        }
+    }
 }
 
 /// Un identificador de pagina no necesita mas.

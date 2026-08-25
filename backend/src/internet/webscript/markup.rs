@@ -17,7 +17,7 @@
 //! `data-*` no es un manejador de eventos: `on...=` sigue prohibido, y el HTML del autor
 //! sigue sin poder traer una linea de codigo.
 
-use super::catalog::{self, Effect};
+use super::catalog::{self, Effect, Target};
 
 /// Recorre los `data-action` del HTML y devuelve el motivo del primero que este mal.
 pub fn check(html: &str) -> Result<(), String> {
@@ -40,11 +40,15 @@ pub fn check(html: &str) -> Result<(), String> {
             ));
         }
 
-        let Some(target) = attribute(&tag, "data-target") else {
-            return Err(format!(
-                "ACTION_TARGET: al boton de `{}` le falta `data-target`. {}",
-                spec.verb, spec.help
-            ));
+        let target = match attribute(&tag, "data-target") {
+            Some(target) => target,
+            None if spec.target == Target::None => String::new(),
+            None => {
+                return Err(format!(
+                    "ACTION_TARGET: al boton de `{}` le falta `data-target`. {}",
+                    spec.verb, spec.help
+                ));
+            }
         };
 
         super::parser::check_target(spec, &target)?;
@@ -60,17 +64,42 @@ pub fn check(html: &str) -> Result<(), String> {
                         spec.verb, spec.help
                     ));
                 }
-                Some(ref value) if declared.numeric => {
-                    let number: Result<i64, _> = value.parse();
-
-                    if number.is_err() || number.unwrap_or(0) <= 0 {
-                        return Err(format!(
-                            "ACTION_PARAM: `{name}` tiene que ser un numero mayor que cero"
-                        ));
-                    }
+                Some(ref value) => {
+                    super::parser::check_value(&name, declared.kind, value)?;
                 }
                 _ => {}
             }
+        }
+    }
+
+    check_named(html, "data-field", catalog::FIELDS, "se puede teclear")?;
+    check_named(html, "data-bind", catalog::BINDS, "rellena el juego")?;
+    check_named(html, "data-list", catalog::LISTS, "repite el juego")?;
+    check_named(html, "data-when", catalog::WHENS, "decide cuando se ve")?;
+
+    Ok(())
+}
+
+/// Que los `data-field`, `data-bind` y `data-list` sean de los que el juego conoce.
+///
+/// Sin esto, escribir `data-bind="saldo"` en vez de `balance` dejaria un hueco que no se
+/// rellena nunca y sin una sola pista de por que.
+fn check_named(
+    html: &str,
+    attribute_name: &str,
+    known: &[&str],
+    what: &str,
+) -> Result<(), String> {
+    for tag in tags_with(html, attribute_name) {
+        let Some(value) = attribute(&tag, attribute_name) else {
+            continue;
+        };
+
+        if !known.contains(&value.to_lowercase().as_str()) {
+            return Err(format!(
+                "ACTION_FIELD: `{attribute_name}=\"{value}\"` no existe. Lo que {what} es: {}",
+                known.join(", ")
+            ));
         }
     }
 
@@ -79,10 +108,14 @@ pub fn check(html: &str) -> Result<(), String> {
 
 /// Las etiquetas que llevan un `data-action`, cada una entera para poder leerle el resto.
 fn tags_with_actions(html: &str) -> Vec<String> {
+    tags_with(html, "data-action")
+}
+
+fn tags_with(html: &str, attribute_name: &str) -> Vec<String> {
     let lower = html.to_lowercase();
     let mut found = Vec::new();
 
-    for (at, _) in lower.match_indices("data-action") {
+    for (at, _) in lower.match_indices(attribute_name) {
         // Retroceder hasta el `<` que abre la etiqueta y avanzar hasta el `>` que la cierra.
         let Some(open) = lower[..at].rfind('<') else {
             continue;

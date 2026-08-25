@@ -5,6 +5,7 @@ use sqlx::{
 };
 
 use super::models::{
+    BankOfMachineRow,
     AnalyzeResultRow,
     BestAnalyzerRow,
     BookmarkRow,
@@ -775,4 +776,59 @@ pub async fn set_player_site(pool: &PgPool, id: i64, web: &str) -> Result<u64, s
         .await?;
 
     Ok(done.rows_affected())
+}
+
+/// Si esta maquina es de un banco, cual. Un banco es una organizacion activa con el
+/// comportamiento `banking`, la misma condicion que hace cumplir `bank_accounts`.
+pub async fn bank_of_npc(
+    pool: &PgPool,
+    npc_id: i64,
+) -> Result<Option<BankOfMachineRow>, sqlx::Error> {
+    sqlx::query_as::<_, BankOfMachineRow>(
+        r#"
+        SELECT o.id, o.name
+        FROM organization_network_npcs m
+        JOIN organization_networks net
+            ON net.id = m.network_id
+        JOIN organizations o
+            ON o.id = net.organization_id
+        JOIN organization_behaviors b
+            ON b.organization_id = o.id
+           AND b.code = 'banking'
+        WHERE m.npc_id = $1
+          AND o.active
+        "#,
+    )
+    .bind(npc_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Que familias de ordenes puede usar la web de esta maquina.
+///
+/// Los cuatro alcances se resuelven de una vez: `all_sites` vale siempre;
+/// `all_organizations` en cuanto la maquina pertenezca a alguna; `organization` y `site`
+/// cuando el destino coincide. Un `action` de `*` concede la familia entera, y uno concreto
+/// solo ese verbo -que se filtra despues, ya con el catalogo delante-.
+pub async fn granted_actions(
+    pool: &PgPool,
+    npc_id: i64,
+) -> Result<Vec<(String, String)>, sqlx::Error> {
+    sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT DISTINCT g.family, g.action
+        FROM action_grants g
+        LEFT JOIN organization_network_npcs m
+            ON m.npc_id = $1
+        LEFT JOIN organization_networks net
+            ON net.id = m.network_id
+        WHERE g.scope = 'all_sites'
+           OR (g.scope = 'all_organizations' AND m.npc_id IS NOT NULL)
+           OR (g.scope = 'organization' AND g.organization_id = net.organization_id)
+           OR (g.scope = 'site' AND g.npc_id = $1)
+        "#,
+    )
+    .bind(npc_id)
+    .fetch_all(pool)
+    .await
 }

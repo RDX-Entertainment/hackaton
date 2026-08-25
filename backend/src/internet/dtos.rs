@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::models::{
     AnalyzeResultRow,
+    BankOfMachineRow,
     SiteRow,
     BookmarkRow,
     HistoryRow,
@@ -90,6 +91,31 @@ pub struct InternetNavigateResponse {
     /// navegador del juego por fuera. Va en `None` cuando el sitio no declara nada y basta
     /// con pintar `web` tal cual.
     pub site: Option<Site>,
+
+    /// El banco al que pertenece esta maquina, si es de alguno. Lo dice el servidor y no la
+    /// pagina: asi un sitio no puede hacerse pasar por el banco de al lado.
+    pub bank: Option<BankRef>,
+
+    /// Las ordenes que esta web tiene permitido usar, salidas de `action_grants`. El
+    /// navegador no obedece ninguna que no este aqui, asi que escribir una en el HTML no
+    /// sirve de nada si no se ha concedido.
+    pub allowed: Vec<String>,
+}
+
+/// Lo justo para que el navegador sepa donde esta operando.
+#[derive(Debug, Serialize)]
+pub struct BankRef {
+    pub id: i64,
+    pub name: String,
+}
+
+impl From<BankOfMachineRow> for BankRef {
+    fn from(value: BankOfMachineRow) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+        }
+    }
 }
 
 //

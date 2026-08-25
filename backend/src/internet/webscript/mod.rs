@@ -367,6 +367,36 @@ mod tests {
     }
 
     #[test]
+    fn un_banco_pide_las_credenciales_en_su_propio_html() {
+        let html = r#"<input class="mio" data-field="account">
+                      <input class="mio" data-field="pin" type="password">
+                      <button class="btn" data-action="bank_login" data-then="cuenta">Entrar</button>
+                      <b data-bind="balance">0</b>
+                      <ul data-list="movements"><li data-bind="concept"></li></ul>"#;
+
+        assert!(check(html).is_ok());
+    }
+
+    #[test]
+    fn rechaza_un_campo_que_el_juego_no_sabe_leer() {
+        let error = check(r#"<input data-field="usuario">"#).unwrap_err();
+
+        assert!(format!("{error:?}").contains("ACTION_FIELD"));
+    }
+
+    #[test]
+    fn rechaza_un_hueco_que_nadie_va_a_rellenar() {
+        assert!(check(r#"<b data-bind="saldo"></b>"#).is_err());
+        assert!(check(r#"<ul data-list="pagos"></ul>"#).is_err());
+    }
+
+    #[test]
+    fn el_destino_tras_una_operacion_es_una_pagina() {
+        assert!(check(r#"<button data-action="bank_login" data-then="cuenta">x</button>"#).is_ok());
+        assert!(check(r#"<button data-action="bank_login" data-then="con espacios">x</button>"#).is_err());
+    }
+
+    #[test]
     fn rechaza_un_parametro_que_no_existe() {
         assert!(check("<action>go_to: 1.2.3.4 | ir | amount=5</action>").is_err());
     }

@@ -13,6 +13,7 @@ use super::{
         InternetHistoryResponse,
         InternetLoginRequest,
         InternetLoginResponse,
+        BankRef,
         InternetNavigateResponse,
         InternetTargetResponse,
         IpRequest,
@@ -70,6 +71,37 @@ pub async fn resolve_ip(
         down: false,
         web: player.web,
     })
+}
+
+/// Traduce las concesiones de la base a la lista de verbos que el navegador va a obedecer.
+///
+/// Un `*` abre la familia entera; un verbo suelto, solo ese. Se resuelve aqui, contra el
+/// catalogo, para que la base no tenga que saberse los nombres de las ordenes.
+async fn allowed_actions(
+    pool: &PgPool,
+    npc_id: i64,
+) -> Result<Vec<String>, ApiError> {
+    use webscript::catalog::{self, Family};
+
+    let mut allowed: Vec<String> = Vec::new();
+
+    for (family, action) in repo::granted_actions(pool, npc_id).await? {
+        let family = match family.as_str() {
+            "integrated" => Family::Integrated,
+            _ => Family::Normal,
+        };
+
+        if action == "*" {
+            allowed.extend(catalog::of_family(family).into_iter().map(str::to_owned));
+        } else if catalog::find(&action).is_some_and(|spec| spec.family == family) {
+            allowed.push(action);
+        }
+    }
+
+    allowed.sort();
+    allowed.dedup();
+
+    Ok(allowed)
 }
 
 //
@@ -195,6 +227,25 @@ pub async fn internet_navigate(
         // interprete. Cuando no declara nada, no se manda nada: el navegador pinta el HTML
         // tal cual y se ahorra el rodeo.
         site: target.web.as_deref().map(webscript::parse).filter(|site| !site.is_plain()),
+
+        // Solo tiene sentido preguntarlo de un NPC: un jugador no es un banco.
+        bank: if target.is_npc {
+            repo::bank_of_npc(pool, target.id)
+                .await?
+                .map(BankRef::from)
+        } else {
+            None
+        },
+
+        allowed: if target.is_npc {
+            allowed_actions(pool, target.id).await?
+        } else {
+            // La pagina de un jugador solo puede hacer lo que puede hacer cualquiera.
+            webscript::catalog::of_family(webscript::catalog::Family::Normal)
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+        },
 
         web: target.web,
     })

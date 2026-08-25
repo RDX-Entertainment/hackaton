@@ -73,3 +73,12 @@ pub struct SiteRow {
     pub name: String,
     pub web: String,
 }
+
+/// El banco al que pertenece una maquina, cuando lo es. Lo necesita el navegador para saber
+/// donde abre cuenta o contra quien autentica sin que la pagina tenga que decirselo: si lo
+/// dijera la pagina, un sitio cualquiera podria hacerse pasar por el banco de al lado.
+#[derive(Debug, Clone, FromRow)]
+pub struct BankOfMachineRow {
+    pub id: i64,
+    pub name: String,
+}
