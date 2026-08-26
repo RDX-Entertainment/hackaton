@@ -1,0 +1,108 @@
+/*
+ * Los ficheros, agrupados por dónde están. El grupo se titula como los bloques del arsenal,
+ * porque son la misma cosa: un rótulo que separa, no una sección con peso propio.
+ */
+.swgroup {
+  margin: 0 0 1.8rem;
+  max-width: var(--content-max-width);
+}
+
+.swgroup h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.4rem;
+  color: var(--color-text-nav);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.swgroup h3 small {
+  color: var(--color-text-subtle);
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.swfile {
+  padding: 0.75rem 0.85rem;
+  margin: 0 0 0.6rem;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.swfile__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.swfile__ver {
+  color: var(--color-accent);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El tipo es lo que dice qué es el fichero, así que va al lado del nombre y no en la letra
+   pequeña de abajo. */
+.swfile__type {
+  margin-left: auto;
+  padding: 0.1rem 0.45rem;
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.swfile__meta {
+  margin: 0.3rem 0 0;
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.swfile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.65rem 0 0;
+}
+
+.swfile__actions button:disabled {
+  color: var(--color-text-subtle);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}
+
+/*
+ * El porqué de cada verbo. Es la razón de ser de esta pantalla: antes los botones que no
+ * podían hacer nada lo hacían en silencio, encolando una tarea que terminaba sin efecto.
+ */
+.swfile__why {
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0 0;
+  list-style: none;
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.swfile__why li {
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.swfile__why li b {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.swfile__why li.is-blocked b {
+  color: var(--color-danger);
+}

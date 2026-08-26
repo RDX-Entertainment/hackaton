@@ -19,6 +19,7 @@ import './styles/internet.css';
 import './styles/adminshell.css';
 import './styles/admin.css';
 import './styles/arsenal.css';
+import './styles/software.css';
 import './styles/kits.css';
 import './styles/organizations.css';
 import './styles/forms.css';

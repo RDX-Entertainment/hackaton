@@ -1,5 +1,5 @@
 import { del, get, post } from './client';
-import type { CreatedRecord, ProcessAction, ProcessCommand, UnknownRow } from './types';
+import type { ProcessAction, ProcessCommand, ProcessStarted, UnknownRow } from './types';
 
 export function listProcesses(): Promise<UnknownRow[]> {
   return get<UnknownRow[]>('/processes');
@@ -15,8 +15,8 @@ export function startProcess(
   victimId?: number,
   softwareId?: number,
   info?: string,
-): Promise<CreatedRecord> {
-  return post<CreatedRecord>('/processes', {
+): Promise<ProcessStarted> {
+  return post<ProcessStarted>('/processes', {
     action,
     victim_id: victimId,
     software_id: softwareId,

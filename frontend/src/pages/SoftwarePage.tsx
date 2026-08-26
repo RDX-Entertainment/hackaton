@@ -1,168 +1,190 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
+import { FileCard } from '../components/software/FileCard';
+import { Meter } from '../components/software/Meter';
+import { contextoDe, discoEnUso, ramEnUso } from '../components/software/rules';
+import { WriteFileForm } from '../components/software/WriteFileForm';
 import { EmptyNotice } from '../components/Notice';
 import { StatusMessage } from '../components/StatusMessage';
 import {
+  hardwareApi,
   processesApi,
   researchApi,
   softwareApi,
+  type Machine,
   type OwnedFile,
   type SoftwareType,
 } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
 /**
- * Every verb on this screen is a legacy process action, so the buttons queue
- * work rather than doing it.
+ * El disco de la máquina.
+ *
+ * La pantalla se ordena por dónde está cada fichero, porque es lo que decide qué se puede
+ * hacer con él: lo cargado en memoria es lo único que funciona, lo del disco está a la
+ * espera, y lo oculto no se ve hasta que un Seeker lo saque. Antes era una lista plana con
+ * seis botones por fila y ninguna pista de por qué la mitad no hacían nada.
  */
-const ACTION = {
-  hide: 4,
-  seek: 5,
-  install: 13,
-  uninstall: 14,
-  park: 18,
-} as const;
-
-const MAX_NAME_LENGTH = 25;
-
 export function SoftwarePage() {
   const status = useStatusMessage();
 
-  const [files, setFiles] = useState<OwnedFile[]>([]);
-  const [types, setTypes] = useState<SoftwareType[]>([]);
-  const [name, setName] = useState('');
-  const [type, setType] = useState('1');
-  const [size, setSize] = useState('30');
-  const [ram, setRam] = useState('50');
+  const [ficheros, setFicheros] = useState<OwnedFile[]>([]);
+  const [tipos, setTipos] = useState<SoftwareType[]>([]);
+  const [maquinas, setMaquinas] = useState<Machine[]>([]);
 
-  const load = useCallback(() => {
-    softwareApi.listSoftware().then(setFiles).catch(() => {});
+  const cargar = useCallback(() => {
+    softwareApi.listSoftware().then(setFicheros).catch(() => setFicheros([]));
   }, []);
 
   useEffect(() => {
-    load();
-    softwareApi.listSoftwareTypes().then(setTypes).catch(() => {});
-  }, [load]);
+    cargar();
+    softwareApi.listSoftwareTypes().then(setTipos).catch(() => setTipos([]));
+    hardwareApi.listMachines().then(setMaquinas).catch(() => setMaquinas([]));
+  }, [cargar]);
 
-  const queue = async (action: number, softwareId: number, label: string) => {
+  // El worker suma la flota entera para el disco y para la memoria, así que aquí igual.
+  const capacidad = useMemo(
+    () =>
+      maquinas.reduce(
+        (total, maquina) => ({ hdd: total.hdd + maquina.hdd, ram: total.ram + maquina.ram }),
+        { hdd: 0, ram: 0 },
+      ),
+    [maquinas],
+  );
+
+  const ctx = useMemo(() => contextoDe(ficheros, capacidad.ram), [ficheros, capacidad.ram]);
+
+  const nombreDeTipo = useMemo(
+    () => new Map(tipos.map((uno) => [uno.id, uno.name])),
+    [tipos],
+  );
+
+  const enMemoria = ficheros.filter((uno) => uno.running);
+  const enDisco = ficheros.filter((uno) => !uno.running && !uno.hidden);
+  const ocultos = ficheros.filter((uno) => uno.hidden);
+
+  const encolar = async (accion: number, label: string, id: number) => {
     try {
-      await processesApi.startProcess(action, undefined, softwareId);
-      status.report(`${label} queued. Run the worker to advance it.`);
-      load();
+      const tarea = await processesApi.startProcess(accion, undefined, id);
+      status.report(`${label}: tarea #${tarea.id}, lista en ${tarea.seconds} s.`);
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
   };
 
-  const research = async (softwareId: number) => {
+  const investigar = async (id: number) => {
     try {
-      const queued = await researchApi.startResearch(softwareId);
-      status.report(`Research queued as task #${queued.process_id}.`);
+      const tarea = await researchApi.startResearch(id);
+      status.report(`Investigar: tarea #${tarea.process_id}, lista en ${tarea.seconds} s.`);
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
   };
 
-  const write = async (event: FormEvent) => {
-    event.preventDefault();
-
-    try {
-      await softwareApi.createSoftware(name, Number(type), Number(size), Number(ram));
-      setName('');
-      status.report('Software written.');
-      load();
-    } catch (error) {
-      status.reportError(error);
-    }
-  };
+  const pintar = (lista: OwnedFile[]) =>
+    lista.map((fichero) => (
+      <FileCard
+        key={fichero.id}
+        fichero={fichero}
+        tipo={nombreDeTipo.get(fichero.type) ?? `tipo ${fichero.type}`}
+        ctx={ctx}
+        onTarea={(accion, label) => void encolar(accion, label, fichero.id)}
+        onInvestigar={() => void investigar(fichero.id)}
+      />
+    ));
 
   return (
     <>
       <h2>Software</h2>
 
-      <form className="compose" onSubmit={write}>
-        <label>
-          Name
-          <input
-            value={name}
-            maxLength={MAX_NAME_LENGTH}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-        </label>
+      <p className="muted">
+        Un fichero en el disco no hace nada: hay que cargarlo en memoria, y la memoria es lo
+        que limita cuántos programas puedes tener a la vez. Cada verbo de esta pantalla encola
+        una tarea, y el resultado se ve en <Link to="/processes">Procesos</Link>.
+      </p>
 
-        <label>
-          Type
-          <select value={type} onChange={(event) => setType(event.target.value)}>
-            {types.map((softwareType) => (
-              <option key={softwareType.id} value={softwareType.id}>
-                {softwareType.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="swmeters">
+        <Meter
+          label="Disco"
+          usado={discoEnUso(ficheros)}
+          total={capacidad.hdd}
+          unidad=""
+          nota="Lo ocupa todo lo que tienes, corra o no."
+        />
+        <Meter
+          label="Memoria"
+          usado={ramEnUso(ficheros)}
+          total={capacidad.ram}
+          unidad=""
+          nota="Solo la ocupa lo cargado. Es lo que decide si un programa entra."
+        />
+      </div>
 
-        <label>
-          Size (MB)
-          <input
-            value={size}
-            inputMode="numeric"
-            onChange={(event) => setSize(event.target.value)}
-            required
-          />
-        </label>
+      <StatusMessage text={status.message} as="block" />
 
-        <label>
-          RAM
-          <input
-            value={ram}
-            inputMode="numeric"
-            onChange={(event) => setRam(event.target.value)}
-            required
-          />
-        </label>
+      <section className="swgroup">
+        <h3>
+          En memoria <small>{enMemoria.length}</small>
+        </h3>
 
-        <button>Write it</button>
-        <StatusMessage text={status.message} />
-      </form>
+        {enMemoria.length ? (
+          pintar(enMemoria)
+        ) : (
+          <EmptyNotice>
+            Nada cargado. Sin esto no funciona ningún programa, ni el tuyo ni el que te
+            defiende.
+          </EmptyNotice>
+        )}
+      </section>
 
-      {files.map((file) => (
-        <article className="forum-post" key={file.id}>
-          <b>
-            {file.name} v{file.version}
-          </b>
-          <small>
-            {' '}
-            · {file.size} MB · {file.ram} RAM · {file.running ? 'running' : 'not running'}
-            {file.hidden && ` · hidden with v${file.hidden_with}`}
-          </small>
+      <section className="swgroup">
+        <h3>
+          En el disco <small>{enDisco.length}</small>
+        </h3>
 
-          {file.running ? (
-            <button onClick={() => void queue(ACTION.uninstall, file.id, 'Uninstall')}>
-              Uninstall
-            </button>
-          ) : (
-            <button onClick={() => void queue(ACTION.install, file.id, 'Install')}>
-              Install
-            </button>
-          )}
+        {enDisco.length ? (
+          pintar(enDisco)
+        ) : (
+          <EmptyNotice>
+            El disco está vacío. Compila algo en <Link to="/arsenal">Arsenal</Link>, róbalo por
+            ahí, o escríbelo a mano aquí abajo.
+          </EmptyNotice>
+        )}
+      </section>
 
-          {file.hidden ? (
-            <button onClick={() => void queue(ACTION.seek, file.id, 'Seek')}>Seek</button>
-          ) : (
-            <button onClick={() => void queue(ACTION.hide, file.id, 'Hide')}>Hide</button>
-          )}
+      {ocultos.length > 0 && (
+        <section className="swgroup">
+          <h3>
+            Ocultos <small>{ocultos.length}</small>
+          </h3>
 
-          <button onClick={() => void research(file.id)}>Research</button>
-          <button onClick={() => void queue(ACTION.park, file.id, 'Park on external drive')}>
-            Park
-          </button>
-        </article>
-      ))}
+          <p className="muted">
+            Escondidos con un Hidder. Solo los saca un Seeker de versión igual o mejor que la
+            que los escondió.
+          </p>
 
-      {!files.length && (
-        <EmptyNotice>Nothing on disk yet. Write something, or go take it.</EmptyNotice>
+          {pintar(ocultos)}
+        </section>
       )}
+
+      <section className="swgroup">
+        <h3>Escribir un fichero a mano</h3>
+
+        <p className="muted">
+          La vía del legado: eliges tipo, tamaño y RAM y aparece el programa. Para armarte, lo
+          que quieres es <Link to="/arsenal">Arsenal</Link>; esto es para las herramientas que
+          el sistema modular todavía no cubre, como el Hidder y el Seeker.
+        </p>
+
+        <WriteFileForm
+          tipos={tipos}
+          discoLibre={Math.max(0, capacidad.hdd - discoEnUso(ficheros))}
+          onEscrito={cargar}
+        />
+      </section>
     </>
   );
 }
