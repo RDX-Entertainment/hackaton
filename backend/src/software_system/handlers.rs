@@ -10,6 +10,7 @@ use actix_web::{HttpResponse, web};
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/software-system/capabilities", web::get().to(capabilities))
         .route("/software-system/research/modules", web::get().to(modules))
+        .route("/software-system/programs", web::get().to(programs))
         .route("/software-system/blueprints", web::get().to(blueprints))
         .route(
             "/software-system/blueprints",
@@ -26,6 +27,9 @@ async fn capabilities(state: web::Data<AppState>, _: Ctx) -> Result<HttpResponse
 }
 async fn modules(state: web::Data<AppState>, ctx: Ctx) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(catalog::modules(&state.pool, ctx.id).await?))
+}
+async fn programs(state: web::Data<AppState>, ctx: Ctx) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(catalog::programs(&state.pool, ctx.id).await?))
 }
 async fn blueprints(state: web::Data<AppState>, ctx: Ctx) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(blueprints::list(&state.pool, ctx.id).await?))

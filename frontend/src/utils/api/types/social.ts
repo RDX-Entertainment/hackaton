@@ -45,3 +45,9 @@ export type ClanRequest = {
   created_at: string;
 };
 
+
+export type RankedPlayer = {
+  rank: number;
+  user_id: number;
+  login: string;
+};

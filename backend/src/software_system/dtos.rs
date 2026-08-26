@@ -57,6 +57,22 @@ pub struct CompiledSoftware {
     pub capability: String,
     pub stats: Stats,
 }
+/// Una copia compilada, vista desde el arsenal del jugador. `software` la lista como un
+/// fichero mas —nombre, tamano, si corre—, y lo que falta ahi es justo lo que decide si
+/// sirve para una operacion: que capacidad tiene y con que atributos se compilo.
+#[derive(Serialize)]
+pub struct Program {
+    pub software_id: i64,
+    pub name: String,
+    pub version: i32,
+    pub capability: Option<String>,
+    pub capability_name: Option<String>,
+    pub role: Option<String>,
+    pub action_kind: Option<String>,
+    pub origin: String,
+    pub running: bool,
+    pub stats: Stats,
+}
 #[derive(Deserialize)]
 pub struct StartOperationRequest {
     pub capability: String,

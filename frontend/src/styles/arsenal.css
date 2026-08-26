@@ -1,0 +1,6 @@
+/*
+ * El arsenal: la pantalla del sistema modular de software. Partida por lo que se ve, igual
+ * que internet y hardware, para que la hoja de atributos y el taller crezcan por separado.
+ */
+@import './arsenal/stat-sheet.css';
+@import './arsenal/workshop.css';

@@ -1,0 +1,107 @@
+/*
+ * La hoja de atributos de un programa. Comparte el lenguaje visual de las estadísticas de
+ * hardware —etiqueta, cifra y una barra de 3px— porque son la misma clase de dato leído de
+ * la misma manera; lo que cambia es que aquí hay seis y se comparan entre sí, así que van en
+ * rejilla y no en columna.
+ */
+.asheet {
+  margin: 0.7rem 0 0.2rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.asheet__attrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.55rem 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.astat {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.5rem;
+  align-items: baseline;
+}
+
+.astat__label {
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.astat__value {
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.astat__bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: var(--color-border);
+}
+
+.astat__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px var(--color-accent-glow);
+}
+
+.astat.is-full .astat__value {
+  color: var(--color-highlight);
+}
+
+.astat.is-full .astat__fill {
+  background: var(--color-highlight);
+  box-shadow: none;
+}
+
+/*
+ * Los costes no llevan barra: no están en la escala de los atributos sino en la del catálogo
+ * de piezas, y lo que importa de ellos es si la máquina llega, no cuánto ocupan de cien.
+ */
+.asheet__cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0.75rem 0 0;
+  padding-top: 0.6rem;
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.acost {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.acost__label {
+  color: var(--color-text-subtle);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+}
+
+.acost__value {
+  color: var(--color-text);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.acost__value small {
+  color: var(--color-text-subtle);
+  font-size: 0.66rem;
+}
+
+/* Lo que la máquina no cubre es la única razón por la que un programa no se puede lanzar. */
+.acost.is-short .acost__label,
+.acost.is-short .acost__value,
+.acost.is-short .acost__value small {
+  color: var(--color-danger);
+}

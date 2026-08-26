@@ -1,6 +1,11 @@
 use sqlx::{PgPool, Row};
 use crate::error::ApiError;
-use super::dtos::{Capability, ResearchModule, Stats};
+use super::{dtos::{Capability, Program, ResearchModule, Stats}, support::profile_stats};
+
+pub async fn programs(pool: &PgPool, user_id: i64) -> Result<Vec<Program>, ApiError> {
+    let rows = sqlx::query("SELECT p.*,s.soft_name,s.soft_version,c.code,c.name AS capability_name,c.role,c.action_kind,EXISTS(SELECT 1 FROM software_running r WHERE r.soft_id=s.id) AS running FROM software_profiles p JOIN software s ON s.id=p.software_id LEFT JOIN software_capabilities c ON c.id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY s.id DESC").bind(user_id).fetch_all(pool).await?;
+    Ok(rows.into_iter().map(|row| Program { software_id: row.get("software_id"), name: row.get("soft_name"), version: row.get("soft_version"), capability: row.get("code"), capability_name: row.get("capability_name"), role: row.get("role"), action_kind: row.get("action_kind"), origin: row.get("origin"), running: row.get("running"), stats: profile_stats(&row) }).collect())
+}
 
 pub async fn capabilities(pool: &PgPool) -> Result<Vec<Capability>, ApiError> {
     let rows = sqlx::query("SELECT c.code,c.name,d.code AS domain,c.role,c.action_kind FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id ORDER BY d.id,c.id").fetch_all(pool).await?;

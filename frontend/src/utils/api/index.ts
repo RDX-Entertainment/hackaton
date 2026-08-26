@@ -6,6 +6,7 @@
  */
 export * as accountApi from './account';
 export * as adminApi from './admin';
+export * as arsenalApi from './arsenal';
 export * as authApi from './auth';
 export * as bankApi from './bank';
 export * as bitcoinApi from './bitcoin';
@@ -20,6 +21,7 @@ export * as listsApi from './lists';
 export * as mailApi from './mail';
 export * as missionsApi from './missions';
 export * as processesApi from './processes';
+export * as rankingApi from './ranking';
 export * as researchApi from './research';
 export * as softwareApi from './software';
 export * as wikiApi from './wiki';

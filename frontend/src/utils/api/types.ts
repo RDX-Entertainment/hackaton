@@ -1,4 +1,5 @@
 export * from './types/admin';
+export * from './types/arsenal';
 export * from './types/auth';
 export * from './types/common';
 export * from './types/finances';

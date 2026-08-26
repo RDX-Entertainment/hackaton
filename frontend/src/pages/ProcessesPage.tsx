@@ -106,8 +106,24 @@ export function ProcessesPage() {
             </b>
             <p>
               {formatCell(task.worked_seconds)}/{formatCell(task.ideal_seconds)} seconds ·{' '}
-              {task.completed ? 'completed' : task.paused ? 'paused' : 'running'}
+              {/*
+                A finished task now says how it finished. `status` is only worth reading once
+                it is over: a legacy action is inserted as `queued` and never updated until
+                the worker resolves it, so before that the pause flag is the honest answer.
+              */}
+              {task.completed
+                ? formatCell(task.status) || 'completed'
+                : task.paused
+                  ? 'paused'
+                  : 'running'}
             </p>
+
+            {/* Only a modular operation carries a reason; every other action leaves it empty. */}
+            {Boolean(task.result_message) && (
+              <p className={task.status === 'failed' ? 'error' : 'muted'}>
+                {formatCell(task.result_code)} — {formatCell(task.result_message)}
+              </p>
+            )}
 
             {!task.completed && (
               <>
