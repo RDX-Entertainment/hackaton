@@ -85,7 +85,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             23 => analyze_effect(pool, user, victim, is_npc, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
-            90 => modular_operation_effect(pool, pid).await?,
+            90 => modular_operation_effect(pool, pid, user, victim, soft).await?,
             _ => {}
         }
         sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action=90 THEN status ELSE 'succeeded' END WHERE pid=$1")
@@ -98,9 +98,22 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
 
 /// An operation uses the resource and attribute snapshot recorded when it was started.
 /// Later research cannot rewrite the outcome of an operation already in progress.
-async fn modular_operation_effect(pool: &sqlx::PgPool, pid: i64) -> Result<(), sqlx::Error> {
-    let row = sqlx::query("SELECT (process_payload->>'attack_effectiveness')::integer attack, (process_payload->>'attack_penetration')::integer penetration, (process_payload->>'attack_stealth')::integer stealth, (process_payload->>'defense_effectiveness')::integer defense, (process_payload->>'defense_detection')::integer detection, (process_payload->>'defense_removal')::integer removal FROM processes WHERE pid=$1")
+///
+/// Winning the roll is only half of it: what a win *does* is the capability's `action_kind`,
+/// read from the same frozen payload. A new capability is a row in `software_capabilities`;
+/// only a new kind of consequence is a new arm here.
+async fn modular_operation_effect(
+    pool: &sqlx::PgPool,
+    pid: i64,
+    user: i64,
+    victim: i64,
+    soft: i64,
+) -> Result<(), sqlx::Error> {
+    let row = sqlx::query("SELECT process_payload->>'capability' capability, process_payload->>'action_kind' kind, process_payload->>'grants_login' login, (process_payload->>'attack_effectiveness')::integer attack, (process_payload->>'attack_penetration')::integer penetration, (process_payload->>'attack_stealth')::integer stealth, (process_payload->>'defense_effectiveness')::integer defense, (process_payload->>'defense_detection')::integer detection, (process_payload->>'defense_removal')::integer removal FROM processes WHERE pid=$1")
         .bind(pid).fetch_one(pool).await?;
+    let capability: String = row.get::<Option<String>, _>("capability").unwrap_or_default();
+    let kind: Option<String> = row.get("kind");
+    let login: Option<String> = row.get("login");
     let attack: i32 = row.get("attack");
     let penetration: i32 = row.get("penetration");
     let stealth: i32 = row.get("stealth");
@@ -110,17 +123,137 @@ async fn modular_operation_effect(pool: &sqlx::PgPool, pid: i64) -> Result<(), s
     let score = attack + penetration;
     let resistance = defense + detection / 2 + removal / 3;
     let detected = stealth < detection;
-    let (status, code, message) = if score >= resistance {
-        if detected { ("succeeded", "SUCCEEDED_DETECTED", "operation completed, but the defender detected it") }
-        else { ("succeeded", "SUCCEEDED_STEALTH", "operation completed without detection") }
-    } else if detected {
-        ("failed", "BLOCKED_DETECTED", "defender blocked and detected the operation")
+    let won = score >= resistance;
+    // The defender is beaten but the world can still refuse the consequence -- a machine
+    // that vanished, a disk with no room. That is a failure with its own reason, not a win
+    // that quietly changed nothing.
+    let refused = if won {
+        match kind.as_deref() {
+            Some("intrude") => intrusion_effect(pool, user, victim, login.as_deref(), resistance).await?,
+            Some("infect") => infection_effect(pool, user, victim, soft).await?,
+            // A kind nobody has given a consequence yet resolves and leaves the world alone.
+            _ => None,
+        }
     } else {
-        ("failed", "BLOCKED", "defender resisted the operation")
+        None
+    };
+    let (status, code, message) = match (won, refused, detected) {
+        (true, Some((code, message)), _) => ("failed", code, message),
+        (true, None, true) => ("succeeded", "SUCCEEDED_DETECTED", "operation completed, but the defender detected it"),
+        (true, None, false) => ("succeeded", "SUCCEEDED_STEALTH", "operation completed without detection"),
+        (false, _, true) => ("failed", "BLOCKED_DETECTED", "defender blocked and detected the operation"),
+        (false, _, false) => ("failed", "BLOCKED", "defender resisted the operation"),
     };
     sqlx::query("UPDATE processes SET status=$2,result_code=$3,result_message=$4 WHERE pid=$1")
         .bind(pid).bind(status).bind(code).bind(message).execute(pool).await?;
+    // Every legacy action wrote a line on both machines. Here the victim's line is what
+    // stealth buys: an operation their detectors never noticed leaves nothing on their log,
+    // won or lost. The attacker's own machine always records what it did.
+    let attacker_ip:Option<i64>=sqlx::query_scalar("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_one(pool).await?;
+    if let Some((target_ip, _)) = victim_ip(pool, victim, false).await? {
+        add_log(pool, user, false, &format!("localhost ran {capability} against [{}] - {code}", dotted(target_ip))).await?;
+    }
+    if detected {
+        if let Some(attacker_ip) = attacker_ip {
+            add_log(pool, victim, false, &format!("[{}] ran {capability} against localhost - {code}", dotted(attacker_ip))).await?;
+        }
+    }
     Ok(())
+}
+
+/// A won intrusion opens the machine, exactly as cases 11 and 16 did. Which of the two it
+/// behaves like is not decided here: a capability that names no login took the credentials
+/// and enters as root, one that names a service user slipped in as that user without ever
+/// learning the password.
+async fn intrusion_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    grants_login: Option<&str>,
+    resistance: i32,
+) -> Result<Option<(&'static str, &'static str)>, sqlx::Error> {
+    let Some((ip, pass)) = victim_ip(pool, victim, false).await? else {
+        return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
+    };
+    let (login, password) = match grants_login {
+        Some(login) => (login, "exploited".to_owned()),
+        None => ("root", pass),
+    };
+    // ALREADY_LISTED, as in the legacy: a repeat refreshes the row instead of piling up, and
+    // an exploit never downgrades a machine already held under its real password.
+    let held:Option<String>=sqlx::query_scalar("SELECT password FROM compromised_lists WHERE user_id=$1 AND ip=$2").bind(user).bind(ip).fetch_optional(pool).await?;
+    match held.as_deref() {
+        Some(current) if current != "exploited" && password == "exploited" => {}
+        Some(_) => {
+            sqlx::query("UPDATE compromised_lists SET login=$3,password=$4,hacked_at=now() WHERE user_id=$1 AND ip=$2")
+                .bind(user).bind(ip).bind(login).bind(&password).execute(pool).await?;
+        }
+        None => {
+            sqlx::query("INSERT INTO compromised_lists(user_id,ip,login,password) VALUES($1,$2,$3,$4)")
+                .bind(user).bind(ip).bind(login).bind(&password).execute(pool).await?;
+        }
+    }
+    // A machine already open by password stays open by password: an exploit on top of it
+    // adds nothing, and marking it via_exploit would take access away.
+    sqlx::query("INSERT INTO internet_access(user_id,ip,via_exploit) VALUES($1,$2,$3) ON CONFLICT(user_id,ip) DO UPDATE SET via_exploit=internet_access.via_exploit AND excluded.via_exploit,granted_at=now()")
+        .bind(user).bind(ip).bind(grants_login.is_some()).execute(pool).await?;
+    // The legacy paid for what stood in the way -- firewall and cracker versions. Here that
+    // is the defence actually beaten, so a defended target is worth more than an open one.
+    sqlx::query("UPDATE users_stats SET exp=exp+$2,hack_count=hack_count+1 WHERE uid=$1")
+        .bind(user).bind(resistance.max(1) as i64).execute(pool).await?;
+    Ok(None)
+}
+
+/// A won infection leaves the program running on the victim's machine, hidden. The legacy
+/// needed two steps for this -- upload, then install -- because it had no way to say "this
+/// program plants itself"; a capability of kind `infect` is that way.
+///
+/// It still needs the machine to be open first. Planting something inside a machine nobody
+/// got into would make `intrude` optional, and the two kinds are meant to chain.
+async fn infection_effect(
+    pool: &sqlx::PgPool,
+    user: i64,
+    victim: i64,
+    soft: i64,
+) -> Result<Option<(&'static str, &'static str)>, sqlx::Error> {
+    let Some((ip, _)) = victim_ip(pool, victim, false).await? else {
+        return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
+    };
+    let open:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_access WHERE user_id=$1 AND ip=$2)").bind(user).bind(ip).fetch_one(pool).await?;
+    if !open {
+        return Ok(Some(("NO_ACCESS", "the target machine is not open: intrude before infecting")));
+    }
+    let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc").bind(soft).bind(user).fetch_optional(pool).await? else {
+        return Ok(Some(("PAYLOAD_GONE", "the program that carried the operation is gone")));
+    };
+    let name: String = f.get("soft_name");
+    let version: i32 = f.get("soft_version");
+    let size: i32 = f.get("soft_size");
+    let ram: i32 = f.get("soft_ram");
+    // The copy has to fit on the victim's disk and stay loaded in their RAM: the same two
+    // checks a transfer and an install go through. A machine with no room is not infected,
+    // and the operation says so instead of claiming a silent win.
+    let hdd:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(victim).fetch_one(pool).await?;
+    let used_hdd:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc").bind(victim).fetch_one(pool).await?;
+    if (hdd.unwrap_or(0.0) as i64) < used_hdd.unwrap_or(0) + size as i64 {
+        return Ok(Some(("NO_DISK", "the target machine had no room for the payload")));
+    }
+    let total_ram:Option<f32>=sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(victim).fetch_one(pool).await?;
+    let used_ram:Option<i64>=sqlx::query_scalar("SELECT sum(s.soft_ram)::bigint FROM software s JOIN software_running r ON r.soft_id=s.id WHERE r.user_id=$1 AND NOT r.is_npc").bind(victim).fetch_one(pool).await?;
+    if (total_ram.unwrap_or(0.0) as i64) < used_ram.unwrap_or(0) + ram as i64 {
+        return Ok(Some(("NO_RAM", "the target machine could not keep the payload running")));
+    }
+    // Hidden, because a virus the owner can see on their own file list is not a virus. Their
+    // seeker is what finds it, the same as any other hidden file.
+    let planted:i64=sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,soft_hidden,original_from,licensed_to) VALUES($1,$2,$3,$4,$5,$6,true,$7,$8) RETURNING id")
+        .bind(victim).bind(&name).bind(version).bind(size).bind(ram).bind(f.get::<i16,_>("soft_type")).bind(soft).bind(f.get::<i64,_>("licensed_to")).fetch_one(pool).await?;
+    sqlx::query("INSERT INTO software_running(soft_id,user_id,is_npc) VALUES($1,$2,false) ON CONFLICT DO NOTHING")
+        .bind(planted).bind(victim).execute(pool).await?;
+    // virus_id is where the legacy remembered whose virus sits on a machine. It only means
+    // anything next to the row for that machine, so an infection with no listing sets none.
+    sqlx::query("UPDATE compromised_lists SET virus_id=$3 WHERE user_id=$1 AND ip=$2")
+        .bind(user).bind(ip).bind(planted).execute(pool).await?;
+    Ok(None)
 }
 
 /// Resolves the IP of a finished process's victim, plus the password a crack would reveal.

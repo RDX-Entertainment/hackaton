@@ -2,9 +2,15 @@ use sqlx::{PgPool, Row};
 use crate::error::ApiError;
 use super::dtos::Stats;
 
+/// Los atributos van de 0 a 100, pero el consumo no: se compara contra `hardware.cpu/ram/net`,
+/// que estan en las unidades del catalogo de piezas. Una maquina de arranque trae 1000 de CPU,
+/// 512 de RAM y **1 de red** —la NET1, la pieza mas baja de la escala—, asi que un consumo
+/// inventado en la escala de los atributos hacia imposible lanzar nada: pedia 5 de red a
+/// quien tiene 1. Un programa pelado cabe en la maquina de arranque y los modulos son los que
+/// obligan a subir de pieza.
 pub(crate) fn base_stats(role: &str) -> Stats {
-    if role == "defender" { Stats { effectiveness: 45, detection: 50, removal: 35, stealth: 0, penetration: 0, stability: 65, cpu: 12, ram: 20, net: 3, weight: 24 } }
-    else { Stats { effectiveness: 50, stealth: 45, detection: 0, removal: 0, penetration: 45, stability: 55, cpu: 12, ram: 20, net: 5, weight: 24 } }
+    if role == "defender" { Stats { effectiveness: 45, detection: 50, removal: 35, stealth: 0, penetration: 0, stability: 65, cpu: 200, ram: 128, net: 1, weight: 24 } }
+    else { Stats { effectiveness: 50, stealth: 45, detection: 0, removal: 0, penetration: 45, stability: 55, cpu: 200, ram: 128, net: 1, weight: 24 } }
 }
 
 pub(crate) fn apply_module(mut stats: Stats, row: &sqlx::postgres::PgRow) -> Stats {

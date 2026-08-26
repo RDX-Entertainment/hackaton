@@ -181,6 +181,14 @@ const BOOTSTRAP: &[&str] = &[
     "INSERT INTO bank_accounts(bank_acc,bank_pass,bank_id,bank_user)
      SELECT random_free_bank_account(),NULL,default_bank(),$1
      WHERE default_bank() IS NOT NULL",
+    // Los modulos de research iniciales, mientras el area real no exista. 0036 los repartio
+    // entre los jugadores que habia entonces con un CROSS JOIN, y eso solo ocurre una vez:
+    // quien se registraba despues nacia sin ninguno y no podia armar un blueprint. El alta
+    // es el sitio donde se reparte lo que trae una cuenta nueva, asi que se reparten aqui.
+    // Cuando el research se gane jugando, esta linea se borra y no queda nada mas que tocar.
+    "INSERT INTO user_research_modules(user_id,module_id)
+     SELECT $1,id FROM research_modules
+     ON CONFLICT DO NOTHING",
 ];
 
 pub async fn bootstrap_player(
