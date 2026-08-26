@@ -30,6 +30,13 @@ export function ProcessesPage() {
     processesApi.getProcessActions().then(setActions).catch(() => setActions([]));
   }, [load]);
 
+  // El worker actualiza la cola fuera de React; recargar evita una pantalla congelada entre
+  // que una tarea vence y el worker deja su resultado.
+  useEffect(() => {
+    const timer = window.setInterval(load, 5_000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
   const start = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -98,14 +105,24 @@ export function ProcessesPage() {
 
       {tasks.map((task) => {
         const id = Number(task.id);
+        const actionId = Number(task.action);
+        const actionName = actionId === 91
+          ? 'Compilar software'
+          : actions.find((available) => available.id === actionId)?.name ?? formatCell(task.details || task.action);
+        const secondsLeft = Math.max(0, Number(task.seconds_left ?? 0));
+        const idealSeconds = Number(task.ideal_seconds ?? 0);
+        const workedSeconds = task.completed
+          ? Number(task.worked_seconds ?? idealSeconds)
+          : Math.max(0, idealSeconds - secondsLeft);
 
         return (
           <article className="forum-post" key={id}>
             <b>
-              Task #{id} · {formatCell(task.details || task.action)}
+              Tarea #{id} · {actionName}
             </b>
             <p>
-              {formatCell(task.worked_seconds)}/{formatCell(task.ideal_seconds)} seconds ·{' '}
+              {workedSeconds}/{idealSeconds} segundos
+              {!task.completed && !task.paused && ` · faltan ${secondsLeft} s`} ·{' '}
               {/*
                 A finished task now says how it finished. `status` is only worth reading once
                 it is over: a legacy action is inserted as `queued` and never updated until

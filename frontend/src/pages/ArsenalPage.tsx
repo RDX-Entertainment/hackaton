@@ -86,8 +86,8 @@ export function ArsenalPage() {
     try {
       const hecho = await arsenalApi.compile(diseno.id);
       status.report(
-        `«${hecho.name}» compilado como fichero #${hecho.software_id}. ` +
-          'Instálalo desde Software para poder usarlo.',
+        `Compilación de «${hecho.name}» encolada (${hecho.seconds} s). ` +
+          'El fichero aparecerá al terminar; después instálalo desde Software.',
       );
       cargar();
     } catch (error) {

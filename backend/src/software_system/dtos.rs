@@ -50,11 +50,12 @@ pub struct CompileRequest {
     pub blueprint_id: i64,
 }
 #[derive(Serialize)]
-pub struct CompiledSoftware {
-    pub software_id: i64,
+pub struct CompilationQueued {
+    pub process_id: i64,
     pub blueprint_id: i64,
     pub name: String,
     pub capability: String,
+    pub seconds: i32,
     pub stats: Stats,
 }
 /// Una copia compilada, vista desde el arsenal del jugador. `software` la lista como un

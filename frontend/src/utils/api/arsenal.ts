@@ -8,7 +8,7 @@ import { get, post } from './client';
 import type {
   Blueprint,
   Capability,
-  CompiledSoftware,
+  CompilationQueued,
   OperationStarted,
   Program,
   ResearchModule,
@@ -42,9 +42,9 @@ export function createBlueprint(
   });
 }
 
-/** Compilar materializa el diseño en un fichero. Instalarlo es otro paso, en Software. */
-export function compile(blueprintId: number): Promise<CompiledSoftware> {
-  return post<CompiledSoftware>('/software-system/compile', { blueprint_id: blueprintId });
+/** Compilar encola el trabajo; el fichero aparece al terminar en Procesos. */
+export function compile(blueprintId: number): Promise<CompilationQueued> {
+  return post<CompilationQueued>('/software-system/compile', { blueprint_id: blueprintId });
 }
 
 /**

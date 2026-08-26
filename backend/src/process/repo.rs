@@ -23,6 +23,10 @@ pub async fn find_for_user(
             info_str,
             time_ideal,
             time_worked,
+            GREATEST(
+                0,
+                EXTRACT(EPOCH FROM (time_end - now()))::integer
+            ) AS seconds_left,
             is_paused,
             completed_at,
             status,

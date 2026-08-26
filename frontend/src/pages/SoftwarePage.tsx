@@ -15,8 +15,34 @@ import {
   type Machine,
   type OwnedFile,
   type SoftwareType,
+  type UnknownRow,
 } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
+
+type Compilation = {
+  id: number;
+  idealSeconds: number;
+  workedSeconds: number;
+  completed: boolean;
+  status: string;
+  resultCode: string | null;
+  resultMessage: string | null;
+};
+
+/** La cola general conserva también las tareas del legado; aquí solo se ven las 91. */
+function lecturaDeCompilacion(row: UnknownRow): Compilation | null {
+  if (Number(row.action) !== 91) return null;
+
+  return {
+    id: Number(row.id),
+    idealSeconds: Number(row.ideal_seconds),
+    workedSeconds: Math.max(0, Number(row.ideal_seconds) - Number(row.seconds_left ?? 0)),
+    completed: Boolean(row.completed),
+    status: String(row.status ?? 'running'),
+    resultCode: typeof row.result_code === 'string' ? row.result_code : null,
+    resultMessage: typeof row.result_message === 'string' ? row.result_message : null,
+  };
+}
 
 /**
  * El disco de la máquina.
@@ -32,15 +58,28 @@ export function SoftwarePage() {
   const [ficheros, setFicheros] = useState<OwnedFile[]>([]);
   const [tipos, setTipos] = useState<SoftwareType[]>([]);
   const [maquinas, setMaquinas] = useState<Machine[]>([]);
+  const [compilaciones, setCompilaciones] = useState<Compilation[]>([]);
 
   const cargar = useCallback(() => {
     softwareApi.listSoftware().then(setFicheros).catch(() => setFicheros([]));
+    processesApi
+      .listProcesses()
+      .then((tareas) => tareas.map(lecturaDeCompilacion).filter((tarea): tarea is Compilation => tarea !== null))
+      .then(setCompilaciones)
+      .catch(() => setCompilaciones([]));
   }, []);
 
   useEffect(() => {
     cargar();
     softwareApi.listSoftwareTypes().then(setTipos).catch(() => setTipos([]));
     hardwareApi.listMachines().then(setMaquinas).catch(() => setMaquinas([]));
+  }, [cargar]);
+
+  // La compilación la resuelve el worker: refrescar aquí evita obligar a ir a Procesos para
+  // descubrir que ya terminó y hace que el fichero aparezca solo en el disco.
+  useEffect(() => {
+    const timer = window.setInterval(cargar, 5_000);
+    return () => window.clearInterval(timer);
   }, [cargar]);
 
   // El worker suma la flota entera para el disco y para la memoria, así que aquí igual.
@@ -63,6 +102,7 @@ export function SoftwarePage() {
   const enMemoria = ficheros.filter((uno) => uno.running);
   const enDisco = ficheros.filter((uno) => !uno.running && !uno.hidden);
   const ocultos = ficheros.filter((uno) => uno.hidden);
+  const compilacionActiva = compilaciones.find((una) => !una.completed);
 
   const encolar = async (accion: number, label: string, id: number) => {
     try {
@@ -124,6 +164,43 @@ export function SoftwarePage() {
       </div>
 
       <StatusMessage text={status.message} as="block" />
+
+      <section className="swgroup">
+        <h3>
+          Compilación <small>{compilaciones.length}</small>
+        </h3>
+
+        {compilacionActiva ? (
+          <article className="swfile">
+            <p className="swfile__head">
+              <b>Compilando programa</b>
+              <span className="swfile__type">en curso</span>
+            </p>
+            <p className="swfile__meta">
+              Tarea #{compilacionActiva.id} · {compilacionActiva.workedSeconds}/
+              {compilacionActiva.idealSeconds} s. Al terminar, el fichero aparecerá abajo en
+              el disco.
+            </p>
+          </article>
+        ) : compilaciones.length ? (
+          <article className="swfile">
+            <p className="swfile__head">
+              <b>Última compilación</b>
+              <span className="swfile__type">
+                {compilaciones[0].status === 'succeeded' ? 'terminada' : compilaciones[0].status}
+              </span>
+            </p>
+            <p className="swfile__meta">
+              {compilaciones[0].resultMessage ?? 'La compilación no dejó un mensaje.'}
+            </p>
+          </article>
+        ) : (
+          <EmptyNotice>
+            Diseña un programa en <Link to="/arsenal">Arsenal</Link>. La compilación se verá
+            y terminará aquí.
+          </EmptyNotice>
+        )}
+      </section>
 
       <section className="swgroup">
         <h3>

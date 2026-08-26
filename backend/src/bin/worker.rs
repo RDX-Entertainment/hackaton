@@ -12,12 +12,20 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     let once = env::args().any(|arg| arg == "--once");
+    // Los procesos se miden en segundos. Dormir un minuto entero hacia que una tarea de 20 s
+    // pareciera congelada y podia terminar casi un minuto tarde. Se puede ampliar fuera de
+    // desarrollo, pero el valor normal mantiene la cola perceptiblemente viva.
+    let tick_seconds = env::var("WORKER_TICK_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(5);
     loop {
         tick(&pool).await?;
         if once {
             break;
         }
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        tokio::time::sleep(Duration::from_secs(tick_seconds)).await;
     }
     Ok(())
 }
@@ -86,14 +94,46 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
             90 => modular_operation_effect(pool, pid, user, victim, soft).await?,
+            91 => compilation_effect(pool, pid, user).await?,
             _ => {}
         }
-        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action=90 THEN status ELSE 'succeeded' END WHERE pid=$1")
+        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (90,91) THEN status ELSE 'succeeded' END WHERE pid=$1")
             .bind(pid)
             .execute(pool)
             .await?;
     }
     Ok(())
+}
+
+/// Materializa una compilacion que ya consumio su tiempo. El espacio se comprueba de nuevo:
+/// otra accion pudo haber terminado antes y ocupar el disco que estaba libre al encolarla.
+async fn compilation_effect(pool: &sqlx::PgPool, pid: i64, user: i64) -> Result<(), sqlx::Error> {
+    let row = sqlx::query("SELECT process_payload FROM processes WHERE pid=$1").bind(pid).fetch_one(pool).await?;
+    let payload: serde_json::Value = row.get("process_payload");
+    let stats = &payload["stats"];
+    let weight = stats["weight"].as_i64().unwrap_or(1).max(1);
+    let capacity: i64 = sqlx::query_scalar("SELECT COALESCE(sum(hdd)::bigint,0) FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
+    let used: i64 = sqlx::query_scalar("SELECT COALESCE(sum(soft_size)::bigint,0) FROM software WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
+    if capacity - used < weight {
+        sqlx::query("UPDATE processes SET status='failed',result_code='DISK_FULL',result_message='La compilacion termino sin espacio libre en disco' WHERE pid=$1").bind(pid).execute(pool).await?;
+        return Ok(());
+    }
+    let capability = payload["capability"].as_str().unwrap_or_default();
+    let name = payload["name"].as_str().unwrap_or("Programa");
+    let revision = payload["revision"].as_i64().unwrap_or(1) as i32;
+    let blueprint_id = payload["blueprint_id"].as_i64();
+    let legacy_type = match capability { "ssh_exploit" => 14, "ftp_exploit" => 13, "cracker" => 1, "virus_infect" => 99, _ => 4 };
+    let mut tx = pool.begin().await?;
+    let software_id: i64 = sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,$3,$4,$5,$6) RETURNING id")
+        .bind(user).bind(name).bind(revision).bind(weight as i32).bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(legacy_type).fetch_one(&mut *tx).await?;
+    sqlx::query("INSERT INTO software_profiles(software_id,blueprint_id,origin,capability_id,effectiveness,stealth,detection,removal,penetration,stability,cpu_need,ram_need,net_need,weight) SELECT $1,$2,'research',id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 FROM software_capabilities WHERE code=$13")
+        .bind(software_id).bind(blueprint_id).bind(stats["effectiveness"].as_i64().unwrap_or(0) as i32).bind(stats["stealth"].as_i64().unwrap_or(0) as i32).bind(stats["detection"].as_i64().unwrap_or(0) as i32).bind(stats["removal"].as_i64().unwrap_or(0) as i32).bind(stats["penetration"].as_i64().unwrap_or(0) as i32).bind(stats["stability"].as_i64().unwrap_or(0) as i32).bind(stats["cpu"].as_i64().unwrap_or(1).max(1) as i32).bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(stats["net"].as_i64().unwrap_or(1).max(1) as i32).bind(weight as i32).bind(capability).execute(&mut *tx).await?;
+    sqlx::query("UPDATE processes SET status='succeeded',result_code='COMPILED',result_message=$2 WHERE pid=$1")
+        .bind(pid)
+        .bind(format!("«{name}» compilado como fichero #{software_id}"))
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await
 }
 
 /// An operation uses the resource and attribute snapshot recorded when it was started.

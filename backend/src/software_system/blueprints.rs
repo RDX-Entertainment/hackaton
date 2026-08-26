@@ -1,6 +1,7 @@
+use serde_json::json;
 use sqlx::{PgPool, Row};
 use crate::error::ApiError;
-use super::{dtos::{Blueprint, CompiledSoftware, CreateBlueprintRequest}, support::{apply_module, base_stats, blueprint_modules, legacy_type, owned_blueprint}};
+use super::{dtos::{Blueprint, CompilationQueued, CreateBlueprintRequest}, support::{apply_module, base_stats, blueprint_modules, owned_blueprint}};
 
 fn projected(role: &str, modules: &[sqlx::postgres::PgRow]) -> (Vec<i64>, super::dtos::Stats) { let mut stats = base_stats(role); let mut ids = Vec::new(); for module in modules { stats = apply_module(stats, module); ids.push(module.get("id")); } (ids, stats) }
 
@@ -20,9 +21,18 @@ pub async fn create(pool: &PgPool, user_id: i64, input: CreateBlueprintRequest) 
     let modules = blueprint_modules(pool, id).await?; let (module_ids, stats) = projected(&role, &modules); Ok(Blueprint { id, name: name.to_owned(), revision: 1, capability: input.capability, modules: module_ids, projected: stats })
 }
 
-pub async fn compile(pool: &PgPool, user_id: i64, blueprint_id: i64) -> Result<CompiledSoftware, ApiError> {
+/// Compilar ocupa disco y tiempo. La copia no aparece al pulsar el boton: el worker usa el
+/// payload congelado cuando vence el proceso. Solo hay una compilacion por jugador para que
+/// una cola no permita reservar el mismo disco muchas veces.
+pub async fn compile(pool: &PgPool, user_id: i64, blueprint_id: i64) -> Result<CompilationQueued, ApiError> {
     let (name, capability, role, revision) = owned_blueprint(pool, user_id, blueprint_id).await?; let (_, stats) = projected(&role, &blueprint_modules(pool, blueprint_id).await?);
-    let software_id: i64 = sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,$3,$4,$5,$6) RETURNING id").bind(user_id).bind(&name).bind(revision).bind(stats.weight).bind(stats.ram).bind(legacy_type(&capability)).fetch_one(pool).await?;
-    sqlx::query("INSERT INTO software_profiles(software_id,blueprint_id,origin,capability_id,effectiveness,stealth,detection,removal,penetration,stability,cpu_need,ram_need,net_need,weight) SELECT $1,$2,'research',id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 FROM software_capabilities WHERE code=$13").bind(software_id).bind(blueprint_id).bind(stats.effectiveness).bind(stats.stealth).bind(stats.detection).bind(stats.removal).bind(stats.penetration).bind(stats.stability).bind(stats.cpu).bind(stats.ram).bind(stats.net).bind(stats.weight).bind(&capability).execute(pool).await?;
-    Ok(CompiledSoftware { software_id, blueprint_id, name, capability, stats })
+    let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=91 AND completed_at IS NULL)").bind(user_id).fetch_one(pool).await?;
+    if active { return Err(ApiError::BadRequest("COMPILATION_ACTIVE: termina la compilacion en curso antes de iniciar otra".into())); }
+    let (capacity, used): (i64, i64) = sqlx::query_as("SELECT COALESCE((SELECT sum(hdd)::bigint FROM hardware WHERE user_id=$1 AND NOT is_npc),0), COALESCE((SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc),0)").bind(user_id).fetch_one(pool).await?;
+    if capacity - used < i64::from(stats.weight) { return Err(ApiError::BadRequest("DISK_FULL: no hay espacio suficiente para compilar este programa".into())); }
+    let seconds = (15 + stats.weight + stats.cpu / 40 + stats.ram / 32 + stats.net * 8).clamp(20, 300);
+    let payload = json!({"blueprint_id": blueprint_id, "name": name, "capability": capability, "revision": revision, "stats": stats});
+    let process_id: i64 = sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,0,91,0,'compile','compile',now()+($2::integer*interval '1 second'),$2,'running',now(),$3,$4) RETURNING pid")
+        .bind(user_id).bind(seconds).bind(json!({"disk_needed": stats.weight, "disk_free": capacity - used})).bind(payload).fetch_one(pool).await?;
+    Ok(CompilationQueued { process_id, blueprint_id, name, capability, seconds, stats })
 }

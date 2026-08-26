@@ -56,11 +56,12 @@ export type Blueprint = {
   projected: ProgramStats;
 };
 
-export type CompiledSoftware = {
-  software_id: number;
+export type CompilationQueued = {
+  process_id: number;
   blueprint_id: number;
   name: string;
   capability: string;
+  seconds: number;
   stats: ProgramStats;
 };
 

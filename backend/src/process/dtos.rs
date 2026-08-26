@@ -17,6 +17,7 @@ pub struct ProcessResponse {
     pub details: String,
     pub ideal_seconds: i32,
     pub worked_seconds: i32,
+    pub seconds_left: i32,
     pub paused: bool,
     pub completed: bool,
     pub status: String,
@@ -34,6 +35,7 @@ impl From<ProcessRow> for ProcessResponse {
             details: value.info_str,
             ideal_seconds: value.time_ideal,
             worked_seconds: value.time_worked,
+            seconds_left: value.seconds_left,
             paused: value.is_paused,
             completed: value
                 .completed_at

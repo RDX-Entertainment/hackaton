@@ -37,6 +37,4 @@ pub(crate) async fn owned_blueprint(pool: &PgPool, user_id: i64, blueprint_id: i
         .map(|row| (row.get("name"), row.get("code"), row.get("role"), row.get("revision"))).ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn legacy_type(capability: &str) -> i16 { match capability { "ssh_exploit" => 14, "ftp_exploit" => 13, "cracker" => 1, "virus_infect" => 99, _ => 4 } }
-
 pub(crate) fn profile_stats(row: &sqlx::postgres::PgRow) -> Stats { Stats { effectiveness: row.get("effectiveness"), stealth: row.get("stealth"), detection: row.get("detection"), removal: row.get("removal"), penetration: row.get("penetration"), stability: row.get("stability"), cpu: row.get("cpu_need"), ram: row.get("ram_need"), net: row.get("net_need"), weight: row.get("weight") } }
