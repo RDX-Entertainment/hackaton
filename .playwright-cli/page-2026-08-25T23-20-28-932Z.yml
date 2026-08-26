@@ -1,0 +1,52 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - link "hackerexperience" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e6]: H
+    - navigation "Secciones del juego" [ref=f1e8]:
+      - button "Operación" [ref=f1e10] [cursor=pointer]:
+        - generic [ref=f1e11]: ⌁
+      - button "Progreso" [ref=f1e14] [cursor=pointer]:
+        - generic [ref=f1e15]: ◈
+      - button "Dinero" [ref=f1e18] [cursor=pointer]:
+        - generic [ref=f1e19]: ₿
+      - button "Gente" [ref=f1e22] [cursor=pointer]:
+        - generic [ref=f1e23]: ⚇
+      - button "Registro" [ref=f1e26] [cursor=pointer]:
+        - generic [ref=f1e27]: ▤
+      - button "Cuenta" [ref=f1e30] [cursor=pointer]:
+        - generic [ref=f1e31]: ◎
+      - button "Sin portar" [ref=f1e34] [cursor=pointer]:
+        - generic [ref=f1e35]: ∅
+    - generic [ref=f1e37]:
+      - generic [ref=f1e38]:
+        - generic [ref=f1e39]: ip
+        - button "Mostrar tu dirección" [ref=f1e40] [cursor=pointer]: 208.148.•••.•••
+        - generic [ref=f1e41]: adm
+      - button "[ salir ]" [ref=f1e42] [cursor=pointer]
+  - main [ref=f1e43]:
+    - generic [ref=f1e44]:
+      - heading "$ Internet" [level=2] [ref=f1e45]
+      - generic [ref=f1e46]:
+        - generic [ref=f1e47]:
+          - generic [ref=f1e48]:
+            - generic [ref=f1e49]:
+              - button "Atrás" [disabled] [ref=f1e50]: ◂
+              - button "Adelante" [disabled] [ref=f1e51]: ▸
+              - button "Recargar" [ref=f1e52] [cursor=pointer]: ⟳
+            - generic [ref=f1e53]:
+              - generic [ref=f1e54]: tcp://
+              - textbox "dirección o nombre de la máquina" [ref=f1e55]
+              - button "[ conectar ]" [disabled] [ref=f1e56]
+          - paragraph [ref=f1e57]: Sin marcadores. Guarda una máquina desde su pestaña pública y aparecerá aquí.
+          - generic [ref=f1e59]:
+            - generic [ref=f1e60]: ___ _ _ |_ _|_ _| |_ ___ _ _ _ _ ___| |_ | || ' \ _/ -_) '_| ' \/ -_) _| |___|_||_\__\___|_| |_||_\___|\__|
+            - paragraph [ref=f1e61]: Escribe una dirección arriba, o entra por una de las conocidas del listín.
+        - complementary [ref=f1e62]:
+          - generic [ref=f1e63]:
+            - heading "Máquinas conocidas" [level=4] [ref=f1e64]
+            - generic [ref=f1e65]: "0"
+          - generic [ref=f1e66]:
+            - generic [ref=f1e67]: ⌕
+            - textbox "filtrar…" [ref=f1e68]
+          - paragraph [ref=f1e69]: Ninguna encaja.
