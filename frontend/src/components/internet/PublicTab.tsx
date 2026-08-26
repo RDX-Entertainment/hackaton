@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { Remote, SiteAction } from '../../utils/api';
 import { formatCount } from '../../utils/format';
@@ -19,7 +19,14 @@ type PublicTabProps = {
  */
 export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps) {
   const [paying, setPaying] = useState<SiteAction | null>(null);
-  const { holder: client, handle: onBank, restore: onRestore } = useBankSession(remote.bank);
+  const { holder: client, handle: onBank, restore: onRestore } = useBankSession(remote.bank, remote.ip);
+
+  // Un cuadro de pago pertenece al sitio que lo abriÃ³. Al navegar a otra IP no puede quedar
+  // por encima de la nueva pÃ¡gina ni conservar una orden dirigida a la mÃ¡quina anterior.
+  useEffect(() => {
+    setPaying(null);
+  }, [remote.ip]);
+
   const rows = [
     { key: 'dirección', value: formatIp(remote.ip) },
     { key: 'titular', value: remote.kind === 'npc' ? `servidor NPC · tipo ${remote.type}` : 'jugador' },

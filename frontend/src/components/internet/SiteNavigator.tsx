@@ -16,7 +16,7 @@ type SiteNavigatorProps = {
   onVisit: (ip: number) => void;
   onPay: (action: SiteAction) => void;
   /** Las órdenes de banca las atiende la sesión, que responde con datos para la página. */
-  onBank: (message: SiteMessage, reply: (fill: SiteFill) => void) => void;
+  onBank: (message: SiteMessage, reply: (fill: SiteFill) => void) => Promise<void>;
   /** Repinta lo que la sesión ya sabe en la página que acaba de cargar. */
   onRestore: (reply: (fill: SiteFill) => void) => void;
 };
@@ -59,7 +59,7 @@ export function SiteNavigator({
   }, [ip]);
 
   const handle = useCallback(
-    (message: SiteMessage, reply: (fill: SiteFill) => void) => {
+    async (message: SiteMessage, reply: (fill: SiteFill) => void) => {
       // Una orden que esta web no tiene concedida no se obedece, esté escrita o no. Que el
       // servidor la mande en la lista es lo único que la hace real.
       if (!allowed.includes(message.kind)) {
@@ -82,7 +82,7 @@ export function SiteNavigator({
       }
 
       if (message.kind.startsWith('bank_')) {
-        onBank(message, reply);
+        await onBank(message, reply);
 
         // El banco decide a dónde llevar al cliente después de cada operación.
         if (message.params.then) {

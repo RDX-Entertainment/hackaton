@@ -1,0 +1,341 @@
+.machine {
+  margin-bottom: 1.4rem;
+}
+
+.machine__badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.machine__chipset {
+  padding: 0.08rem 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.machine__ddr {
+  color: var(--color-highlight);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+}
+
+.machine__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14.5rem;
+  gap: 1px;
+  background: var(--color-border);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.board {
+  background: var(--color-surface-sunken);
+}
+
+.board__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--color-surface-raised);
+  border-bottom: var(--border-width) solid var(--color-border-strong);
+  border-left: 2px solid var(--color-highlight);
+}
+
+.board__icon {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  color: var(--color-highlight);
+}
+
+.board__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.board__name {
+  color: var(--color-text);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.board__spec {
+  color: var(--color-text-subtle);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+}
+
+.board__head button {
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.66rem;
+}
+
+.board__deck {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-areas:
+    'cpu ram'
+    'net ram'
+    'hdd hdd';
+  gap: 0.7rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.board__trace {
+  position: absolute;
+  background: var(--color-border);
+  pointer-events: none;
+}
+
+.board__trace--a {
+  top: 0;
+  bottom: 0;
+  left: 52%;
+  width: var(--border-width);
+}
+
+.board__trace--b {
+  right: 0;
+  left: 0;
+  top: 58%;
+  height: var(--border-width);
+}
+
+.board--empty {
+  display: grid;
+  place-items: center;
+  gap: 0.4rem;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.board__hole {
+  width: 64px;
+  height: 64px;
+  border: var(--border-width) dashed var(--color-border-strong);
+}
+
+.board__missing {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-subtle);
+  font-size: 0.9rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.board__hint {
+  max-width: 22rem;
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.zone {
+  position: relative;
+  padding: 1.15rem 0.6rem 0.6rem;
+  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  border: var(--border-width) dashed var(--color-border-strong);
+}
+
+.zone--cpu {
+  grid-area: cpu;
+}
+
+.zone--ram {
+  grid-area: ram;
+}
+
+.zone--hdd {
+  grid-area: hdd;
+}
+
+.zone--net {
+  grid-area: net;
+}
+
+.zone__legend {
+  position: absolute;
+  top: 0.28rem;
+  left: 0.55rem;
+  color: var(--color-text-subtle);
+  font-size: 0.55rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.zone__none {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+}
+
+.zone--cpu .zone__slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.zone--ram .zone__slots {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+}
+
+.zone--hdd .zone__slots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.zone--net .zone__slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.mount {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+  border-left: 2px solid var(--color-accent);
+}
+
+.mount--free {
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  background: transparent;
+  border: var(--border-width) dashed var(--color-border);
+}
+
+.mount__label {
+  color: var(--color-text-subtle);
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.mount__free {
+  color: var(--color-text-subtle);
+  font-size: 0.66rem;
+}
+
+.mount__icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
+}
+
+.mount__name {
+  color: var(--color-text);
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mount__spec {
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.mount__pull {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.05rem 0.28rem;
+  color: var(--color-text-subtle);
+  font-size: 0.8rem;
+  line-height: 1.2;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.mount__pull::before,
+.mount__pull::after {
+  content: none;
+}
+
+.mount__pull:hover:not(:disabled) {
+  color: var(--color-danger);
+}
+
+.zone--cpu .mount {
+  align-items: center;
+  padding: 0.85rem 0.6rem;
+  text-align: center;
+}
+
+.zone--cpu .mount--free {
+  min-height: 5.4rem;
+}
+
+.zone--cpu .mount__icon {
+  width: 32px;
+  height: 32px;
+}
+
+.zone--ram .mount {
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 3.3rem;
+  min-height: 8.6rem;
+  padding: 0.5rem 0.3rem;
+  border-left: var(--border-width) solid var(--color-border-field);
+  border-top: 3px solid var(--color-accent);
+}
+
+.zone--ram .mount--free {
+  border: var(--border-width) dashed var(--color-border);
+  border-top: 3px dashed var(--color-border-strong);
+}
+
+.zone--ram .mount__name {
+  writing-mode: vertical-rl;
+  max-height: 5.4rem;
+}
+
+.zone--ram .mount__spec {
+  writing-mode: vertical-rl;
+  color: var(--color-text-subtle);
+  font-size: 0.58rem;
+}
+
+.zone--ram .mount__label {
+  writing-mode: vertical-rl;
+}
+
+.zone--hdd .mount {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.zone--hdd .mount--free {
+  padding: 0.35rem 0.55rem;
+}
+
+.zone--hdd .mount__name {
+  flex: 1 1 auto;
+}
+
+.zone--net .mount {
+  min-width: 8rem;
+}
+

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { bankApi, financesApi, type BankAccess } from '../../utils/api';
 import { messageFrom } from '../../utils/errors';
@@ -22,13 +22,22 @@ type Bank = { id: number; name: string };
  * La sesión vive en memoria y se pierde al cambiar de máquina, como cerrar la pestaña de un
  * banco de verdad.
  */
-export function useBankSession(bank: Bank | null) {
+export function useBankSession(bank: Bank | null, ip: number) {
   const [holder, setHolder] = useState<string | null>(null);
   const session = useRef<{ access: BankAccess; pin: string } | null>(null);
 
   // Lo último que se le mandó a la página. Cambiar de sección reemplaza el documento y se
   // lleva por delante lo rellenado, así que hay que poder volver a ponerlo.
   const painted = useRef<SiteFill | null>(null);
+
+  // La banca pertenece a la pestaÃ±a de la mÃ¡quina, no a la organizaciÃ³n. Dos IPs del
+  // mismo banco pueden servir la misma web, pero saltar entre ellas equivale a abrir una
+  // pestaÃ±a nueva y nunca debe conservar credenciales ni saldo ya pintado.
+  useEffect(() => {
+    session.current = null;
+    painted.current = null;
+    setHolder(null);
+  }, [ip]);
 
   const handle = useCallback(
     async (message: SiteMessage, reply: (fill: SiteFill) => void) => {
@@ -146,12 +155,19 @@ export function useBankSession(bank: Bank | null) {
             source: SITE_FILL,
             values: { ...shown(open.access), status: `${rows.length} movimientos.` },
             lists: {
-              movements: rows.map((one) => ({
+              movements: rows.length
+                ? rows.map((one) => ({
                 amount: `${one.amount > 0 ? '+' : ''}${formatMoney(one.amount)}`,
                 concept: one.concept || 'sin concepto',
                 balance: formatMoney(one.balance),
                 other_account: one.other_account ? String(one.other_account) : '—',
-              })),
+                  }))
+                : [{
+                    amount: '-',
+                    concept: 'Sin movimientos todavia.',
+                    balance: formatMoney(open.access.cash),
+                    other_account: '-',
+                  }],
             },
           });
         }
@@ -166,9 +182,10 @@ export function useBankSession(bank: Bank | null) {
 
   /** Vuelve a pintar lo que la sesión ya sabía, en la página que acaba de cargar. */
   const restore = useCallback((reply: (fill: SiteFill) => void) => {
-    if (painted.current) {
-      reply(painted.current);
-    }
+    reply(painted.current ?? {
+      source: SITE_FILL,
+      session: session.current !== null,
+    });
   }, []);
 
   return { holder, handle, restore };

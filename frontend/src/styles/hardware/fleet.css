@@ -1,0 +1,186 @@
+.machine__rename {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.machine__rename input {
+  flex: 0 1 12rem;
+  padding: 0.22rem 0.5rem;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-accent-dim);
+}
+
+.machine__rename input:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.machine__rename button {
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.66rem;
+}
+
+.machine__act {
+  margin: 0;
+  padding: 0.16rem 0.45rem;
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+  border-color: transparent;
+}
+
+.machine__act::before,
+.machine__act::after {
+  content: none;
+}
+
+.machine__act:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: var(--color-hover);
+  border-color: var(--color-border-strong);
+}
+
+.machine__act--drop:hover:not(:disabled) {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.machine__act:disabled {
+  color: var(--color-text-subtle);
+}
+
+.fleet__count {
+  color: var(--color-accent);
+  font-size: 0.7rem;
+}
+
+.fleet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.fleet__bays {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.fleet__bay {
+  flex: 1 1 0;
+  height: 2.1rem;
+  background: transparent;
+  border: var(--border-width) dashed var(--color-border-strong);
+}
+
+.fleet__bay.is-taken {
+  background: var(--color-surface-raised);
+  border: var(--border-width) solid var(--color-accent-dim);
+  border-left: 3px solid var(--color-accent);
+}
+
+.fleet__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.fleet__name {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.fleet__name input {
+  padding: 0.3rem 0.5rem;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+}
+
+.fleet__name input:focus-visible {
+  outline: none;
+  border-color: var(--color-accent-dim);
+}
+
+.fleet__price {
+  color: var(--color-highlight);
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fleet__form button {
+  margin: 0;
+}
+
+.fleet__full {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+}
+
+.fleet__hint {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+
+.piece {
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.piece__pick.is-open {
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.piece__targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.3rem 0 0.5rem;
+  list-style: none;
+}
+
+.piece__targets button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  margin: 0;
+  padding: 0.28rem 0.55rem;
+  text-align: left;
+}
+
+.piece__target {
+  color: inherit;
+  font-size: 0.72rem;
+}
+
+.piece__targets small {
+  color: var(--color-text-subtle);
+  font-size: 0.6rem;
+}
+
+.piece__targets button:hover small {
+  color: inherit;
+}

@@ -24,7 +24,10 @@ pub async fn find_for_user(
             time_ideal,
             time_worked,
             is_paused,
-            completed_at
+            completed_at,
+            status,
+            result_code,
+            result_message
         FROM processes
         WHERE creator_id = $1
         ORDER BY time_start DESC

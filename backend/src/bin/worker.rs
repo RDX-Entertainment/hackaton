@@ -85,13 +85,41 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             23 => analyze_effect(pool, user, victim, is_npc, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
+            90 => modular_operation_effect(pool, pid).await?,
             _ => {}
         }
-        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now() WHERE pid=$1")
+        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action=90 THEN status ELSE 'succeeded' END WHERE pid=$1")
             .bind(pid)
             .execute(pool)
             .await?;
     }
+    Ok(())
+}
+
+/// An operation uses the resource and attribute snapshot recorded when it was started.
+/// Later research cannot rewrite the outcome of an operation already in progress.
+async fn modular_operation_effect(pool: &sqlx::PgPool, pid: i64) -> Result<(), sqlx::Error> {
+    let row = sqlx::query("SELECT (process_payload->>'attack_effectiveness')::integer attack, (process_payload->>'attack_penetration')::integer penetration, (process_payload->>'attack_stealth')::integer stealth, (process_payload->>'defense_effectiveness')::integer defense, (process_payload->>'defense_detection')::integer detection, (process_payload->>'defense_removal')::integer removal FROM processes WHERE pid=$1")
+        .bind(pid).fetch_one(pool).await?;
+    let attack: i32 = row.get("attack");
+    let penetration: i32 = row.get("penetration");
+    let stealth: i32 = row.get("stealth");
+    let defense: i32 = row.get("defense");
+    let detection: i32 = row.get("detection");
+    let removal: i32 = row.get("removal");
+    let score = attack + penetration;
+    let resistance = defense + detection / 2 + removal / 3;
+    let detected = stealth < detection;
+    let (status, code, message) = if score >= resistance {
+        if detected { ("succeeded", "SUCCEEDED_DETECTED", "operation completed, but the defender detected it") }
+        else { ("succeeded", "SUCCEEDED_STEALTH", "operation completed without detection") }
+    } else if detected {
+        ("failed", "BLOCKED_DETECTED", "defender blocked and detected the operation")
+    } else {
+        ("failed", "BLOCKED", "defender resisted the operation")
+    };
+    sqlx::query("UPDATE processes SET status=$2,result_code=$3,result_message=$4 WHERE pid=$1")
+        .bind(pid).bind(status).bind(code).bind(message).execute(pool).await?;
     Ok(())
 }
 

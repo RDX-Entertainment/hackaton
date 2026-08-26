@@ -138,7 +138,9 @@ const RUNTIME = `
 
       for (var w = 0; w < marked.length; w++) {
         var quiere = marked[w].dataset.when === 'in';
-        marked[w].style.display = quiere === data.session ? '' : 'none';
+        // La regla base oculta la vista privada antes de conocer el estado. Al entrar hay
+        // que sobrescribirla en linea: quitar el estilo deja que CSS la siga ocultando.
+        marked[w].style.display = quiere === data.session ? 'block' : 'none';
       }
     }
 

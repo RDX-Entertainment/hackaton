@@ -14,6 +14,7 @@ mod process;
 mod social;
 mod pages;
 mod software;
+mod software_system;
 mod state;
 mod user;
 mod wiki;
@@ -93,6 +94,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(user::handlers::configure)
                     .configure(wiki::handlers::configure)
                     .configure(software::handlers::configure)
+                    .configure(software_system::handlers::configure)
                     .configure(internet::handlers::configure)
                     .configure(news::handlers::configure)
                     .configure(hardware::handlers::configure)

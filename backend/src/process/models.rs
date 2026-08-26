@@ -12,4 +12,7 @@ pub struct ProcessRow {
     pub time_worked: i32,
     pub is_paused: bool,
     pub completed_at: Option<DateTime<Utc>>,
+    pub status: String,
+    pub result_code: Option<String>,
+    pub result_message: Option<String>,
 }

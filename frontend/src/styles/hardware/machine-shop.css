@@ -1,0 +1,113 @@
+.shop__tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.shop__tabs button {
+  margin: 0;
+  padding: 0.16rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  border-color: transparent;
+}
+
+.shop__tabs button::before,
+.shop__tabs button::after {
+  content: none;
+}
+
+.shop__tabs button:hover {
+  color: var(--color-accent);
+  background: var(--color-hover);
+  border-color: var(--color-border-strong);
+}
+
+.shop__tabs button.is-active {
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.shop {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.shop th {
+  padding: 0.3rem 0.6rem 0.5rem 0;
+  color: var(--color-text-subtle);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.shop td {
+  padding: 0.3rem 0.6rem 0.3rem 0;
+  color: var(--color-text-nav);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.shop tr:hover td {
+  color: var(--color-text);
+}
+
+.shop td button {
+  margin: 0;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.68rem;
+}
+
+.shop__chipset {
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+}
+
+.tier {
+  padding: 0.08rem 0.4rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: var(--border-width) solid currentcolor;
+}
+
+.tier--domestica {
+  color: var(--color-text-muted);
+}
+
+.tier--gaming {
+  color: var(--color-accent);
+}
+
+.tier--server {
+  color: var(--color-highlight);
+}
+
+.tier--industrial {
+  color: var(--color-danger);
+}
+
+@media (max-width: 900px) {
+  .machine__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board__deck {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'cpu'
+      'ram'
+      'hdd'
+      'net';
+  }
+
+  .board__trace {
+    display: none;
+  }
+
+  .folder__list {
+    padding-left: 1rem;
+  }
+}
