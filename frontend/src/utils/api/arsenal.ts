@@ -4,7 +4,7 @@
  * No sustituye a `software.ts`: aquel lista los ficheros del disco y los instala, y sigue
  * siendo el que carga en memoria lo que aquí se compila.
  */
-import { get, post } from './client';
+import { get, post, put } from './client';
 import type {
   Blueprint,
   Capability,
@@ -12,6 +12,7 @@ import type {
   OperationStarted,
   Program,
   ResearchModule,
+  ProgramStats,
 } from './types';
 
 export function listCapabilities(): Promise<Capability[]> {
@@ -46,6 +47,9 @@ export function createBlueprint(
 export function compile(blueprintId: number): Promise<CompilationQueued> {
   return post<CompilationQueued>('/software-system/compile', { blueprint_id: blueprintId });
 }
+
+export function listLabPrograms(): Promise<Program[]> { return get<Program[]>('/software-lab/programs'); }
+export function tuneProgram(softwareId: number, stats: ProgramStats): Promise<void> { return put<void>(`/software-lab/programs/${softwareId}`, { stats }); }
 
 /**
  * Lanzar una operación encola un proceso; el worker lo resuelve al vencer, y es entonces

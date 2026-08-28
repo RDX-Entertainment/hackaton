@@ -38,6 +38,10 @@ pub fn configure(
         )
         .route(
             "/processes/{id}",
+            web::get().to(process),
+        )
+        .route(
+            "/processes/{id}",
             web::delete().to(delete_process),
         )
         .route(
@@ -48,6 +52,21 @@ pub fn configure(
             "/processes/{id}/resume",
             web::post().to(resume_process),
         );
+}
+
+pub async fn process(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::process(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::Ok().json(response))
 }
 
 //

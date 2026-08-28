@@ -7,6 +7,7 @@ import { OrganizationsPage } from '../pages/admin/OrganizationsPage';
 import { SiteActionsPage } from '../pages/admin/SiteActionsPage';
 import { SitesPage } from '../pages/admin/SitesPage';
 import { UsersPage } from '../pages/admin/UsersPage';
+import { SoftwareAdminPage } from '../pages/admin/SoftwareAdminPage';
 
 export function AdminShell() {
   return (
@@ -22,6 +23,7 @@ export function AdminShell() {
             <Route path="sitios" element={<SitesPage />} />
             <Route path="acciones" element={<SiteActionsPage />} />
             <Route path="usuarios" element={<UsersPage />} />
+            <Route path="software" element={<SoftwareAdminPage />} />
           </Routes>
         </div>
       </main>

@@ -78,6 +78,7 @@ pub struct InternetNavigateResponse {
 
     pub down: bool,
     pub access: bool,
+    pub access_as: Option<String>,
     pub bookmarked: bool,
     pub scanned: bool,
     pub analysis: Option<HardwareAnalysisResponse>,

@@ -75,6 +75,11 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         // Internet::hack writes "npc" or "player" into info when it starts the process,
         // which is what the legacy carried in its isNPC flag.
         let is_npc = p.get::<String, _>("info") == "npc";
+        let exploit_succeeded = if action == 16 {
+            Some(exploit_effect(pool, user, victim, is_npc).await?)
+        } else {
+            None
+        };
         match action {
             1 | 2 => transfer_effect(pool, user, victim, is_npc, soft, action).await?,
             3 => delete_effect(pool, user, victim, is_npc, soft).await?,
@@ -85,7 +90,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
-            16 => exploit_effect(pool, user, victim, is_npc).await?,
+            16 => {},
             17 => research_effect(pool, user, soft).await?,
             18 => park_effect(pool, user, soft).await?,
             19 => unpark_effect(pool, user, soft).await?,
@@ -97,7 +102,13 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             91 => compilation_effect(pool, pid, user).await?,
             _ => {}
         }
-        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (90,91) THEN status ELSE 'succeeded' END WHERE pid=$1")
+        if exploit_succeeded == Some(false) {
+            sqlx::query("UPDATE processes SET status='failed',result_code='EXPLOIT_BLOCKED',result_message='El firewall rechazó tus exploits instalados' WHERE pid=$1")
+                .bind(pid)
+                .execute(pool)
+                .await?;
+        }
+        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (16,90,91) THEN status ELSE 'succeeded' END WHERE pid=$1")
             .bind(pid)
             .execute(pool)
             .await?;
@@ -814,9 +825,9 @@ async fn exploit_effect(
     user: i64,
     victim: i64,
     victim_is_npc: bool,
-) -> Result<(), sqlx::Error> {
+) -> Result<bool, sqlx::Error> {
     let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
-        return Ok(());
+        return Ok(false);
     };
     let firewall = best_running(pool, victim, victim_is_npc, 4).await?;
     let ftp = best_running(pool, user, false, 13).await?;
@@ -826,7 +837,7 @@ async fn exploit_effect(
         (true, false) => "ftp",
         (false, true) => "ssh",
         // Neither exploit clears the firewall, so nothing opens.
-        (false, false) => return Ok(()),
+        (false, false) => return Ok(false),
     };
     // ALREADY_LISTED: the legacy refused when the machine was already held under a real
     // password, and refused a repeat exploit that would not improve on the user it granted.
@@ -836,7 +847,7 @@ async fn exploit_effect(
             sqlx::query("UPDATE compromised_lists SET login=$3,hacked_at=now() WHERE user_id=$1 AND ip=$2")
                 .bind(user).bind(ip).bind(login).execute(pool).await?;
         }
-        Some(_) => return Ok(()),
+        Some(_) => return Ok(false),
         None => {
             sqlx::query("INSERT INTO compromised_lists(user_id,ip,login,password) VALUES($1,$2,$3,'exploited')")
                 .bind(user).bind(ip).bind(login).execute(pool).await?;
@@ -854,7 +865,7 @@ async fn exploit_effect(
         add_log(pool, victim, victim_is_npc, &format!("[{}] logged in as {login}", dotted(attacker_ip))).await?;
         add_log(pool, user, false, &format!("localhost logged in to [{}] as {login}", dotted(ip))).await?;
     }
-    Ok(())
+    Ok(true)
 }
 
 /// Case 18 of completeProcess. Parking a file on the external drive, which is the point of

@@ -9,6 +9,23 @@ export type AdminUser = {
   components: number;
 };
 
+export type AdminSoftwareInput = {
+  name: string;
+  soft_type: number;
+  version: number;
+  size: number;
+  ram: number;
+  running: boolean;
+};
+
+export type AdminCreateUserInput = {
+  username: string;
+  email?: string;
+  password: string;
+  kit_id?: number;
+  admin: boolean;
+};
+
 export type Site = {
   kind: 'npc' | 'player';
   id: number;
@@ -71,4 +88,3 @@ export type SiteGrant = {
   npc_id: number | null;
   target_name: string | null;
 };
-

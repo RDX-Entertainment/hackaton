@@ -5,6 +5,7 @@ import { BlueprintForge } from '../components/arsenal/BlueprintForge';
 import { OperationLauncher } from '../components/arsenal/OperationLauncher';
 import { StatSheet } from '../components/arsenal/StatSheet';
 import { EmptyNotice } from '../components/Notice';
+import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import {
   arsenalApi,
@@ -45,6 +46,7 @@ export function ArsenalPage() {
   const [disenos, setDisenos] = useState<Blueprint[]>([]);
   const [jugadores, setJugadores] = useState<RankedPlayer[]>([]);
   const [maquinas, setMaquinas] = useState<Machine[]>([]);
+  const [compilacionActiva, setCompilacionActiva] = useState<{ blueprintId: number; processId: number }>();
 
   const cargar = useCallback(() => {
     arsenalApi.listCapabilities().then(setCapacidades).catch(() => setCapacidades([]));
@@ -85,6 +87,7 @@ export function ArsenalPage() {
   const compilar = async (diseno: Blueprint) => {
     try {
       const hecho = await arsenalApi.compile(diseno.id);
+      setCompilacionActiva({ blueprintId: diseno.id, processId: hecho.process_id });
       status.report(
         `Compilación de «${hecho.name}» encolada (${hecho.seconds} s). ` +
           'El fichero aparecerá al terminar; después instálalo desde Software.',
@@ -161,6 +164,9 @@ export function ArsenalPage() {
             <StatSheet stats={diseno.projected} capacidad={capacidad} />
 
             <button onClick={() => void compilar(diseno)}>Compilar</button>
+            {compilacionActiva?.blueprintId === diseno.id && (
+              <ProcessProgress processId={compilacionActiva.processId} onFinished={cargar} />
+            )}
           </article>
         ))}
 

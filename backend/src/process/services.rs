@@ -1,3 +1,5 @@
+use std::env;
+
 use sqlx::PgPool;
 
 use crate::error::ApiError;
@@ -52,6 +54,17 @@ pub async fn processes(
     Ok(processes)
 }
 
+pub async fn process(
+    pool: &PgPool,
+    user_id: i64,
+    process_id: i64,
+) -> Result<ProcessResponse, ApiError> {
+    repo::find_one_for_user(pool, process_id, user_id)
+        .await?
+        .map(ProcessResponse::from)
+        .ok_or(ApiError::NotFound)
+}
+
 //
 // ==============================
 // START
@@ -64,7 +77,7 @@ const INFO_MAX: usize = 30;
 /// Cuanto tarda cada accion. El legado las repartia en tres tramos segun lo costosa que
 /// fuera la operacion.
 fn duration_of(action: u8) -> i32 {
-    match action {
+    let seconds = match action {
         1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 13
         | 14 => 30,
         10 | 11 | 12 | 15 | 16 | 17 | 22 | 23 => {
@@ -74,7 +87,18 @@ fn duration_of(action: u8) -> i32 {
             120
         }
         _ => 60,
-    }
+    };
+    duration_for(seconds)
+}
+
+/// El entorno de desarrollo puede reducir todas las colas a 3--5 segundos sin cambiar la
+/// formula real de cada accion. Produccion simplemente no define esta variable.
+pub fn duration_for(seconds: i32) -> i32 {
+    env::var("PROCESS_TEST_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<i32>().ok())
+        .filter(|value| (3..=5).contains(value))
+        .unwrap_or(seconds)
 }
 
 pub async fn start(

@@ -34,6 +34,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { path: 'internet', label: 'Internet' },
       { path: 'software', label: 'Software' },
       { path: 'arsenal', label: 'Arsenal' },
+      { path: 'lab', label: 'Lab' },
       { path: 'hardware', label: 'Hardware' },
       { path: 'processes', label: 'Processes' },
     ],

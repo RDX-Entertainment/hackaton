@@ -6,6 +6,7 @@ import { Meter } from '../components/software/Meter';
 import { contextoDe, discoEnUso, ramEnUso } from '../components/software/rules';
 import { WriteFileForm } from '../components/software/WriteFileForm';
 import { EmptyNotice } from '../components/Notice';
+import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import {
   hardwareApi,
@@ -59,6 +60,7 @@ export function SoftwarePage() {
   const [tipos, setTipos] = useState<SoftwareType[]>([]);
   const [maquinas, setMaquinas] = useState<Machine[]>([]);
   const [compilaciones, setCompilaciones] = useState<Compilation[]>([]);
+  const [processId, setProcessId] = useState<number>();
 
   const cargar = useCallback(() => {
     softwareApi.listSoftware().then(setFicheros).catch(() => setFicheros([]));
@@ -107,6 +109,7 @@ export function SoftwarePage() {
   const encolar = async (accion: number, label: string, id: number) => {
     try {
       const tarea = await processesApi.startProcess(accion, undefined, id);
+      setProcessId(tarea.id);
       status.report(`${label}: tarea #${tarea.id}, lista en ${tarea.seconds} s.`);
       cargar();
     } catch (error) {
@@ -117,6 +120,7 @@ export function SoftwarePage() {
   const investigar = async (id: number) => {
     try {
       const tarea = await researchApi.startResearch(id);
+      setProcessId(tarea.process_id);
       status.report(`Investigar: tarea #${tarea.process_id}, lista en ${tarea.seconds} s.`);
       cargar();
     } catch (error) {
@@ -164,6 +168,7 @@ export function SoftwarePage() {
       </div>
 
       <StatusMessage text={status.message} as="block" />
+      {processId && <ProcessProgress processId={processId} onFinished={cargar} />}
 
       <section className="swgroup">
         <h3>

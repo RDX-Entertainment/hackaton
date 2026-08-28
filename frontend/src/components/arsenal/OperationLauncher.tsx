@@ -3,6 +3,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { arsenalApi, type Program, type RankedPlayer } from '../../utils/api';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 import { EmptyNotice } from '../Notice';
+import { ProcessProgress } from '../ProcessProgress';
 import { StatusMessage } from '../StatusMessage';
 
 type OperationLauncherProps = {
@@ -26,6 +27,7 @@ export function OperationLauncher({ programas, jugadores, yo, onLanzada }: Opera
 
   const [capacidad, setCapacidad] = useState('');
   const [objetivo, setObjetivo] = useState('');
+  const [processId, setProcessId] = useState<number>();
 
   // Una operación sale de un programa corriendo, y solo los atacantes salen a por alguien.
   const armas = useMemo(
@@ -65,6 +67,7 @@ export function OperationLauncher({ programas, jugadores, yo, onLanzada }: Opera
 
     try {
       const empezada = await arsenalApi.startOperation(elegida, Number(contra));
+      setProcessId(empezada.process_id);
       status.report(
         `Encolada como tarea #${empezada.process_id}; termina en ${empezada.seconds} s. ` +
           'El resultado sale en Procesos cuando el worker la resuelva.',
@@ -114,6 +117,7 @@ export function OperationLauncher({ programas, jugadores, yo, onLanzada }: Opera
 
       <button>Lanzar</button>
       <StatusMessage text={status.message} />
+      {processId && <ProcessProgress processId={processId} onFinished={onLanzada} />}
 
       {arma?.action_kind === 'infect' && (
         <p className="muted">

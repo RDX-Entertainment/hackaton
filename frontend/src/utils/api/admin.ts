@@ -1,6 +1,8 @@
 import { del, get, post, put } from './client';
 import type {
   ActionInfo,
+  AdminSoftwareInput,
+  AdminCreateUserInput,
   AdminUser,
   BankAccount,
   SiteGrant,
@@ -20,6 +22,7 @@ import type {
   Part,
   PartInput,
   Site,
+  OwnedFile,
 } from './types';
 
 export function listParts(): Promise<Part[]> {
@@ -64,9 +67,17 @@ export function listUsers(): Promise<AdminUser[]> {
   return get<AdminUser[]>('/admin/users');
 }
 
+export function createUser(input: AdminCreateUserInput): Promise<{ id: number }> { return post<{ id: number }>('/admin/users', input); }
+
 export function setAdminFlag(id: number, admin: boolean): Promise<void> {
   return put<void>(`/admin/users/${id}/admin`, { admin });
 }
+
+export function listUserSoftware(user: number): Promise<OwnedFile[]> { return get<OwnedFile[]>(`/admin/users/${user}/software`); }
+export function createUserSoftware(user: number, input: AdminSoftwareInput): Promise<{ id: number }> { return post<{ id: number }>(`/admin/users/${user}/software`, input); }
+export function editUserSoftware(user: number, software: number, input: AdminSoftwareInput): Promise<void> { return put<void>(`/admin/users/${user}/software/${software}`, input); }
+export function removeUserSoftware(user: number, software: number): Promise<void> { return del<void>(`/admin/users/${user}/software/${software}`); }
+export function setUserSoftwareRunning(user: number, software: number, running: boolean): Promise<void> { return put<void>(`/admin/users/${user}/software/${software}/running`, { running }); }
 
 export function listChipsets(): Promise<Chipset[]> {
   return get<Chipset[]>('/admin/chipsets');

@@ -137,6 +137,10 @@
   margin-top: 1.2rem;
 }
 
+.page__block--first {
+  margin-top: 0;
+}
+
 .page__block h4 {
   margin: 0 0 0.5rem;
   color: var(--color-text-muted);
@@ -517,4 +521,3 @@
     flex-direction: column;
   }
 }
-

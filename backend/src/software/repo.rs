@@ -426,3 +426,91 @@ pub async fn create_research_process(
     .fetch_one(pool)
     .await
 }
+
+pub async fn user_exists(pool: &PgPool, user_id: i64) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+}
+
+pub async fn create_admin_software(
+    pool: &PgPool,
+    user_id: i64,
+    name: &str,
+    version: i32,
+    size: i32,
+    ram: i32,
+    soft_type: i16,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        "INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
+    )
+    .bind(user_id)
+    .bind(name)
+    .bind(version)
+    .bind(size)
+    .bind(ram)
+    .bind(soft_type)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn update_admin_software(
+    pool: &PgPool,
+    user_id: i64,
+    software_id: i64,
+    name: &str,
+    version: i32,
+    size: i32,
+    ram: i32,
+    soft_type: i16,
+) -> Result<bool, sqlx::Error> {
+    Ok(sqlx::query(
+        "UPDATE software SET soft_name=$3,soft_version=$4,soft_size=$5,soft_ram=$6,soft_type=$7 WHERE id=$1 AND user_id=$2 AND NOT is_npc",
+    )
+    .bind(software_id)
+    .bind(user_id)
+    .bind(name)
+    .bind(version)
+    .bind(size)
+    .bind(ram)
+    .bind(soft_type)
+    .execute(pool)
+    .await?
+    .rows_affected() > 0)
+}
+
+pub async fn delete_admin_software(pool: &PgPool, user_id: i64, software_id: i64) -> Result<bool, sqlx::Error> {
+    sqlx::query("DELETE FROM software_running WHERE soft_id=$1")
+        .bind(software_id)
+        .execute(pool)
+        .await?;
+    Ok(sqlx::query("DELETE FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc")
+        .bind(software_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?
+        .rows_affected() > 0)
+}
+
+pub async fn set_admin_software_running(
+    pool: &PgPool,
+    user_id: i64,
+    software_id: i64,
+    running: bool,
+) -> Result<bool, sqlx::Error> {
+    let owned: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc)")
+        .bind(software_id)
+        .bind(user_id)
+        .fetch_one(pool)
+        .await?;
+    if !owned { return Ok(false); }
+    if running {
+        sqlx::query("INSERT INTO software_running(soft_id,user_id,is_npc) VALUES($1,$2,false) ON CONFLICT(soft_id) DO UPDATE SET user_id=EXCLUDED.user_id,is_npc=false")
+            .bind(software_id).bind(user_id).execute(pool).await?;
+    } else {
+        sqlx::query("DELETE FROM software_running WHERE soft_id=$1").bind(software_id).execute(pool).await?;
+    }
+    Ok(true)
+}

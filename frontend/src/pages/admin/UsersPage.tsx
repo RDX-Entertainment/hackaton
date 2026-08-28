@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { AccountsBoard } from '../../components/admin/AccountsBoard';
 import { AdminCard } from '../../components/admin/AdminCard';
 import { Loading } from '../../components/Notice';
 import { StatusMessage } from '../../components/StatusMessage';
-import { adminApi, type AdminUser, type BankAccount } from '../../utils/api';
+import { adminApi, type AdminCreateUserInput, type AdminUser, type BankAccount, type Kit } from '../../utils/api';
 import { formatCount, formatDate, formatMoney } from '../../utils/format';
 import { formatIp } from '../../utils/ip';
 import { useStatusMessage } from '../../utils/useStatusMessage';
@@ -53,6 +53,7 @@ export function UsersPage() {
     <>
       <h2>Usuarios</h2>
       <StatusMessage text={status.message} as="block" />
+      <UserCreator onCreated={load} />
 
       <div className="table-wrap users-table">
         <table>
@@ -106,6 +107,39 @@ export function UsersPage() {
 
       {selected && <UserAccounts user={selected} busy={busy} onRun={run} />}
     </>
+  );
+}
+
+function UserCreator({ onCreated }: { onCreated: () => Promise<void> }) {
+  const status = useStatusMessage();
+  const [kits, setKits] = useState<Kit[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<AdminCreateUserInput>({ username: '', email: '', password: '', kit_id: undefined, admin: false });
+
+  useEffect(() => { adminApi.listKits().then(setKits).catch(status.reportError); }, [status.reportError]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await adminApi.createUser({ ...draft, email: draft.email || undefined, kit_id: draft.kit_id || undefined });
+      setDraft({ username: '', email: '', password: '', kit_id: undefined, admin: false });
+      status.report('Cuenta creada.');
+      await onCreated();
+    } catch (error) { status.reportError(error); } finally { setBusy(false); }
+  };
+
+  return (
+    <form className="compose" onSubmit={submit}>
+      <h3>Crear cuenta</h3>
+      <label>Usuario<input required maxLength={15} value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })} /></label>
+      <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
+      <label>Contraseña<input required minLength={8} type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} /></label>
+      <label>Kit inicial<select value={draft.kit_id ?? ''} onChange={(event) => setDraft({ ...draft, kit_id: event.target.value ? Number(event.target.value) : undefined })}><option value="">kit por defecto</option>{kits.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>)}</select></label>
+      <label><input type="checkbox" checked={draft.admin} onChange={(event) => setDraft({ ...draft, admin: event.target.checked })} /> Administrador</label>
+      <button disabled={busy}>crear usuario</button>
+      <StatusMessage text={status.message} />
+    </form>
   );
 }
 

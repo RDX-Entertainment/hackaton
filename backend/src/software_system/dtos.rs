@@ -79,6 +79,11 @@ pub struct StartOperationRequest {
     pub capability: String,
     pub target_user_id: i64,
 }
+
+#[derive(Deserialize)]
+pub struct TuneProgramRequest {
+    pub stats: Stats,
+}
 #[derive(Serialize)]
 pub struct OperationStarted {
     pub process_id: i64,

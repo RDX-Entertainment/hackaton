@@ -12,6 +12,7 @@ use crate::{
 use super::{
     dtos::{
         AdminFlagUpdate,
+        AdminCreateUserRequest,
         CertificationStartRequest,
         CreateCompromisedListEntryRequest,
         ProfileUpdate,
@@ -379,6 +380,10 @@ pub fn configure_admin(
             web::get().to(admin_users),
         )
         .route(
+            "/users",
+            web::post().to(admin_create_user),
+        )
+        .route(
             "/users/{id}/admin",
             web::put().to(admin_set_flag),
         );
@@ -412,4 +417,47 @@ pub async fn admin_set_flag(
     .await?;
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn admin_create_user(
+    state: web::Data<AppState>,
+    _: Ctx,
+    input: web::Json<AdminCreateUserRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let input = input.into_inner();
+
+    if let Some(kit_id) = input.kit_id {
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM hardware_kits WHERE id=$1)")
+            .bind(kit_id)
+            .fetch_one(&state.pool)
+            .await?;
+        if !exists { return Err(ApiError::BadRequest("unknown kit".into())); }
+    }
+
+    let session = crate::auth::services::register(
+        &state.pool,
+        &state.jwt_secret,
+        crate::auth::dtos::RegisterRequest {
+            username: input.username,
+            email: input.email,
+            password: input.password,
+        },
+    ).await?;
+    let user_id = session.user.id;
+
+    if let Some(kit_id) = input.kit_id {
+        let mut tx = state.pool.begin().await?;
+        sqlx::query("DELETE FROM hardware_components WHERE user_id=$1 AND NOT is_npc").bind(user_id).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO hardware_components(part_id,user_id,installed_in) SELECT ki.part_id,$1,(SELECT server_id FROM hardware WHERE user_id=$1 AND NOT is_npc ORDER BY server_id LIMIT 1) FROM hardware_kit_items ki CROSS JOIN generate_series(1,ki.amount) WHERE ki.kit_id=$2")
+            .bind(user_id).bind(kit_id).execute(&mut *tx).await?;
+        sqlx::query("UPDATE hardware h SET cpu=COALESCE(s.cpu,0),ram=COALESCE(s.ram,0),hdd=COALESCE(s.hdd,0),net=COALESCE(s.net,0) FROM (SELECT c.installed_in AS server_id,sum(k.power) FILTER (WHERE k.kind='cpu') AS cpu,sum(k.power) FILTER (WHERE k.kind='ram') AS ram,sum(k.power) FILTER (WHERE k.kind='hdd') AS hdd,sum(k.power) FILTER (WHERE k.kind='net') AS net FROM hardware_components c JOIN hardware_parts k ON k.id=c.part_id WHERE c.user_id=$1 AND c.installed_in IS NOT NULL GROUP BY c.installed_in) s WHERE h.server_id=s.server_id")
+            .bind(user_id).execute(&mut *tx).await?;
+        tx.commit().await?;
+    }
+
+    if input.admin {
+        sqlx::query("UPDATE users SET is_admin=true WHERE id=$1").bind(user_id).execute(&state.pool).await?;
+    }
+
+    Ok(HttpResponse::Created().json(serde_json::json!({ "id": user_id })))
 }

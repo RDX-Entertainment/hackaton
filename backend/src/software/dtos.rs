@@ -176,3 +176,20 @@ pub struct ResearchStartedResponse {
     pub software_id: i64,
     pub seconds: i32,
 }
+
+/// Entrada del panel: a diferencia de la creación normal, el administrador también define
+/// versión y si el programa queda cargado en memoria.
+#[derive(Debug, Deserialize)]
+pub struct AdminSoftwareRequest {
+    pub name: String,
+    pub soft_type: i16,
+    pub version: i32,
+    pub size: i32,
+    pub ram: i32,
+    pub running: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminSoftwareRunningRequest {
+    pub running: bool,
+}

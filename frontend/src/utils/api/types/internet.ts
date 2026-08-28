@@ -40,6 +40,7 @@ export type Remote = {
   type: number;
   down: boolean;
   access: boolean;
+  access_as: string | null;
   bookmarked: boolean;
   scanned: boolean;
   analysis: RemoteAnalysis | null;
@@ -78,4 +79,3 @@ export type Visited = {
   name: string;
   visited_at?: string;
 };
-

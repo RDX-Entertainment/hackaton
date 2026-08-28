@@ -6,6 +6,7 @@ import { Directory } from '../components/internet/Directory';
 import { RemotePage, type RemoteTab } from '../components/internet/RemotePage';
 import { StartPage } from '../components/internet/StartPage';
 import { StatusMessage } from '../components/StatusMessage';
+import { ProcessProgress } from '../components/ProcessProgress';
 import {
   internetApi,
   processesApi,
@@ -40,6 +41,8 @@ export function InternetPage() {
   const [bookmarks, setBookmarks] = useState<Visited[]>([]);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState<number>();
+  const [processId, setProcessId] = useState<number>();
+  const [accessProcessId, setAccessProcessId] = useState<number>();
 
   const loadSides = useCallback(() => {
     internetApi.listTargets().then(setTargets).catch(() => {});
@@ -94,6 +97,8 @@ export function InternetPage() {
         if (record) {
           trail.push(ip);
         }
+
+        return machine;
       } catch (error) {
         setRemote(undefined);
 
@@ -122,10 +127,14 @@ export function InternetPage() {
   };
 
   /** Avisa con el id que haya usado el servidor para la tarea. */
-  const announce = async (work: Promise<Queued>, label: string) => {
+  const announce = async (work: Promise<Queued>, label: string, seeksAccess = false) => {
     try {
       const queued = await work;
       const id = queued.process_id ?? queued.id;
+      if (id) {
+        setProcessId(id);
+        if (seeksAccess) setAccessProcessId(id);
+      }
       status.report(`${label} encolado como tarea #${id}. Ocurre cuando pase el worker.`);
     } catch (error) {
       status.reportError(error);
@@ -155,6 +164,8 @@ export function InternetPage() {
 
     try {
       const result = await internetApi.hack(remote.ip, kind);
+      setProcessId(result.process_id);
+      setAccessProcessId(result.process_id);
       status.report(
         `Tarea #${result.process_id} · tu v${result.attacker_version} contra su ` +
           `v${result.defender_version}. Pasa el worker y vuelve a conectar.`,
@@ -234,6 +245,25 @@ export function InternetPage() {
           />
 
           <StatusMessage text={status.message} as="block" />
+          {processId && (
+            <ProcessProgress
+              processId={processId}
+              onFinished={(process) => {
+                if (!remote) return;
+                void (async () => {
+                  const refreshed = await open(remote.ip, false);
+                  if (processId !== accessProcessId || process.status !== 'succeeded') return;
+
+                  if (refreshed?.access) {
+                    setTab('files');
+                    status.report('Acceso conseguido. El software de la máquina está en Files.');
+                  } else {
+                    status.report('El proceso terminó, pero no consiguió acceso a esta máquina.');
+                  }
+                })();
+              }}
+            />
+          )}
 
           {remote ? (
             <RemotePage
@@ -249,6 +279,7 @@ export function InternetPage() {
                 void announce(
                   processesApi.startProcess(EXPLOIT_ACTION, remote.id, undefined, remote.kind),
                   'Exploit',
+                  true,
                 )
               }
               onAnalyze={() => void announce(internetApi.analyze(remote.ip), 'Análisis')}

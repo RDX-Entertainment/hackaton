@@ -7,6 +7,7 @@ import { FinancesPage } from '../pages/FinancesPage';
 import { HardwarePage } from '../pages/HardwarePage';
 import { InternetPage } from '../pages/InternetPage';
 import { ListPage } from '../pages/ListPage';
+import { LabPage } from '../pages/LabPage';
 import { MailPage } from '../pages/MailPage';
 import { MissionsPage } from '../pages/MissionsPage';
 import { ProcessesPage } from '../pages/ProcessesPage';
@@ -30,6 +31,7 @@ export const PAGE_REGISTRY: Record<string, ComponentType> = {
   finances: FinancesPage,
   hardware: HardwarePage,
   internet: InternetPage,
+  lab: LabPage,
   list: ListPage,
   mail: MailPage,
   missions: MissionsPage,

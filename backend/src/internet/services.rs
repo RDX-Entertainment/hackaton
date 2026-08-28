@@ -183,6 +183,12 @@ pub async fn internet_navigate(
     )
     .await?;
 
+    let access_as = if access {
+        repo::access_login(pool, user_id, ip).await?
+    } else {
+        None
+    };
+
     let bookmarked = repo::is_bookmarked(
         pool,
         user_id,
@@ -219,6 +225,7 @@ pub async fn internet_navigate(
         npc_type: target.npc_type,
         down: target.down,
         access,
+        access_as,
         bookmarked,
         scanned,
         analysis,
@@ -426,6 +433,7 @@ pub async fn internet_hack(
         "player"
     };
 
+    let seconds = crate::process::services::duration_for(HACK_SECONDS);
     let process_id =
         repo::create_hack_process(
             pool,
@@ -433,14 +441,14 @@ pub async fn internet_hack(
             target.id,
             action,
             info,
-            HACK_SECONDS,
+            seconds,
         )
         .await?;
 
     Ok(InternetHackResponse {
         process_id,
         action,
-        seconds: HACK_SECONDS,
+        seconds,
         attacker_version: attacker,
         defender_version: defender,
     })
@@ -505,6 +513,7 @@ pub async fn edit_remote_log(
     };
 
     let mut tx = pool.begin().await?;
+    let seconds = crate::process::services::duration_for(LOG_EDIT_SECONDS);
 
     let process_id =
         repo::create_log_edit_process(
@@ -512,7 +521,7 @@ pub async fn edit_remote_log(
             user_id,
             target.id,
             info,
-            LOG_EDIT_SECONDS,
+            seconds,
         )
         .await?;
 
@@ -530,7 +539,7 @@ pub async fn edit_remote_log(
 
     Ok(LogEditStartedResponse {
         process_id,
-        seconds: LOG_EDIT_SECONDS,
+        seconds,
     })
 }
 
@@ -582,6 +591,7 @@ pub async fn internet_analyze(
         "player"
     };
 
+    let seconds = crate::process::services::duration_for(ANALYZE_SECONDS);
     let process_id =
         repo::create_analyze_process(
             pool,
@@ -589,13 +599,13 @@ pub async fn internet_analyze(
             target.id,
             analyzer.id,
             info,
-            ANALYZE_SECONDS,
+            seconds,
         )
         .await?;
 
     Ok(AnalyzeStartedResponse {
         process_id,
-        seconds: ANALYZE_SECONDS,
+        seconds,
         analyzer_version: analyzer.soft_version,
     })
 }

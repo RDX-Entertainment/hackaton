@@ -8,6 +8,7 @@ use crate::legacy::SOFTWARE_TYPES;
 use super::{
     dtos::{
         DeleteSoftwareStartedResponse,
+        AdminSoftwareRequest,
         NewSoftwareRequest,
         RemoteSoftwareResponse,
         ResearchHistoryResponse,
@@ -267,6 +268,7 @@ pub async fn transfer_software(
         "player"
     };
 
+    let seconds = crate::process::services::duration_for(TRANSFER_SECONDS);
     let process_id =
         repo::create_transfer_process(
             pool,
@@ -275,7 +277,7 @@ pub async fn transfer_software(
             action,
             input.software_id,
             info,
-            TRANSFER_SECONDS,
+            seconds,
         )
         .await?;
 
@@ -283,7 +285,7 @@ pub async fn transfer_software(
         TransferStartedResponse {
             process_id,
             action,
-            seconds: TRANSFER_SECONDS,
+            seconds,
         },
     )
 }
@@ -320,6 +322,7 @@ pub async fn delete_remote_software(
         "player"
     };
 
+    let seconds = crate::process::services::duration_for(TRANSFER_SECONDS);
     let process_id =
         repo::create_delete_process(
             pool,
@@ -327,14 +330,14 @@ pub async fn delete_remote_software(
             target_id,
             software_id,
             info,
-            TRANSFER_SECONDS,
+            seconds,
         )
         .await?;
 
     Ok(
         DeleteSoftwareStartedResponse {
             process_id,
-            seconds: TRANSFER_SECONDS,
+            seconds,
         },
     )
 }
@@ -395,12 +398,13 @@ pub async fn start_research(
         );
     }
 
+    let seconds = crate::process::services::duration_for(RESEARCH_SECONDS);
     let process_id =
         repo::create_research_process(
             pool,
             user_id,
             input.software_id,
-            RESEARCH_SECONDS,
+            seconds,
         )
         .await?;
 
@@ -408,7 +412,50 @@ pub async fn start_research(
         ResearchStartedResponse {
             process_id,
             software_id: input.software_id,
-            seconds: RESEARCH_SECONDS,
+            seconds,
         },
     )
+}
+
+fn validate_admin_software(input: &AdminSoftwareRequest) -> Result<&str, ApiError> {
+    let name = input.name.trim();
+    if name.is_empty() || name.len() > 25 || input.version < 1 || input.size <= 0 || input.ram < 0 {
+        return Err(ApiError::BadRequest("invalid software values".into()));
+    }
+    if !SOFTWARE_TYPES.iter().any(|(_, id)| *id as i16 == input.soft_type) {
+        return Err(ApiError::BadRequest("unknown software type".into()));
+    }
+    Ok(name)
+}
+
+pub async fn admin_software(pool: &PgPool, user_id: i64) -> Result<Vec<SoftwareResponse>, ApiError> {
+    if !repo::user_exists(pool, user_id).await? { return Err(ApiError::NotFound); }
+    software(pool, user_id).await
+}
+
+pub async fn admin_create_software(pool: &PgPool, user_id: i64, input: AdminSoftwareRequest) -> Result<i64, ApiError> {
+    let name = validate_admin_software(&input)?;
+    if !repo::user_exists(pool, user_id).await? { return Err(ApiError::NotFound); }
+    let id = repo::create_admin_software(pool, user_id, name, input.version, input.size, input.ram, input.soft_type).await?;
+    repo::set_admin_software_running(pool, user_id, id, input.running).await?;
+    Ok(id)
+}
+
+pub async fn admin_update_software(pool: &PgPool, user_id: i64, software_id: i64, input: AdminSoftwareRequest) -> Result<(), ApiError> {
+    let name = validate_admin_software(&input)?;
+    if !repo::update_admin_software(pool, user_id, software_id, name, input.version, input.size, input.ram, input.soft_type).await? {
+        return Err(ApiError::NotFound);
+    }
+    repo::set_admin_software_running(pool, user_id, software_id, input.running).await?;
+    Ok(())
+}
+
+pub async fn admin_delete_software(pool: &PgPool, user_id: i64, software_id: i64) -> Result<(), ApiError> {
+    if !repo::delete_admin_software(pool, user_id, software_id).await? { return Err(ApiError::NotFound); }
+    Ok(())
+}
+
+pub async fn admin_set_software_running(pool: &PgPool, user_id: i64, software_id: i64, running: bool) -> Result<(), ApiError> {
+    if !repo::set_admin_software_running(pool, user_id, software_id, running).await? { return Err(ApiError::NotFound); }
+    Ok(())
 }

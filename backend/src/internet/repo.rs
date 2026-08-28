@@ -163,6 +163,22 @@ pub async fn has_access(
     .await
 }
 
+/// The compromised list remembers which account was obtained through an attack. A normal
+/// password login has no row there, so callers can fall back to `root` in that case.
+pub async fn access_login(
+    pool: &PgPool,
+    user_id: i64,
+    ip: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT login FROM compromised_lists WHERE user_id = $1 AND ip = $2 ORDER BY hacked_at DESC NULLS LAST LIMIT 1",
+    )
+    .bind(user_id)
+    .bind(ip)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn is_bookmarked(
     pool: &PgPool,
     user_id: i64,

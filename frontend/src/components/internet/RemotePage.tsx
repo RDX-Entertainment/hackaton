@@ -3,12 +3,14 @@ import { formatIp } from '../../utils/ip';
 import { AccessTab } from './AccessTab';
 import { ForceTab } from './ForceTab';
 import { PublicTab } from './PublicTab';
+import { RemoteFileList } from './RemoteFileList';
 
-export type RemoteTab = 'public' | 'access' | 'force';
+export type RemoteTab = 'public' | 'access' | 'files' | 'force';
 
 const TABS: { key: RemoteTab; label: string; hint: string }[] = [
   { key: 'public', label: 'public', hint: 'lo que enseña a cualquiera' },
   { key: 'access', label: 'acceso', hint: 'ssh: entrar y lo que hay dentro' },
+  { key: 'files', label: 'files', hint: 'software y ficheros de la máquina' },
   { key: 'force', label: 'force', hint: 'romperla por la fuerza' },
 ];
 
@@ -61,7 +63,7 @@ export function RemotePage({
         </span>
 
         <nav className="viewport__tabs" aria-label="Secciones de la máquina">
-          {TABS.map((one) => (
+          {TABS.filter((one) => one.key !== 'files' || remote.access).map((one) => (
             <button
               type="button"
               key={one.key}
@@ -89,14 +91,24 @@ export function RemotePage({
         {tab === 'access' && (
           <AccessTab
             remote={remote}
-            files={files}
             log={log}
             onSignIn={onSignIn}
-            onDownload={onDownload}
-            onDelete={onDelete}
             onRewriteLog={onRewriteLog}
             onWipeLog={onWipeLog}
           />
+        )}
+
+        {tab === 'files' && (
+          <div className="page">
+            {remote.access ? (
+              <section className="page__block page__block--first">
+                <h4>Software encontrado</h4>
+                <RemoteFileList files={files} onDownload={onDownload} onDelete={onDelete} />
+              </section>
+            ) : (
+              <p className="page__note">Necesitas acceso a la máquina para inspeccionar sus ficheros.</p>
+            )}
+          </div>
         )}
 
         {tab === 'force' && (

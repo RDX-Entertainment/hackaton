@@ -1,8 +1,13 @@
 import { del, get, post } from './client';
-import type { ProcessAction, ProcessCommand, ProcessStarted, UnknownRow } from './types';
+import type { ProcessAction, ProcessCommand, ProcessSnapshot, ProcessStarted, UnknownRow } from './types';
 
 export function listProcesses(): Promise<UnknownRow[]> {
   return get<UnknownRow[]>('/processes');
+}
+
+/** Consulta una tarea concreta; se usa para animar solo la accion que el jugador inicio. */
+export function getProcess(id: number): Promise<ProcessSnapshot> {
+  return get<ProcessSnapshot>(`/processes/${id}`);
 }
 
 /**

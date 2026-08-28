@@ -233,3 +233,14 @@ impl From<AdminUserRow> for AdminUserResponse {
 pub struct AdminFlagUpdate {
     pub admin: bool,
 }
+
+/// Alta desde el panel. El kit es opcional: sin él, la cuenta conserva el kit por defecto.
+#[derive(Debug, Deserialize)]
+pub struct AdminCreateUserRequest {
+    pub username: String,
+    pub email: Option<String>,
+    pub password: String,
+    pub kit_id: Option<i64>,
+    #[serde(default)]
+    pub admin: bool,
+}

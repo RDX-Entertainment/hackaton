@@ -39,7 +39,7 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
       value: client
         ? `cliente · ${client}`
         : remote.access
-          ? 'sesión abierta'
+          ? `atacante · ${remote.access_as ?? 'root'}`
           : 'sin sesión',
     },
   ];

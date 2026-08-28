@@ -42,6 +42,29 @@ pub async fn find_for_user(
     .await
 }
 
+/// Leer una sola tarea por id conserva la comprobacion de propiedad de la cola. Es la
+/// consulta ligera que usa la UI mientras una accion acaba de ser lanzada.
+pub async fn find_one_for_user(
+    pool: &PgPool,
+    process_id: i64,
+    user_id: i64,
+) -> Result<Option<ProcessRow>, sqlx::Error> {
+    sqlx::query_as::<_, ProcessRow>(
+        r#"
+        SELECT
+            pid, victim_id, action, info, info_str, time_ideal, time_worked,
+            GREATEST(0, EXTRACT(EPOCH FROM (time_end - now()))::integer) AS seconds_left,
+            is_paused, completed_at, status, result_code, result_message
+        FROM processes
+        WHERE pid = $1 AND creator_id = $2
+        "#,
+    )
+    .bind(process_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
 //
 // ==============================
 // START

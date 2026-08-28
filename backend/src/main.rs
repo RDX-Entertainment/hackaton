@@ -115,6 +115,7 @@ async fn main() -> std::io::Result<()> {
                             .configure(organizations::handlers::configure_admin)
                             .configure(finances::handlers::configure_admin)
                             .configure(internet::handlers::configure_admin)
+                            .configure(software::handlers::configure_admin)
                             .configure(user::handlers::configure_admin),
                     ),
             )

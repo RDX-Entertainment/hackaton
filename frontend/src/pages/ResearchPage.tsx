@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { DataTable } from '../components/DataTable';
 import { StatusMessage } from '../components/StatusMessage';
+import { ProcessProgress } from '../components/ProcessProgress';
 import { researchApi, type UnknownRow } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
@@ -10,6 +11,7 @@ export function ResearchPage() {
 
   const [rows, setRows] = useState<UnknownRow[]>([]);
   const [softwareId, setSoftwareId] = useState('');
+  const [processId, setProcessId] = useState<number>();
 
   const load = useCallback(() => {
     researchApi.listResearch().then(setRows).catch(() => setRows([]));
@@ -24,6 +26,7 @@ export function ResearchPage() {
 
     try {
       const queued = await researchApi.startResearch(Number(softwareId));
+      setProcessId(queued.process_id);
       setSoftwareId('');
       status.report(`Research queued as task #${queued.process_id}. Run the worker to apply it.`);
       load();
@@ -49,6 +52,7 @@ export function ResearchPage() {
 
         <button>Research next version</button>
         <StatusMessage text={status.message} />
+        {processId && <ProcessProgress processId={processId} onFinished={load} />}
       </form>
 
       <DataTable rows={rows} />

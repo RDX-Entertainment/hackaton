@@ -18,6 +18,18 @@ export type ProcessStarted = {
   seconds: number;
 };
 
+export type ProcessSnapshot = {
+  id: number;
+  ideal_seconds: number;
+  worked_seconds: number;
+  seconds_left: number;
+  paused: boolean;
+  completed: boolean;
+  status: string;
+  result_code: string | null;
+  result_message: string | null;
+};
+
 export type ProcessCommand = 'pause' | 'resume' | 'delete';
 export type MissionCommand = 'accept' | 'abort';
 export type HackKind = 'bf' | 'scan';

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { StatusMessage } from '../components/StatusMessage';
+import { ProcessProgress } from '../components/ProcessProgress';
 import {
   processesApi,
   type ProcessAction,
@@ -20,6 +21,7 @@ export function ProcessesPage() {
   const [action, setAction] = useState('1');
   const [victim, setVictim] = useState('');
   const [info, setInfo] = useState('');
+  const [startedId, setStartedId] = useState<number>();
 
   const load = useCallback(() => {
     processesApi.listProcesses().then(setTasks).catch(() => setTasks([]));
@@ -41,12 +43,13 @@ export function ProcessesPage() {
     event.preventDefault();
 
     try {
-      await processesApi.startProcess(
+      const started = await processesApi.startProcess(
         Number(action),
         victim ? Number(victim) : undefined,
         undefined,
         info,
       );
+      setStartedId(started.id);
       setInfo('');
       status.report('Task started. Run the worker to advance queued tasks.');
       load();
@@ -101,9 +104,40 @@ export function ProcessesPage() {
 
         <button>Start task</button>
         <StatusMessage text={status.message} />
+        {startedId && <ProcessProgress processId={startedId} onFinished={load} />}
       </form>
 
-      {tasks.map((task) => {
+      <section className="processes" aria-label="Procesos actuales">
+        <h3>En curso</h3>
+        {tasks.filter((task) => !task.completed).length === 0 && (
+          <p className="muted">No hay procesos activos.</p>
+        )}
+        {tasks.filter((task) => !task.completed).map((task) => {
+          const id = Number(task.id);
+          const actionId = Number(task.action);
+          const actionName = actionId === 91
+            ? 'Compilar software'
+            : actions.find((available) => available.id === actionId)?.name ?? formatCell(task.details || task.action);
+
+          return (
+            <article className="forum-post" key={id}>
+              <b>Tarea #{id} · {actionName}</b>
+              <ProcessProgress processId={id} onFinished={load} />
+              {task.paused ? (
+                <button onClick={() => void command(id, 'resume')}>Resume</button>
+              ) : (
+                <button onClick={() => void command(id, 'pause')}>Pause</button>
+              )}
+              <button onClick={() => void command(id, 'delete')}>Delete</button>
+            </article>
+          );
+        })}
+      </section>
+
+      <details className="processes__completed">
+        <summary>Procesos terminados ({tasks.filter((task) => task.completed).length})</summary>
+        <div className="processes__completed-list">
+          {tasks.filter((task) => task.completed).map((task) => {
         const id = Number(task.id);
         const actionId = Number(task.action);
         const actionName = actionId === 91
@@ -142,19 +176,11 @@ export function ProcessesPage() {
               </p>
             )}
 
-            {!task.completed && (
-              <>
-                {task.paused ? (
-                  <button onClick={() => void command(id, 'resume')}>Resume</button>
-                ) : (
-                  <button onClick={() => void command(id, 'pause')}>Pause</button>
-                )}
-                <button onClick={() => void command(id, 'delete')}>Delete</button>
-              </>
-            )}
           </article>
         );
-      })}
+          })}
+        </div>
+      </details>
     </>
   );
 }
