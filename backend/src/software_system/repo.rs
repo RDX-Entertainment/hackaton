@@ -1,30 +1,32 @@
 use serde_json::Value;
 use sqlx::PgPool;
 
-use super::models::{BlueprintRow, CapabilityRow, HardwareTotals, ModuleRow, ProgramRow};
+use super::dtos::Stats;
+use super::models::{
+    BlueprintRow, CapabilityRow, EvidenceRow, HardwareTotals, MachineAccessRow, ModuleRow,
+    ProgramRow, WebContentRow,
+};
 
 pub async fn programs(pool: &PgPool, user_id: i64) -> Result<Vec<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,EXISTS(SELECT 1 FROM software_running r WHERE r.soft_id=s.id) AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id LEFT JOIN software_capabilities c ON c.id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY s.id DESC").bind(user_id).fetch_all(pool).await
+    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,EXISTS(SELECT 1 FROM software_running r WHERE r.soft_id=s.id) AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id LEFT JOIN software_capabilities c ON c.id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY s.id DESC").bind(user_id).fetch_all(pool).await
 }
 
 pub async fn capabilities(pool: &PgPool) -> Result<Vec<CapabilityRow>, sqlx::Error> {
-    sqlx::query_as("SELECT c.id,c.code,c.name,d.code AS domain,c.role,c.action_kind FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id ORDER BY d.id,c.id").fetch_all(pool).await
+    sqlx::query_as("SELECT c.id,c.code,c.name,d.code AS domain,c.role,c.action_kind,c.relevant_attributes,c.secondary_attributes,c.available_actions,c.max_access_scope,c.granted_permissions FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id ORDER BY d.id,c.id").fetch_all(pool).await
 }
 
 pub async fn modules(pool: &PgPool, user_id: i64) -> Result<Vec<ModuleRow>, sqlx::Error> {
-    sqlx::query_as("SELECT m.id,m.code,m.name,c.code AS capability,m.effectiveness_delta,m.stealth_delta,m.detection_delta,m.removal_delta,m.penetration_delta,m.stability_delta,m.cpu_delta,m.ram_delta,m.net_delta,m.size_delta FROM research_modules m LEFT JOIN software_capabilities c ON c.id=m.capability_id JOIN user_research_modules u ON u.module_id=m.id WHERE u.user_id=$1 ORDER BY m.id").bind(user_id).fetch_all(pool).await
+    sqlx::query_as("SELECT m.id,m.code,m.name,c.code AS capability,m.effectiveness_delta,m.stealth_delta,m.detection_delta,m.removal_delta,m.penetration_delta,m.resistance_delta,m.hardening_delta,m.manipulation_delta,m.integrity_delta,m.anti_forensics_delta,m.forensics_delta,m.persistence_delta,m.stability_delta,m.cpu_delta,m.ram_delta,m.net_delta,m.size_delta FROM research_modules m LEFT JOIN software_capabilities c ON c.id=m.capability_id JOIN user_research_modules u ON u.module_id=m.id WHERE u.user_id=$1 ORDER BY m.id").bind(user_id).fetch_all(pool).await
 }
 
 pub async fn tune(
     pool: &PgPool,
     user_id: i64,
     software_id: i64,
-    stats: &(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32),
+    stats: &Stats,
 ) -> Result<bool, sqlx::Error> {
-    let (effectiveness, stealth, detection, removal, penetration, stability, cpu, ram, net, weight) =
-        *stats;
-    Ok(sqlx::query("UPDATE software_profiles p SET effectiveness=$3,stealth=$4,detection=$5,removal=$6,penetration=$7,stability=$8,cpu_need=$9,ram_need=$10,net_need=$11,weight=$12 FROM software s WHERE p.software_id=s.id AND s.id=$1 AND s.user_id=$2 AND NOT s.is_npc")
-        .bind(software_id).bind(user_id).bind(effectiveness).bind(stealth).bind(detection).bind(removal).bind(penetration).bind(stability).bind(cpu).bind(ram).bind(net).bind(weight).execute(pool).await?.rows_affected()>0)
+    Ok(sqlx::query("UPDATE software_profiles p SET effectiveness=$3,resistance=$4,stealth=$5,detection=$6,removal=$7,penetration=$8,hardening=$9,manipulation=$10,integrity=$11,anti_forensics=$12,forensics=$13,persistence=$14,stability=$15,cpu_need=$16,ram_need=$17,net_need=$18,weight=$19 FROM software s WHERE p.software_id=s.id AND s.id=$1 AND s.user_id=$2 AND NOT s.is_npc")
+        .bind(software_id).bind(user_id).bind(stats.effectiveness).bind(stats.resistance).bind(stats.stealth).bind(stats.detection).bind(stats.removal).bind(stats.penetration).bind(stats.hardening).bind(stats.manipulation).bind(stats.integrity).bind(stats.anti_forensics).bind(stats.forensics).bind(stats.persistence).bind(stats.stability).bind(stats.cpu).bind(stats.ram).bind(stats.net).bind(stats.weight).execute(pool).await?.rows_affected()>0)
 }
 
 pub async fn blueprints(pool: &PgPool, user_id: i64) -> Result<Vec<BlueprintRow>, sqlx::Error> {
@@ -34,10 +36,10 @@ pub async fn blueprint_modules(
     pool: &PgPool,
     blueprint_id: i64,
 ) -> Result<Vec<ModuleRow>, sqlx::Error> {
-    sqlx::query_as("SELECT m.id,m.code,m.name,c.code AS capability,m.effectiveness_delta,m.stealth_delta,m.detection_delta,m.removal_delta,m.penetration_delta,m.stability_delta,m.cpu_delta,m.ram_delta,m.net_delta,m.size_delta FROM blueprint_modules bm JOIN research_modules m ON m.id=bm.module_id LEFT JOIN software_capabilities c ON c.id=m.capability_id WHERE bm.blueprint_id=$1 ORDER BY m.id").bind(blueprint_id).fetch_all(pool).await
+    sqlx::query_as("SELECT m.id,m.code,m.name,c.code AS capability,m.effectiveness_delta,m.stealth_delta,m.detection_delta,m.removal_delta,m.penetration_delta,m.resistance_delta,m.hardening_delta,m.manipulation_delta,m.integrity_delta,m.anti_forensics_delta,m.forensics_delta,m.persistence_delta,m.stability_delta,m.cpu_delta,m.ram_delta,m.net_delta,m.size_delta FROM blueprint_modules bm JOIN research_modules m ON m.id=bm.module_id LEFT JOIN software_capabilities c ON c.id=m.capability_id WHERE bm.blueprint_id=$1 ORDER BY m.id").bind(blueprint_id).fetch_all(pool).await
 }
 pub async fn capability(pool: &PgPool, code: &str) -> Result<Option<CapabilityRow>, sqlx::Error> {
-    sqlx::query_as("SELECT c.id,c.code,c.name,d.code AS domain,c.role,c.action_kind FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id WHERE c.code=$1").bind(code).fetch_optional(pool).await
+    sqlx::query_as("SELECT c.id,c.code,c.name,d.code AS domain,c.role,c.action_kind,c.relevant_attributes,c.secondary_attributes,c.available_actions,c.max_access_scope,c.granted_permissions FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id WHERE c.code=$1").bind(code).fetch_optional(pool).await
 }
 pub async fn module_available(
     pool: &PgPool,
@@ -101,14 +103,28 @@ pub async fn attacker(
     user: i64,
     capability: &str,
 ) -> Result<Option<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,c.grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id AND c.code=$2 WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY p.effectiveness+p.penetration DESC LIMIT 1").bind(user).bind(capability).fetch_optional(pool).await
+    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,c.grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id AND c.code=$2 WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY p.effectiveness+p.penetration DESC LIMIT 1").bind(user).bind(capability).fetch_optional(pool).await
+}
+pub async fn attacker_candidates(
+    pool: &PgPool,
+    user: i64,
+    capability: &str,
+) -> Result<Vec<ProgramRow>, sqlx::Error> {
+    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,c.grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id AND c.code=$2 WHERE s.user_id=$1 AND NOT s.is_npc").bind(user).bind(capability).fetch_all(pool).await
 }
 pub async fn defender(
     pool: &PgPool,
     user: i64,
     capability: &str,
 ) -> Result<Option<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2) ORDER BY p.effectiveness+p.detection+p.removal DESC LIMIT 1").bind(user).bind(capability).fetch_optional(pool).await
+    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2) ORDER BY p.resistance+p.hardening+p.detection DESC LIMIT 1").bind(user).bind(capability).fetch_optional(pool).await
+}
+pub async fn defender_candidates(
+    pool: &PgPool,
+    user: i64,
+    capability: &str,
+) -> Result<Vec<ProgramRow>, sqlx::Error> {
+    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2)").bind(user).bind(capability).fetch_all(pool).await
 }
 pub async fn hardware(pool: &PgPool, user: i64) -> Result<HardwareTotals, sqlx::Error> {
     sqlx::query_as("SELECT COALESCE(sum(cpu),0)::integer AS cpu,COALESCE(sum(ram),0)::integer AS ram,COALESCE(sum(net),0)::integer AS net FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await
@@ -124,4 +140,72 @@ pub async fn enqueue_operation(
     payload: Value,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+}
+
+pub async fn accesses(pool: &PgPool, user: i64) -> Result<Vec<MachineAccessRow>, sqlx::Error> {
+    sqlx::query_as("SELECT target_ip AS ip,identity_name AS identity,privilege,scope,permissions,status,persistence_installed,target_user_id,target_is_npc FROM machine_accesses WHERE attacker_id=$1 ORDER BY obtained_at DESC").bind(user).fetch_all(pool).await
+}
+pub async fn access(
+    pool: &PgPool,
+    user: i64,
+    ip: i64,
+) -> Result<Option<MachineAccessRow>, sqlx::Error> {
+    sqlx::query_as("SELECT target_ip AS ip,identity_name AS identity,privilege,scope,permissions,status,persistence_installed,target_user_id,target_is_npc FROM machine_accesses WHERE attacker_id=$1 AND target_ip=$2 AND status='active'").bind(user).bind(ip).fetch_optional(pool).await
+}
+pub async fn web_content(
+    pool: &PgPool,
+    target: i64,
+    npc: bool,
+) -> Result<WebContentRow, sqlx::Error> {
+    sqlx::query_as("SELECT path,content,COALESCE((SELECT max(id) FROM machine_web_revisions r WHERE r.target_user_id=$1 AND r.target_is_npc=$2 AND r.path=w.path),0) AS revision FROM machine_web_content w WHERE target_user_id=$1 AND target_is_npc=$2 AND path='/index.html'").bind(target).bind(npc).fetch_one(pool).await
+}
+pub async fn evidence(pool: &PgPool, user: i64) -> Result<Vec<EvidenceRow>, sqlx::Error> {
+    sqlx::query_as("SELECT id,process_id,action_code AS action,state,(target_user_id=$1 OR real_identity=$2) AS visible,(real_identity=$2) AS can_tamper,apparent_origin_ip,attribution_confidence AS confidence FROM game_evidence WHERE real_identity=$2 OR (target_user_id=$1 AND visible_to_target) ORDER BY real_at DESC").bind(user).bind(format!("user:{user}")).fetch_all(pool).await
+}
+
+pub async fn hidden_evidence_for_target(pool: &PgPool, user: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT id FROM game_evidence WHERE target_user_id=$1 AND NOT target_is_npc AND NOT visible_to_target ORDER BY real_at DESC LIMIT 1")
+        .bind(user).fetch_optional(pool).await
+}
+
+pub async fn enqueue_tactical(
+    pool: &PgPool,
+    user: i64,
+    target: i64,
+    software: i64,
+    action: i16,
+    seconds: i32,
+    snapshot: Value,
+    payload: Value,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,$2,$3,$4,'tactical','tactical',now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7) RETURNING pid").bind(user).bind(target).bind(action).bind(software).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+}
+pub async fn known_access(pool: &PgPool, user: i64, ip: i64) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM machine_accesses WHERE attacker_id=$1 AND target_ip=$2)",
+    )
+    .bind(user)
+    .bind(ip)
+    .fetch_one(pool)
+    .await
+}
+pub async fn evidence_for_action(
+    pool: &PgPool,
+    user: i64,
+    evidence: i64,
+) -> Result<Option<(i64, bool)>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT target_user_id,target_is_npc FROM game_evidence WHERE id=$1 AND real_identity=$2",
+    )
+    .bind(evidence)
+    .bind(format!("user:{user}"))
+    .fetch_optional(pool)
+    .await
+}
+pub async fn evidence_for_target(
+    pool: &PgPool,
+    user: i64,
+    evidence: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM game_evidence WHERE id=$1 AND target_user_id=$2 AND NOT target_is_npc)").bind(evidence).bind(user).fetch_one(pool).await
 }

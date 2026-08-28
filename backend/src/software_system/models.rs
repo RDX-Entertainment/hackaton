@@ -17,6 +17,13 @@ pub struct ProgramRow {
     pub detection: i32,
     pub removal: i32,
     pub penetration: i32,
+    pub resistance: i32,
+    pub hardening: i32,
+    pub manipulation: i32,
+    pub integrity: i32,
+    pub anti_forensics: i32,
+    pub forensics: i32,
+    pub persistence: i32,
     pub stability: i32,
     pub cpu_need: i32,
     pub ram_need: i32,
@@ -32,6 +39,11 @@ pub struct CapabilityRow {
     pub domain: String,
     pub role: String,
     pub action_kind: String,
+    pub relevant_attributes: serde_json::Value,
+    pub secondary_attributes: serde_json::Value,
+    pub available_actions: serde_json::Value,
+    pub max_access_scope: String,
+    pub granted_permissions: serde_json::Value,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -45,6 +57,13 @@ pub struct ModuleRow {
     pub detection_delta: i32,
     pub removal_delta: i32,
     pub penetration_delta: i32,
+    pub resistance_delta: i32,
+    pub hardening_delta: i32,
+    pub manipulation_delta: i32,
+    pub integrity_delta: i32,
+    pub anti_forensics_delta: i32,
+    pub forensics_delta: i32,
+    pub persistence_delta: i32,
     pub stability_delta: i32,
     pub cpu_delta: i32,
     pub ram_delta: i32,
@@ -66,4 +85,36 @@ pub struct HardwareTotals {
     pub cpu: i32,
     pub ram: i32,
     pub net: i32,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MachineAccessRow {
+    pub ip: i64,
+    pub identity: String,
+    pub privilege: String,
+    pub scope: String,
+    pub permissions: serde_json::Value,
+    pub status: String,
+    pub persistence_installed: bool,
+    pub target_user_id: i64,
+    pub target_is_npc: bool,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct WebContentRow {
+    pub path: String,
+    pub content: String,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct EvidenceRow {
+    pub id: i64,
+    pub process_id: i64,
+    pub action: String,
+    pub state: String,
+    pub visible: bool,
+    pub can_tamper: bool,
+    pub apparent_origin_ip: Option<i64>,
+    pub confidence: i32,
 }

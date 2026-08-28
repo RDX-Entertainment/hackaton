@@ -10,6 +10,12 @@ const PROPERTY_FIELDS: { key: keyof Pick<ProgramStats, 'effectiveness' | 'penetr
   { key: 'stealth', label: 'sigilo' }, { key: 'detection', label: 'detección' },
   { key: 'removal', label: 'eliminación' }, { key: 'stability', label: 'estabilidad' },
 ];
+const TACTICAL_FIELDS: { key: keyof Pick<ProgramStats, 'resistance' | 'hardening' | 'manipulation' | 'integrity' | 'anti_forensics' | 'forensics' | 'persistence'>; label: string }[] = [
+  { key: 'resistance', label: 'resistencia' }, { key: 'hardening', label: 'endurecimiento' },
+  { key: 'manipulation', label: 'manipulacion' }, { key: 'integrity', label: 'integridad' },
+  { key: 'anti_forensics', label: 'antiforense' }, { key: 'forensics', label: 'forense' },
+  { key: 'persistence', label: 'persistencia' },
+];
 const RESOURCE_FIELDS: { key: keyof Pick<ProgramStats, 'cpu' | 'ram' | 'net' | 'weight'>; label: string }[] = [
   { key: 'cpu', label: 'CPU' }, { key: 'ram', label: 'RAM' }, { key: 'net', label: 'red' }, { key: 'weight', label: 'peso en disco' },
 ];
@@ -60,7 +66,14 @@ export function LabPage() {
           <h3>{selected.name} · {selected.capability_name}</h3>
           <p className="muted">{selected.running ? 'En memoria' : 'En disco: instálalo antes de lanzar una operación.'}</p>
           <fieldset><legend>Propiedades (0–100)</legend>{PROPERTY_FIELDS.map((field) => <label key={field.key}>{field.label}<input type="number" min={0} max={100} value={draft[field.key]} onChange={(event) => set(field.key, Number(event.target.value))} /></label>)}</fieldset>
+          <fieldset><legend>Atributos tacticos (0–100)</legend>{TACTICAL_FIELDS.map((field) => <label key={field.key}>{field.label}<input type="number" min={0} max={100} value={draft[field.key]} onChange={(event) => set(field.key, Number(event.target.value))} /></label>)}</fieldset>
           <fieldset><legend>Coste de ejecución</legend>{RESOURCE_FIELDS.map((field) => <label key={field.key}>{field.label}<input type="number" min={1} value={draft[field.key]} onChange={(event) => set(field.key, Number(event.target.value))} /></label>)}</fieldset>
+          <section className="arsenal__block">
+            <h4>Pares tácticos</h4>
+            <p className="muted">eficacia ↔ resistencia · penetración ↔ endurecimiento · sigilo ↔ detección · manipulación ↔ integridad · antiforense ↔ forense · persistencia ↔ eliminación</p>
+            <h4>Habilidades</h4>
+            {selected.skills.length ? <ul>{selected.skills.map((skill) => <li key={skill.action}>{skill.unlocked ? 'activa' : 'bloqueada'} · {skill.action} · {skill.attribute} {skill.unlocked ? '' : `(${skill.threshold})`}</li>)}</ul> : <p className="muted">Esta capacidad no desbloquea acciones en este corte.</p>}
+          </section>
           <button disabled={busy}>guardar perfil</button>
         </form>
       )}

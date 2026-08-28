@@ -90,7 +90,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
-            16 => {},
+            16 => {}
             17 => research_effect(pool, user, soft).await?,
             18 => park_effect(pool, user, soft).await?,
             19 => unpark_effect(pool, user, soft).await?,
@@ -100,6 +100,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             26 => reset_password_effect(pool, user).await?,
             90 => modular_operation_effect(pool, pid, user, victim, soft).await?,
             91 => compilation_effect(pool, pid, user).await?,
+            92 | 93 | 94 | 95 => tactical_effect(pool, pid, user, victim, action).await?,
             _ => {}
         }
         if exploit_succeeded == Some(false) {
@@ -108,7 +109,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
                 .execute(pool)
                 .await?;
         }
-        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (16,90,91) THEN status ELSE 'succeeded' END WHERE pid=$1")
+        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (16,90,91,92,93,94,95) THEN status ELSE 'succeeded' END WHERE pid=$1")
             .bind(pid)
             .execute(pool)
             .await?;
@@ -116,15 +117,171 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+/// Un casi-acierto contra integridad no deja contenido persistente, pero sí permite
+/// representar una tentativa que el monitor restauró antes de que fuera estable.
+fn modification_is_partial(success: bool, probability: i32, roll: i32) -> bool {
+    !success && roll <= (probability + 10).min(100)
+}
+
+/// Acciones posteriores al acceso. El payload contiene la tirada y la configuración ya
+/// congeladas; el worker no vuelve a consultar estadísticas ni vuelve a sortear.
+async fn tactical_effect(
+    pool: &sqlx::PgPool,
+    pid: i64,
+    user: i64,
+    victim: i64,
+    action: i16,
+) -> Result<(), sqlx::Error> {
+    let payload: serde_json::Value =
+        sqlx::query_scalar("SELECT process_payload FROM processes WHERE pid=$1")
+            .bind(pid)
+            .fetch_one(pool)
+            .await?;
+    let phase = |name: &str| {
+        let v = &payload["phase_plan"][name];
+        let p = v["probability"].as_i64().unwrap_or(50) as i32;
+        let r = v["roll"].as_i64().unwrap_or(100) as i32;
+        (p, r, r <= p)
+    };
+    let (prob, roll, success) = phase("primary");
+    let (_, _, detected) = phase("detection");
+    // Un fallo cercano conserva el intento como resultado parcial: la defensa restauró
+    // el cambio antes de que quedara aplicado, pero la operación deja evidencia.
+    let partial = action == 92 && modification_is_partial(success, prob, roll);
+    let ip = payload["ip"].as_i64().unwrap_or(0);
+    let details = &payload["payload"];
+    let (code, message) = match action {
+        92 => {
+            if !success {
+                if partial {
+                    (
+                        "MODIFICATION_PARTIAL",
+                        "la integridad restauró una modificación parcial",
+                    )
+                } else if detected {
+                    (
+                        "MODIFICATION_BLOCKED_DETECTED",
+                        "la integridad bloqueó la modificación y generó alerta",
+                    )
+                } else {
+                    (
+                        "MODIFICATION_BLOCKED",
+                        "la integridad bloqueó la modificación",
+                    )
+                }
+            } else {
+                let content = details["content"].as_str().unwrap_or_default();
+                let path = details["path"].as_str().unwrap_or("/index.html");
+                let exists:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM game_evidence WHERE process_id=$1 AND action_code='modify_web')").bind(pid).fetch_one(pool).await?;
+                if !exists {
+                    let previous:Option<String>=sqlx::query_scalar("SELECT content FROM machine_web_content WHERE target_user_id=$1 AND target_is_npc=false AND path=$2").bind(victim).bind(path).fetch_optional(pool).await?;
+                    if let Some(previous) = previous {
+                        sqlx::query("INSERT INTO machine_web_revisions(target_user_id,target_is_npc,path,content,created_by) VALUES($1,false,$2,$3,$4)").bind(victim).bind(path).bind(previous).bind(user).execute(pool).await?;
+                    }
+                    sqlx::query("INSERT INTO machine_web_content(target_user_id,target_is_npc,path,content,updated_at) VALUES($1,false,$2,$3,now()) ON CONFLICT(target_user_id,target_is_npc,path) DO UPDATE SET content=EXCLUDED.content,updated_at=now()").bind(victim).bind(path).bind(content).execute(pool).await?;
+                }
+                if detected {
+                    (
+                        "MODIFIED_DETECTED",
+                        "contenido web modificado; el monitor lo detectó",
+                    )
+                } else {
+                    (
+                        "MODIFIED_STEALTH",
+                        "contenido web modificado sin alerta inmediata",
+                    )
+                }
+            }
+        }
+        93 => {
+            if success {
+                ("EVIDENCE_HIDDEN", "evidencia ocultada de forma recuperable")
+            } else if detected {
+                (
+                    "FORENSIC_BLOCKED_DETECTED",
+                    "el análisis forense detectó el intento de ocultación",
+                )
+            } else {
+                ("FORENSIC_BLOCKED", "la evidencia resistió la ocultación")
+            }
+        }
+        95 => {
+            if success {
+                (
+                    "EVIDENCE_RECOVERED",
+                    "el análisis forense reconstruyó evidencia ocultada o alterada",
+                )
+            } else {
+                (
+                    "FORENSIC_ANALYSIS_INCONCLUSIVE",
+                    "el análisis no pudo confirmar una alteración",
+                )
+            }
+        }
+        _ => {
+            if success {
+                ("EVIDENCE_FORGED", "procedencia aparente falsificada")
+            } else if detected {
+                (
+                    "FORGERY_DISCOVERED",
+                    "el análisis forense descubrió la falsificación",
+                )
+            } else {
+                ("FORGERY_BLOCKED", "la falsificación no alteró la evidencia")
+            }
+        }
+    };
+    sqlx::query("INSERT INTO operation_phase_results(process_id,phase,probability,roll,outcome,details) VALUES($1,'primary',$2,$3,$4,$5) ON CONFLICT(process_id,phase) DO NOTHING")
+        .bind(pid).bind(prob).bind(roll).bind(if success { "succeeded" } else if partial { "partial" } else { "blocked" })
+        .bind(serde_json::json!({"partial": partial})).execute(pool).await?;
+    let (detection_probability, detection_roll, detection_success) = phase("detection");
+    sqlx::query("INSERT INTO operation_phase_results(process_id,phase,probability,roll,outcome,details) VALUES($1,'detection',$2,$3,$4,'{}') ON CONFLICT(process_id,phase) DO NOTHING")
+        .bind(pid).bind(detection_probability).bind(detection_roll).bind(if detection_success { "detected" } else { "hidden" }).execute(pool).await?;
+    if action == 92 {
+        sqlx::query("INSERT INTO game_evidence(process_id,target_user_id,target_is_npc,action_code,real_origin_ip,real_identity,program_signature,concealment,state,visible_to_target,details) VALUES($1,$2,false,'modify_web',(SELECT game_ip FROM users WHERE id=$3),$4,$5,$6,$7,$8,$9) ON CONFLICT(process_id,action_code) DO NOTHING").bind(pid).bind(victim).bind(user).bind(format!("user:{user}")).bind(payload["capability"].as_str().unwrap_or("web_manipulator")).bind(if detected{0}else{70}).bind(if detected{"normal"}else{"hidden"}).bind(detected).bind(serde_json::json!({"result":code,"ip":ip})).execute(pool).await?;
+    }
+    if action == 93 && success {
+        sqlx::query("UPDATE game_evidence SET state='degraded',concealment=GREATEST(concealment,70),visible_to_target=false WHERE id=$1 AND real_identity=$2").bind(details["evidence_id"].as_i64().unwrap_or(0)).bind(format!("user:{user}")).execute(pool).await?;
+    }
+    if action == 94 && success {
+        sqlx::query("UPDATE game_evidence SET state='altered',apparent_origin_ip=$2,attribution_confidence=40 WHERE id=$1 AND real_identity=$3").bind(details["evidence_id"].as_i64().unwrap_or(0)).bind(details["apparent_origin_ip"].as_i64()).bind(format!("user:{user}")).execute(pool).await?;
+    }
+    if action == 95 && success {
+        sqlx::query("UPDATE game_evidence SET state='recovered',visible_to_target=true,concealment=0,attribution_confidence=GREATEST(attribution_confidence,80) WHERE id=$1 AND target_user_id=$2")
+            .bind(details["evidence_id"].as_i64().unwrap_or(0)).bind(user).execute(pool).await?;
+    }
+    sqlx::query("UPDATE processes SET status=$2,result_code=$3,result_message=$4 WHERE pid=$1")
+        .bind(pid)
+        .bind(if success { "succeeded" } else { "failed" })
+        .bind(code)
+        .bind(message)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// Materializa una compilacion que ya consumio su tiempo. El espacio se comprueba de nuevo:
 /// otra accion pudo haber terminado antes y ocupar el disco que estaba libre al encolarla.
 async fn compilation_effect(pool: &sqlx::PgPool, pid: i64, user: i64) -> Result<(), sqlx::Error> {
-    let row = sqlx::query("SELECT process_payload FROM processes WHERE pid=$1").bind(pid).fetch_one(pool).await?;
+    let row = sqlx::query("SELECT process_payload FROM processes WHERE pid=$1")
+        .bind(pid)
+        .fetch_one(pool)
+        .await?;
     let payload: serde_json::Value = row.get("process_payload");
     let stats = &payload["stats"];
     let weight = stats["weight"].as_i64().unwrap_or(1).max(1);
-    let capacity: i64 = sqlx::query_scalar("SELECT COALESCE(sum(hdd)::bigint,0) FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
-    let used: i64 = sqlx::query_scalar("SELECT COALESCE(sum(soft_size)::bigint,0) FROM software WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
+    let capacity: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(sum(hdd)::bigint,0) FROM hardware WHERE user_id=$1 AND NOT is_npc",
+    )
+    .bind(user)
+    .fetch_one(pool)
+    .await?;
+    let used: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(sum(soft_size)::bigint,0) FROM software WHERE user_id=$1 AND NOT is_npc",
+    )
+    .bind(user)
+    .fetch_one(pool)
+    .await?;
     if capacity - used < weight {
         sqlx::query("UPDATE processes SET status='failed',result_code='DISK_FULL',result_message='La compilacion termino sin espacio libre en disco' WHERE pid=$1").bind(pid).execute(pool).await?;
         return Ok(());
@@ -133,12 +290,27 @@ async fn compilation_effect(pool: &sqlx::PgPool, pid: i64, user: i64) -> Result<
     let name = payload["name"].as_str().unwrap_or("Programa");
     let revision = payload["revision"].as_i64().unwrap_or(1) as i32;
     let blueprint_id = payload["blueprint_id"].as_i64();
-    let legacy_type = match capability { "ssh_exploit" => 14, "ftp_exploit" => 13, "cracker" => 1, "virus_infect" => 99, _ => 4 };
+    let legacy_type = match capability {
+        "ssh_exploit" => 14,
+        "ftp_exploit" => 13,
+        "cracker" => 1,
+        "virus_infect" => 99,
+        _ => 4,
+    };
     let mut tx = pool.begin().await?;
     let software_id: i64 = sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,$3,$4,$5,$6) RETURNING id")
         .bind(user).bind(name).bind(revision).bind(weight as i32).bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(legacy_type).fetch_one(&mut *tx).await?;
-    sqlx::query("INSERT INTO software_profiles(software_id,blueprint_id,origin,capability_id,effectiveness,stealth,detection,removal,penetration,stability,cpu_need,ram_need,net_need,weight) SELECT $1,$2,'research',id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12 FROM software_capabilities WHERE code=$13")
-        .bind(software_id).bind(blueprint_id).bind(stats["effectiveness"].as_i64().unwrap_or(0) as i32).bind(stats["stealth"].as_i64().unwrap_or(0) as i32).bind(stats["detection"].as_i64().unwrap_or(0) as i32).bind(stats["removal"].as_i64().unwrap_or(0) as i32).bind(stats["penetration"].as_i64().unwrap_or(0) as i32).bind(stats["stability"].as_i64().unwrap_or(0) as i32).bind(stats["cpu"].as_i64().unwrap_or(1).max(1) as i32).bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(stats["net"].as_i64().unwrap_or(1).max(1) as i32).bind(weight as i32).bind(capability).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO software_profiles(software_id,blueprint_id,origin,capability_id,effectiveness,resistance,stealth,detection,removal,penetration,hardening,manipulation,integrity,anti_forensics,forensics,persistence,stability,cpu_need,ram_need,net_need,weight) SELECT $1,$2,'research',id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19 FROM software_capabilities WHERE code=$20")
+        .bind(software_id).bind(blueprint_id)
+        .bind(stats["effectiveness"].as_i64().unwrap_or(0) as i32).bind(stats["resistance"].as_i64().unwrap_or(0) as i32)
+        .bind(stats["stealth"].as_i64().unwrap_or(0) as i32).bind(stats["detection"].as_i64().unwrap_or(0) as i32)
+        .bind(stats["removal"].as_i64().unwrap_or(0) as i32).bind(stats["penetration"].as_i64().unwrap_or(0) as i32)
+        .bind(stats["hardening"].as_i64().unwrap_or(0) as i32).bind(stats["manipulation"].as_i64().unwrap_or(0) as i32)
+        .bind(stats["integrity"].as_i64().unwrap_or(0) as i32).bind(stats["anti_forensics"].as_i64().unwrap_or(0) as i32)
+        .bind(stats["forensics"].as_i64().unwrap_or(0) as i32).bind(stats["persistence"].as_i64().unwrap_or(0) as i32)
+        .bind(stats["stability"].as_i64().unwrap_or(0) as i32).bind(stats["cpu"].as_i64().unwrap_or(1).max(1) as i32)
+        .bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(stats["net"].as_i64().unwrap_or(1).max(1) as i32)
+        .bind(weight as i32).bind(capability).execute(&mut *tx).await?;
     sqlx::query("UPDATE processes SET status='succeeded',result_code='COMPILED',result_message=$2 WHERE pid=$1")
         .bind(pid)
         .bind(format!("«{name}» compilado como fichero #{software_id}"))
@@ -160,27 +332,59 @@ async fn modular_operation_effect(
     victim: i64,
     soft: i64,
 ) -> Result<(), sqlx::Error> {
-    let row = sqlx::query("SELECT process_payload->>'capability' capability, process_payload->>'action_kind' kind, process_payload->>'grants_login' login, (process_payload->>'attack_effectiveness')::integer attack, (process_payload->>'attack_penetration')::integer penetration, (process_payload->>'attack_stealth')::integer stealth, (process_payload->>'defense_effectiveness')::integer defense, (process_payload->>'defense_detection')::integer detection, (process_payload->>'defense_removal')::integer removal FROM processes WHERE pid=$1")
-        .bind(pid).fetch_one(pool).await?;
-    let capability: String = row.get::<Option<String>, _>("capability").unwrap_or_default();
-    let kind: Option<String> = row.get("kind");
-    let login: Option<String> = row.get("login");
-    let attack: i32 = row.get("attack");
-    let penetration: i32 = row.get("penetration");
-    let stealth: i32 = row.get("stealth");
-    let defense: i32 = row.get("defense");
-    let detection: i32 = row.get("detection");
-    let removal: i32 = row.get("removal");
-    let score = attack + penetration;
-    let resistance = defense + detection / 2 + removal / 3;
-    let detected = stealth < detection;
-    let won = score >= resistance;
+    let row = sqlx::query("SELECT process_payload FROM processes WHERE pid=$1")
+        .bind(pid)
+        .fetch_one(pool)
+        .await?;
+    let payload: serde_json::Value = row.get("process_payload");
+    let capability = payload["capability"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let kind = payload["action_kind"].as_str();
+    let login = payload["grants_login"].as_str();
+    let phase = |name: &str| -> (i32, i32, bool) {
+        let value = &payload["phase_plan"][name];
+        let probability = value["probability"].as_i64().unwrap_or(50) as i32;
+        let roll = value["roll"].as_i64().unwrap_or(100) as i32;
+        (probability, roll, roll <= probability)
+    };
+    let (execution_probability, execution_roll, execution) = phase("execution");
+    let (penetration_probability, penetration_roll, penetration) = phase("penetration");
+    let (detection_probability, detection_roll, detected) = phase("detection");
+    let won = execution && penetration;
+    let resistance = payload["defense_resistance"].as_i64().unwrap_or(0) as i32;
+    for (name, probability, roll, outcome) in [
+        (
+            "execution",
+            execution_probability,
+            execution_roll,
+            if execution { "succeeded" } else { "blocked" },
+        ),
+        (
+            "penetration",
+            penetration_probability,
+            penetration_roll,
+            if penetration { "succeeded" } else { "blocked" },
+        ),
+        (
+            "detection",
+            detection_probability,
+            detection_roll,
+            if detected { "detected" } else { "hidden" },
+        ),
+    ] {
+        sqlx::query("INSERT INTO operation_phase_results(process_id,phase,probability,roll,outcome,details) VALUES($1,$2,$3,$4,$5,'{}') ON CONFLICT(process_id,phase) DO NOTHING")
+            .bind(pid).bind(name).bind(probability).bind(roll).bind(outcome).execute(pool).await?;
+    }
     // The defender is beaten but the world can still refuse the consequence -- a machine
     // that vanished, a disk with no room. That is a failure with its own reason, not a win
     // that quietly changed nothing.
     let refused = if won {
         match kind.as_deref() {
-            Some("intrude") => intrusion_effect(pool, user, victim, login.as_deref(), resistance).await?,
+            Some("intrude") => {
+                intrusion_effect(pool, user, victim, login, resistance, &payload).await?
+            }
             Some("infect") => infection_effect(pool, user, victim, soft).await?,
             // A kind nobody has given a consequence yet resolves and leaves the world alone.
             _ => None,
@@ -190,24 +394,79 @@ async fn modular_operation_effect(
     };
     let (status, code, message) = match (won, refused, detected) {
         (true, Some((code, message)), _) => ("failed", code, message),
-        (true, None, true) => ("succeeded", "SUCCEEDED_DETECTED", "operation completed, but the defender detected it"),
-        (true, None, false) => ("succeeded", "SUCCEEDED_STEALTH", "operation completed without detection"),
-        (false, _, true) => ("failed", "BLOCKED_DETECTED", "defender blocked and detected the operation"),
+        (true, None, true) => (
+            "succeeded",
+            "SUCCEEDED_DETECTED",
+            "operation completed, but the defender detected it",
+        ),
+        (true, None, false) => (
+            "succeeded",
+            "SUCCEEDED_STEALTH",
+            "operation completed without detection",
+        ),
+        (false, _, true) if execution || penetration => (
+            "failed",
+            "PARTIAL_DETECTED",
+            "la operación avanzó parcialmente y fue detectada",
+        ),
+        (false, _, false) if execution || penetration => (
+            "failed",
+            "PARTIAL",
+            "la operación consiguió una fase, pero no acceso completo",
+        ),
+        (false, _, true) => (
+            "failed",
+            "BLOCKED_DETECTED",
+            "defender blocked and detected the operation",
+        ),
         (false, _, false) => ("failed", "BLOCKED", "defender resisted the operation"),
     };
     sqlx::query("UPDATE processes SET status=$2,result_code=$3,result_message=$4 WHERE pid=$1")
-        .bind(pid).bind(status).bind(code).bind(message).execute(pool).await?;
+        .bind(pid)
+        .bind(status)
+        .bind(code)
+        .bind(message)
+        .execute(pool)
+        .await?;
     // Every legacy action wrote a line on both machines. Here the victim's line is what
     // stealth buys: an operation their detectors never noticed leaves nothing on their log,
     // won or lost. The attacker's own machine always records what it did.
-    let attacker_ip:Option<i64>=sqlx::query_scalar("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_one(pool).await?;
+    let attacker_ip: Option<i64> = sqlx::query_scalar("SELECT game_ip FROM users WHERE id=$1")
+        .bind(user)
+        .fetch_one(pool)
+        .await?;
     if let Some((target_ip, _)) = victim_ip(pool, victim, false).await? {
-        add_log(pool, user, false, &format!("localhost ran {capability} against [{}] - {code}", dotted(target_ip))).await?;
+        add_log(
+            pool,
+            user,
+            false,
+            &format!(
+                "localhost ran {capability} against [{}] - {code}",
+                dotted(target_ip)
+            ),
+        )
+        .await?;
     }
     if detected {
         if let Some(attacker_ip) = attacker_ip {
-            add_log(pool, victim, false, &format!("[{}] ran {capability} against localhost - {code}", dotted(attacker_ip))).await?;
+            add_log(
+                pool,
+                victim,
+                false,
+                &format!(
+                    "[{}] ran {capability} against localhost - {code}",
+                    dotted(attacker_ip)
+                ),
+            )
+            .await?;
         }
+    }
+    if let Some((target_ip, _)) = victim_ip(pool, victim, false).await? {
+        sqlx::query("INSERT INTO game_evidence(process_id,target_user_id,target_is_npc,action_code,real_origin_ip,real_identity,program_signature,integrity,concealment,state,attribution_confidence,visible_to_target,details) VALUES($1,$2,false,$3,$4,$5,$6,100,$7,$8,100,$9,$10) ON CONFLICT(process_id,action_code) DO NOTHING")
+            .bind(pid).bind(victim).bind(&capability).bind(attacker_ip).bind(format!("user:{user}")).bind(&capability)
+            .bind(if detected { 0 } else { 75 }).bind(if detected { "normal" } else { "hidden" }).bind(detected)
+            .bind(serde_json::json!({"result_code":code,"target_ip":target_ip,"execution":execution,"penetration":penetration}))
+            .execute(pool).await?;
     }
     Ok(())
 }
@@ -222,17 +481,25 @@ async fn intrusion_effect(
     victim: i64,
     grants_login: Option<&str>,
     resistance: i32,
+    payload: &serde_json::Value,
 ) -> Result<Option<(&'static str, &'static str)>, sqlx::Error> {
-    let Some((ip, pass)) = victim_ip(pool, victim, false).await? else {
+    let Some((ip, _)) = victim_ip(pool, victim, false).await? else {
         return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
     };
     let (login, password) = match grants_login {
         Some(login) => (login, "exploited".to_owned()),
-        None => ("root", pass),
+        // Las operaciones modulares conceden una sesión de juego, no la contraseña real
+        // del objetivo. El legado queda aislado mientras se migra su flujo de crack.
+        None => ("root", "access-granted".to_owned()),
     };
     // ALREADY_LISTED, as in the legacy: a repeat refreshes the row instead of piling up, and
     // an exploit never downgrades a machine already held under its real password.
-    let held:Option<String>=sqlx::query_scalar("SELECT password FROM compromised_lists WHERE user_id=$1 AND ip=$2").bind(user).bind(ip).fetch_optional(pool).await?;
+    let held: Option<String> =
+        sqlx::query_scalar("SELECT password FROM compromised_lists WHERE user_id=$1 AND ip=$2")
+            .bind(user)
+            .bind(ip)
+            .fetch_optional(pool)
+            .await?;
     match held.as_deref() {
         Some(current) if current != "exploited" && password == "exploited" => {}
         Some(_) => {
@@ -240,18 +507,34 @@ async fn intrusion_effect(
                 .bind(user).bind(ip).bind(login).bind(&password).execute(pool).await?;
         }
         None => {
-            sqlx::query("INSERT INTO compromised_lists(user_id,ip,login,password) VALUES($1,$2,$3,$4)")
-                .bind(user).bind(ip).bind(login).bind(&password).execute(pool).await?;
+            sqlx::query(
+                "INSERT INTO compromised_lists(user_id,ip,login,password) VALUES($1,$2,$3,$4)",
+            )
+            .bind(user)
+            .bind(ip)
+            .bind(login)
+            .bind(&password)
+            .execute(pool)
+            .await?;
         }
     }
     // A machine already open by password stays open by password: an exploit on top of it
     // adds nothing, and marking it via_exploit would take access away.
     sqlx::query("INSERT INTO internet_access(user_id,ip,via_exploit) VALUES($1,$2,$3) ON CONFLICT(user_id,ip) DO UPDATE SET via_exploit=internet_access.via_exploit AND excluded.via_exploit,granted_at=now()")
         .bind(user).bind(ip).bind(grants_login.is_some()).execute(pool).await?;
+    // El acceso táctico es la fuente de permisos; la fila heredada anterior solo mantiene
+    // compatible el navegador ya existente. No se copia ninguna contraseña real aquí.
+    let scope = payload["access_scope"].as_str().unwrap_or("service");
+    let permissions = payload["granted_permissions"].clone();
+    sqlx::query("INSERT INTO machine_accesses(attacker_id,target_user_id,target_is_npc,target_ip,identity_name,origin,privilege,scope,permissions) VALUES($1,$2,false,$3,$4,'operation',$5,$5,$6) ON CONFLICT(attacker_id,target_ip) DO UPDATE SET identity_name=EXCLUDED.identity_name,privilege=EXCLUDED.privilege,scope=EXCLUDED.scope,permissions=EXCLUDED.permissions,status='active',obtained_at=now()")
+        .bind(user).bind(victim).bind(ip).bind(login).bind(scope).bind(permissions).execute(pool).await?;
     // The legacy paid for what stood in the way -- firewall and cracker versions. Here that
     // is the defence actually beaten, so a defended target is worth more than an open one.
     sqlx::query("UPDATE users_stats SET exp=exp+$2,hack_count=hack_count+1 WHERE uid=$1")
-        .bind(user).bind(resistance.max(1) as i64).execute(pool).await?;
+        .bind(user)
+        .bind(resistance.max(1) as i64)
+        .execute(pool)
+        .await?;
     Ok(None)
 }
 
@@ -270,9 +553,18 @@ async fn infection_effect(
     let Some((ip, _)) = victim_ip(pool, victim, false).await? else {
         return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
     };
-    let open:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM internet_access WHERE user_id=$1 AND ip=$2)").bind(user).bind(ip).fetch_one(pool).await?;
+    let open: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM internet_access WHERE user_id=$1 AND ip=$2)",
+    )
+    .bind(user)
+    .bind(ip)
+    .fetch_one(pool)
+    .await?;
     if !open {
-        return Ok(Some(("NO_ACCESS", "the target machine is not open: intrude before infecting")));
+        return Ok(Some((
+            "NO_ACCESS",
+            "the target machine is not open: intrude before infecting",
+        )));
     }
     let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc").bind(soft).bind(user).fetch_optional(pool).await? else {
         return Ok(Some(("PAYLOAD_GONE", "the program that carried the operation is gone")));
@@ -284,15 +576,34 @@ async fn infection_effect(
     // The copy has to fit on the victim's disk and stay loaded in their RAM: the same two
     // checks a transfer and an install go through. A machine with no room is not infected,
     // and the operation says so instead of claiming a silent win.
-    let hdd:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(victim).fetch_one(pool).await?;
-    let used_hdd:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc").bind(victim).fetch_one(pool).await?;
+    let hdd: Option<f32> =
+        sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc")
+            .bind(victim)
+            .fetch_one(pool)
+            .await?;
+    let used_hdd: Option<i64> = sqlx::query_scalar(
+        "SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc",
+    )
+    .bind(victim)
+    .fetch_one(pool)
+    .await?;
     if (hdd.unwrap_or(0.0) as i64) < used_hdd.unwrap_or(0) + size as i64 {
-        return Ok(Some(("NO_DISK", "the target machine had no room for the payload")));
+        return Ok(Some((
+            "NO_DISK",
+            "the target machine had no room for the payload",
+        )));
     }
-    let total_ram:Option<f32>=sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(victim).fetch_one(pool).await?;
+    let total_ram: Option<f32> =
+        sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND NOT is_npc")
+            .bind(victim)
+            .fetch_one(pool)
+            .await?;
     let used_ram:Option<i64>=sqlx::query_scalar("SELECT sum(s.soft_ram)::bigint FROM software s JOIN software_running r ON r.soft_id=s.id WHERE r.user_id=$1 AND NOT r.is_npc").bind(victim).fetch_one(pool).await?;
     if (total_ram.unwrap_or(0.0) as i64) < used_ram.unwrap_or(0) + ram as i64 {
-        return Ok(Some(("NO_RAM", "the target machine could not keep the payload running")));
+        return Ok(Some((
+            "NO_RAM",
+            "the target machine could not keep the payload running",
+        )));
     }
     // Hidden, because a virus the owner can see on their own file list is not a virus. Their
     // seeker is what finds it, the same as any other hidden file.
@@ -303,7 +614,11 @@ async fn infection_effect(
     // virus_id is where the legacy remembered whose virus sits on a machine. It only means
     // anything next to the row for that machine, so an infection with no listing sets none.
     sqlx::query("UPDATE compromised_lists SET virus_id=$3 WHERE user_id=$1 AND ip=$2")
-        .bind(user).bind(ip).bind(planted).execute(pool).await?;
+        .bind(user)
+        .bind(ip)
+        .bind(planted)
+        .execute(pool)
+        .await?;
     Ok(None)
 }
 
@@ -324,6 +639,19 @@ async fn victim_ip(
         .fetch_optional(pool)
         .await?
         .map(|r| (r.get("ip"), r.get("pass"))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::modification_is_partial;
+
+    #[test]
+    fn near_miss_is_partial_but_does_not_turn_a_failed_roll_into_success() {
+        assert!(modification_is_partial(false, 50, 51));
+        assert!(modification_is_partial(false, 50, 60));
+        assert!(!modification_is_partial(false, 50, 61));
+        assert!(!modification_is_partial(true, 50, 1));
+    }
 }
 
 /// Case 11 of completeProcess. A successful brute force lands the victim's credentials in
@@ -348,8 +676,14 @@ async fn hack_effect(
     .fetch_one(pool)
     .await?;
     if known {
-        sqlx::query("UPDATE compromised_lists SET password=$3,hacked_at=now() WHERE user_id=$1 AND ip=$2")
-            .bind(user).bind(ip).bind(&pass).execute(pool).await?;
+        sqlx::query(
+            "UPDATE compromised_lists SET password=$3,hacked_at=now() WHERE user_id=$1 AND ip=$2",
+        )
+        .bind(user)
+        .bind(ip)
+        .bind(&pass)
+        .execute(pool)
+        .await?;
     } else {
         sqlx::query(
             "INSERT INTO compromised_lists(user_id,ip,login,password) VALUES($1,$2,'root',$3)",
@@ -374,9 +708,25 @@ async fn hack_effect(
     // Every action in completeProcess wrote two log lines, one on each side, through
     // LogVPC::logText('LOGIN', ...). The victim sees who came in, the attacker sees where
     // they went, and the pair is what makes log editing worth doing at all.
-    if let Some(attacker_ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_optional(pool).await? {
-        add_log(pool, victim, is_npc, &format!("[{}] logged in as root", dotted(attacker_ip))).await?;
-        add_log(pool, user, false, &format!("localhost logged in to [{}] as root", dotted(ip))).await?;
+    if let Some(attacker_ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1")
+        .bind(user)
+        .fetch_optional(pool)
+        .await?
+    {
+        add_log(
+            pool,
+            victim,
+            is_npc,
+            &format!("[{}] logged in as root", dotted(attacker_ip)),
+        )
+        .await?;
+        add_log(
+            pool,
+            user,
+            false,
+            &format!("localhost logged in to [{}] as root", dotted(ip)),
+        )
+        .await?;
     }
     Ok(())
 }
@@ -417,7 +767,13 @@ async fn edit_log_effect(
     victim: i64,
     is_npc: bool,
 ) -> Result<(), sqlx::Error> {
-    let Some(text) = sqlx::query_scalar::<_, String>("SELECT log_text FROM log_edit WHERE process_id=$1 ORDER BY id DESC LIMIT 1").bind(pid).fetch_optional(pool).await? else {
+    let Some(text) = sqlx::query_scalar::<_, String>(
+        "SELECT log_text FROM log_edit WHERE process_id=$1 ORDER BY id DESC LIMIT 1",
+    )
+    .bind(pid)
+    .fetch_optional(pool)
+    .await?
+    else {
         return Ok(());
     };
     sqlx::query("UPDATE log SET text=$3 WHERE user_id=$1 AND is_npc=$2")
@@ -486,8 +842,19 @@ async fn transfer_effect(
         return Ok(());
     }
     // calculateHDDUsage: total >= used + size, or the file does not land.
-    let total:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND is_npc=$2").bind(to).bind(to_npc).fetch_one(pool).await?;
-    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND is_npc=$2").bind(to).bind(to_npc).fetch_one(pool).await?;
+    let total: Option<f32> =
+        sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND is_npc=$2")
+            .bind(to)
+            .bind(to_npc)
+            .fetch_one(pool)
+            .await?;
+    let used: Option<i64> = sqlx::query_scalar(
+        "SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND is_npc=$2",
+    )
+    .bind(to)
+    .bind(to_npc)
+    .fetch_one(pool)
+    .await?;
     if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + size as i64 {
         return Ok(());
     }
@@ -495,7 +862,15 @@ async fn transfer_effect(
     sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc,original_from,licensed_to) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)")
         .bind(to).bind(&name).bind(version).bind(size).bind(ram).bind(soft_type).bind(to_npc).bind(soft).bind(licensed).execute(pool).await?;
     let verb = if download { "downloaded" } else { "uploaded" };
-    log_pair(pool, user, victim, victim_is_npc, verb, &format!("{name}{version}")).await?;
+    log_pair(
+        pool,
+        user,
+        victim,
+        victim_is_npc,
+        verb,
+        &format!("{name}{version}"),
+    )
+    .await?;
     Ok(())
 }
 
@@ -507,7 +882,15 @@ async fn delete_effect(
     victim_is_npc: bool,
     soft: i64,
 ) -> Result<(), sqlx::Error> {
-    let Some(f)=sqlx::query("SELECT soft_name,soft_version FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(victim).bind(victim_is_npc).fetch_optional(pool).await? else {
+    let Some(f) = sqlx::query(
+        "SELECT soft_name,soft_version FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3",
+    )
+    .bind(soft)
+    .bind(victim)
+    .bind(victim_is_npc)
+    .fetch_optional(pool)
+    .await?
+    else {
         return Ok(());
     };
     let label = format!(
@@ -533,7 +916,10 @@ async fn log_pair(
     verb: &str,
     file: &str,
 ) -> Result<(), sqlx::Error> {
-    let attacker_ip:Option<i64>=sqlx::query_scalar("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_one(pool).await?;
+    let attacker_ip: Option<i64> = sqlx::query_scalar("SELECT game_ip FROM users WHERE id=$1")
+        .bind(user)
+        .fetch_one(pool)
+        .await?;
     let Some((victim_ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
         return Ok(());
     };
@@ -588,7 +974,14 @@ async fn hide_effect(
     soft: i64,
 ) -> Result<(), sqlx::Error> {
     let (owner, owner_is_npc) = target_of(user, victim, victim_is_npc);
-    let Some(f)=sqlx::query("SELECT soft_type FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(owner).bind(owner_is_npc).fetch_optional(pool).await? else {
+    let Some(f) =
+        sqlx::query("SELECT soft_type FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3")
+            .bind(soft)
+            .bind(owner)
+            .bind(owner_is_npc)
+            .fetch_optional(pool)
+            .await?
+    else {
         return Ok(());
     };
     // "You cant hide a folder", and a running program cannot be hidden either.
@@ -596,7 +989,11 @@ async fn hide_effect(
     if soft_type == 31 || soft_type == 29 {
         return Ok(());
     }
-    let installed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_running WHERE soft_id=$1)").bind(soft).fetch_one(pool).await?;
+    let installed: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_running WHERE soft_id=$1)")
+            .bind(soft)
+            .fetch_one(pool)
+            .await?;
     if installed {
         return Ok(());
     }
@@ -649,12 +1046,21 @@ async fn install_effect(
     if !is_executable(soft_type) || f.get::<bool, _>("soft_hidden") {
         return Ok(());
     }
-    let already:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_running WHERE soft_id=$1)").bind(soft).fetch_one(pool).await?;
+    let already: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_running WHERE soft_id=$1)")
+            .bind(soft)
+            .fetch_one(pool)
+            .await?;
     if already {
         return Ok(());
     }
     // calculateRamUsage: total ram of the machine against what is already loaded on it.
-    let total:Option<f32>=sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND is_npc=$2").bind(owner).bind(owner_is_npc).fetch_one(pool).await?;
+    let total: Option<f32> =
+        sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND is_npc=$2")
+            .bind(owner)
+            .bind(owner_is_npc)
+            .fetch_one(pool)
+            .await?;
     let used:Option<i64>=sqlx::query_scalar("SELECT sum(s.soft_ram)::bigint FROM software s JOIN software_running r ON r.soft_id=s.id WHERE r.user_id=$1 AND r.is_npc=$2").bind(owner).bind(owner_is_npc).fetch_one(pool).await?;
     if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + need as i64 {
         return Ok(());
@@ -673,7 +1079,14 @@ async fn uninstall_effect(
     soft: i64,
 ) -> Result<(), sqlx::Error> {
     let (owner, owner_is_npc) = target_of(user, victim, victim_is_npc);
-    let Some(f)=sqlx::query("SELECT soft_type FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3").bind(soft).bind(owner).bind(owner_is_npc).fetch_optional(pool).await? else {
+    let Some(f) =
+        sqlx::query("SELECT soft_type FROM software WHERE id=$1 AND user_id=$2 AND is_npc=$3")
+            .bind(soft)
+            .bind(owner)
+            .bind(owner_is_npc)
+            .fetch_optional(pool)
+            .await?
+    else {
         return Ok(());
     };
     if is_virus(f.get::<i16, _>("soft_type")) {
@@ -735,11 +1148,7 @@ async fn reset_password_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sql
 /// Case 17 of completeProcess. Research is the upgrade path that does not need a victim:
 /// you improve what you already own rather than steal a better copy. Each run raises the
 /// version by one and leaves a row in research_history.
-async fn research_effect(
-    pool: &sqlx::PgPool,
-    user: i64,
-    soft: i64,
-) -> Result<(), sqlx::Error> {
+async fn research_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), sqlx::Error> {
     let Some(f)=sqlx::query("SELECT soft_name,soft_version,soft_type FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc").bind(soft).bind(user).fetch_optional(pool).await? else {
         return Ok(());
     };
@@ -788,7 +1197,9 @@ async fn analyze_effect(
     let ram: f32 = hw.get::<Option<f32>, _>("ram").unwrap_or(0.0);
     // The legacy nudged each bound inwards by a random fraction of the error band, so two
     // readings of the same machine never matched exactly.
-    let jitter:f32=sqlx::query_scalar::<_,f32>("SELECT (5+random()*45)::real").fetch_one(pool).await?;
+    let jitter: f32 = sqlx::query_scalar::<_, f32>("SELECT (5+random()*45)::real")
+        .fetch_one(pool)
+        .await?;
     let span_cpu = cpu * (1.0 - accuracy);
     let span_ram = ram * (1.0 - accuracy);
     let cpu_min = (cpu - span_cpu + span_cpu / jitter).round() as i32;
@@ -841,11 +1252,22 @@ async fn exploit_effect(
     };
     // ALREADY_LISTED: the legacy refused when the machine was already held under a real
     // password, and refused a repeat exploit that would not improve on the user it granted.
-    let held:Option<String>=sqlx::query_scalar("SELECT password FROM compromised_lists WHERE user_id=$1 AND ip=$2").bind(user).bind(ip).fetch_optional(pool).await?;
+    let held: Option<String> =
+        sqlx::query_scalar("SELECT password FROM compromised_lists WHERE user_id=$1 AND ip=$2")
+            .bind(user)
+            .bind(ip)
+            .fetch_optional(pool)
+            .await?;
     match held.as_deref() {
         Some("exploited") => {
-            sqlx::query("UPDATE compromised_lists SET login=$3,hacked_at=now() WHERE user_id=$1 AND ip=$2")
-                .bind(user).bind(ip).bind(login).execute(pool).await?;
+            sqlx::query(
+                "UPDATE compromised_lists SET login=$3,hacked_at=now() WHERE user_id=$1 AND ip=$2",
+            )
+            .bind(user)
+            .bind(ip)
+            .bind(login)
+            .execute(pool)
+            .await?;
         }
         Some(_) => return Ok(false),
         None => {
@@ -861,9 +1283,25 @@ async fn exploit_effect(
         .bind((firewall + cracker) as i64)
         .execute(pool)
         .await?;
-    if let Some(attacker_ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1").bind(user).fetch_optional(pool).await? {
-        add_log(pool, victim, victim_is_npc, &format!("[{}] logged in as {login}", dotted(attacker_ip))).await?;
-        add_log(pool, user, false, &format!("localhost logged in to [{}] as {login}", dotted(ip))).await?;
+    if let Some(attacker_ip) = sqlx::query_scalar::<_, i64>("SELECT game_ip FROM users WHERE id=$1")
+        .bind(user)
+        .fetch_optional(pool)
+        .await?
+    {
+        add_log(
+            pool,
+            victim,
+            victim_is_npc,
+            &format!("[{}] logged in as {login}", dotted(attacker_ip)),
+        )
+        .await?;
+        add_log(
+            pool,
+            user,
+            false,
+            &format!("localhost logged in to [{}] as {login}", dotted(ip)),
+        )
+        .await?;
     }
     Ok(true)
 }
@@ -878,13 +1316,25 @@ async fn park_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), sq
         return Ok(());
     };
     let size: i32 = f.get("soft_size");
-    let already:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_external WHERE id=$1)").bind(soft).fetch_one(pool).await?;
+    let already: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software_external WHERE id=$1)")
+            .bind(soft)
+            .fetch_one(pool)
+            .await?;
     if already {
         return Ok(());
     }
     // BAD_XHD: the drive's capacity against what is already parked on it.
-    let capacity:Option<i64>=sqlx::query_scalar("SELECT sum(size)::bigint FROM hardware_external WHERE user_id=$1").bind(user).fetch_one(pool).await?;
-    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software_external WHERE user_id=$1").bind(user).fetch_one(pool).await?;
+    let capacity: Option<i64> =
+        sqlx::query_scalar("SELECT sum(size)::bigint FROM hardware_external WHERE user_id=$1")
+            .bind(user)
+            .fetch_one(pool)
+            .await?;
+    let used: Option<i64> =
+        sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software_external WHERE user_id=$1")
+            .bind(user)
+            .fetch_one(pool)
+            .await?;
     if capacity.unwrap_or(0) < used.unwrap_or(0) + size as i64 {
         return Ok(());
     }
@@ -907,8 +1357,17 @@ async fn unpark_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), 
         return Ok(());
     }
     // BAD_HDD, the same disk check every copy onto a machine goes through.
-    let total:Option<f32>=sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
-    let used:Option<i64>=sqlx::query_scalar("SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await?;
+    let total: Option<f32> =
+        sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc")
+            .bind(user)
+            .fetch_one(pool)
+            .await?;
+    let used: Option<i64> = sqlx::query_scalar(
+        "SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc",
+    )
+    .bind(user)
+    .fetch_one(pool)
+    .await?;
     if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + size as i64 {
         return Ok(());
     }

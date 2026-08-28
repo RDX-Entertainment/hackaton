@@ -13,6 +13,10 @@ import type {
   Program,
   ResearchModule,
   ProgramStats,
+  MachineAccess,
+  WebContent,
+  TacticalActionStarted,
+  EvidenceSummary,
 } from './types';
 
 export function listCapabilities(): Promise<Capability[]> {
@@ -50,6 +54,14 @@ export function compile(blueprintId: number): Promise<CompilationQueued> {
 
 export function listLabPrograms(): Promise<Program[]> { return get<Program[]>('/software-lab/programs'); }
 export function tuneProgram(softwareId: number, stats: ProgramStats): Promise<void> { return put<void>(`/software-lab/programs/${softwareId}`, { stats }); }
+export function listAccesses(): Promise<MachineAccess[]> { return get('/software-system/accesses'); }
+export function getWebContent(ip: number): Promise<WebContent> { return get(`/software-system/accesses/${ip}/web`); }
+export function modifyWeb(ip: number, content: string): Promise<TacticalActionStarted> { return put(`/software-system/accesses/${ip}/web`, { content }); }
+export function listEvidence(): Promise<EvidenceSummary[]> { return get('/software-system/evidence'); }
+export function analyzeEvidence(evidenceId: number): Promise<TacticalActionStarted> { return post(`/software-system/evidence/${evidenceId}/analyze`, {}); }
+export function discoverEvidence(): Promise<TacticalActionStarted> { return post('/software-system/evidence/discover', {}); }
+export function hideEvidence(ip: number, evidenceId: number): Promise<TacticalActionStarted> { return post(`/software-system/accesses/${ip}/evidence/${evidenceId}/hide`, {}); }
+export function forgeEvidence(ip: number, evidenceId: number, apparentOriginIp: number): Promise<TacticalActionStarted> { return post(`/software-system/accesses/${ip}/evidence/${evidenceId}/forge`, { apparent_origin_ip: apparentOriginIp }); }
 
 /**
  * Lanzar una operación encola un proceso; el worker lo resuelve al vencer, y es entonces

@@ -10,11 +10,18 @@
  * piezas —las mismas de `hardware.cpu/ram/net`—, y `weight` es lo que ocupa en disco.
  */
 export type ProgramStats = {
-  effectiveness: number;
+    effectiveness: number;
+  resistance: number;
   stealth: number;
   detection: number;
   removal: number;
   penetration: number;
+  hardening: number;
+  manipulation: number;
+  integrity: number;
+  anti_forensics: number;
+  forensics: number;
+  persistence: number;
   stability: number;
   cpu: number;
   ram: number;
@@ -32,6 +39,11 @@ export type Capability = {
   role: CapabilityRole;
   /** `intrude`, `infect`, `block`, `detect`, `remove`: lo que pasa si el ataque gana. */
   action_kind: string;
+  relevant_attributes: string[];
+  secondary_attributes: string[];
+  available_actions: string[];
+  max_access_scope: string;
+  granted_permissions: string[];
 };
 
 /** Una pieza de research. Con `capability` a null sería una que encaja en cualquier cosa. */
@@ -64,6 +76,7 @@ export type CompilationQueued = {
   seconds: number;
   stats: ProgramStats;
 };
+export type Skill = { action: string; attribute: string; threshold: number; unlocked: boolean };
 
 /**
  * Una copia ya compilada. `running` es lo que separa tenerla de poder usarla: una operación
@@ -80,6 +93,7 @@ export type Program = {
   origin: string;
   running: boolean;
   stats: ProgramStats;
+  skills: Skill[];
 };
 
 export type OperationStarted = {
@@ -89,4 +103,10 @@ export type OperationStarted = {
   work_units: number;
   attacker: ProgramStats;
   defender: ProgramStats;
+  estimated_chance: 'muy baja' | 'baja' | 'equilibrada' | 'alta' | 'muy alta';
 };
+
+export type MachineAccess = { ip: number; identity: string; privilege: string; scope: string; permissions: string[]; status: string; persistence_installed: boolean };
+export type WebContent = { path: string; content: string; revision: number };
+export type TacticalActionStarted = { process_id: number; seconds: number; estimated_chance: 'muy baja' | 'baja' | 'equilibrada' | 'alta' | 'muy alta' };
+export type EvidenceSummary = { id: number; process_id: number; action: string; state: string; visible: boolean; can_tamper: boolean; apparent_origin_ip: number | null; confidence: number };

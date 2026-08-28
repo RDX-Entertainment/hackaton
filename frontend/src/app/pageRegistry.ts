@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 
 import { ArsenalPage } from '../pages/ArsenalPage';
+import { AccessesPage } from '../pages/AccessesPage';
 import { BitcoinPage } from '../pages/BitcoinPage';
 import { ClanPage } from '../pages/ClanPage';
 import { FinancesPage } from '../pages/FinancesPage';
@@ -24,6 +25,7 @@ import { UniversityPage } from '../pages/UniversityPage';
  * another branch in an if-chain.
  */
 export const PAGE_REGISTRY: Record<string, ComponentType> = {
+  accesses: AccessesPage,
   arsenal: ArsenalPage,
   bitcoin: BitcoinPage,
   certs: UniversityPage,
