@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { FileCard } from '../components/software/FileCard';
 import { Meter } from '../components/software/Meter';
 import { contextoDe, discoEnUso, ramEnUso } from '../components/software/rules';
+import { MachineSelector } from '../components/hardware/MachineSelector';
 import { WriteFileForm } from '../components/software/WriteFileForm';
 import { EmptyNotice } from '../components/Notice';
 import { ProcessProgress } from '../components/ProcessProgress';
@@ -59,6 +60,12 @@ export function SoftwarePage() {
   const [ficheros, setFicheros] = useState<OwnedFile[]>([]);
   const [tipos, setTipos] = useState<SoftwareType[]>([]);
   const [maquinas, setMaquinas] = useState<Machine[]>([]);
+  /**
+   * El equipo que se está mirando. Antes esta pantalla enseñaba todo junto porque el software
+   * era «del jugador»; ahora vive en un disco, y verlo todo mezclado esconde justo el dato que
+   * decide qué puedes hacer con cada cosa.
+   */
+  const [equipo, setEquipo] = useState(0);
   const [compilaciones, setCompilaciones] = useState<Compilation[]>([]);
   const [processId, setProcessId] = useState<number>();
 
@@ -74,7 +81,15 @@ export function SoftwarePage() {
   useEffect(() => {
     cargar();
     softwareApi.listSoftwareTypes().then(setTipos).catch(() => setTipos([]));
-    hardwareApi.listMachines().then(setMaquinas).catch(() => setMaquinas([]));
+    hardwareApi
+      .listMachines()
+      .then((lista) => {
+        setMaquinas(lista);
+        setEquipo((actual) =>
+          lista.some((maquina) => maquina.id === actual) ? actual : lista[0]?.id ?? 0,
+        );
+      })
+      .catch(() => setMaquinas([]));
   }, [cargar]);
 
   // La compilación la resuelve el worker: refrescar aquí evita obligar a ir a Procesos para
@@ -102,9 +117,15 @@ export function SoftwarePage() {
     [tipos],
   );
 
+  // Lo que hay en el equipo que se está mirando. La memoria se queda fuera del filtro
+  // porque todavía es un depósito común: lo cargado ocupa RAM de todos, mires donde mires.
+  const aqui = ficheros.filter((uno) => uno.server_id === equipo);
+
+  const elegido = maquinas.find((maquina) => maquina.id === equipo);
+
   const enMemoria = ficheros.filter((uno) => uno.running);
-  const enDisco = ficheros.filter((uno) => !uno.running && !uno.hidden);
-  const ocultos = ficheros.filter((uno) => uno.hidden);
+  const enDisco = aqui.filter((uno) => !uno.running && !uno.hidden);
+  const ocultos = aqui.filter((uno) => uno.hidden);
   const compilacionActiva = compilaciones.find((una) => !una.completed);
 
   const encolar = async (accion: number, label: string, id: number) => {
@@ -171,29 +192,26 @@ export function SoftwarePage() {
       </p>
 
       {/*
-        Un medidor de disco por equipo, y no uno solo.
-        Sumarlos daria un numero que no decide nada: un fichero cabe o no cabe en **un**
-        disco, y con el total en pantalla se vería sitio de sobra justo cuando el equipo
-        donde intentas escribir está lleno.
-        La memoria sigue siendo una sola: todavía es un depósito común.
+        El disco del equipo que se está mirando, no la suma ni uno por máquina: el selector ya
+        dice cuál es, y repetir el resto llenaba la pantalla de números que no decidían nada.
+        La memoria sigue siendo una sola: aún es un depósito común.
       */}
+      <MachineSelector machines={maquinas} selected={equipo} onSelect={setEquipo} />
+
       <div className="swmeters">
-        {maquinas.map((maquina) => (
-          <Meter
-            key={maquina.id}
-            label={`Disco · ${maquina.name}`}
-            usado={discoEnUso(ficheros.filter((fichero) => fichero.server_id === maquina.id))}
-            total={maquina.hdd}
-            unidad=""
-            nota="Lo que hay guardado en este equipo, corra o no."
-          />
-        ))}
+        <Meter
+          label={`Disco · ${elegido?.name ?? '—'}`}
+          usado={discoEnUso(aqui)}
+          total={elegido?.hdd ?? 0}
+          unidad=""
+          nota="Lo que hay guardado en este equipo, corra o no."
+        />
         <Meter
           label="Memoria"
           usado={ramEnUso(ficheros)}
           total={capacidad.ram}
           unidad=""
-          nota="Solo la ocupa lo cargado. Es lo que decide si un programa entra."
+          nota="Solo la ocupa lo cargado, y se cuenta entre todos los equipos."
         />
       </div>
 
@@ -206,26 +224,26 @@ export function SoftwarePage() {
         </h3>
 
         {compilacionActiva ? (
-          <article className="swfile">
-            <p className="swfile__head">
+          <article className="swnote">
+            <p className="swnote__head">
               <b>Compilando programa</b>
               <span className="swfile__type">en curso</span>
             </p>
-            <p className="swfile__meta">
+            <p className="swnote__meta">
               Tarea #{compilacionActiva.id} · {compilacionActiva.workedSeconds}/
               {compilacionActiva.idealSeconds} s. Al terminar, el fichero aparecerá abajo en
               el disco.
             </p>
           </article>
         ) : compilaciones.length ? (
-          <article className="swfile">
-            <p className="swfile__head">
+          <article className="swnote">
+            <p className="swnote__head">
               <b>Última compilación</b>
               <span className="swfile__type">
                 {compilaciones[0].status === 'succeeded' ? 'terminada' : compilaciones[0].status}
               </span>
             </p>
-            <p className="swfile__meta">
+            <p className="swnote__meta">
               {compilaciones[0].resultMessage ?? 'La compilación no dejó un mensaje.'}
             </p>
           </article>
@@ -252,43 +270,18 @@ export function SoftwarePage() {
         )}
       </section>
 
-      {/*
-        Guardado, y en qué equipo. Antes era una lista sola porque el software era «del
-        jugador»; ahora cada fichero está en un disco y saber en cuál es la mitad de lo que
-        hay que saber para moverlo o para atacar con él.
-      */}
       <section className="swgroup">
         <h3>
           En el disco <small>{enDisco.length}</small>
         </h3>
 
         {enDisco.length ? (
-          maquinas.map((maquina) => {
-            const suyos = enDisco.filter((fichero) => fichero.server_id === maquina.id);
-
-            return (
-              <div className="swmachine" key={maquina.id}>
-                <h4 className="swmachine__head">
-                  {maquina.name}
-                  <small>
-                    {suyos.length ? `${discoEnUso(suyos)} de ${maquina.hdd}` : 'vacío'}
-                  </small>
-                </h4>
-
-                {suyos.length ? (
-                  pintar(suyos)
-                ) : (
-                  <p className="muted swmachine__empty">
-                    Sin nada guardado. Cabe todo su disco.
-                  </p>
-                )}
-              </div>
-            );
-          })
+          pintar(enDisco)
         ) : (
           <EmptyNotice>
-            El disco está vacío. Compila algo en <Link to="/arsenal">Arsenal</Link>, róbalo por
-            ahí, o escríbelo a mano aquí abajo.
+            {elegido?.name ?? 'Este equipo'} no tiene nada guardado. Compílalo en{' '}
+            <Link to="/arsenal">Arsenal</Link>, róbalo por ahí, tráelo de otro equipo o
+            escríbelo a mano aquí abajo.
           </EmptyNotice>
         )}
       </section>

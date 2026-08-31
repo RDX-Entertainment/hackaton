@@ -73,19 +73,30 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
   const avisos = verbos.filter((verbo) => !verbo.motivo && verbo.nota);
 
   return (
-    <article className="swfile">
-      <p className="swfile__head">
+    <article className={`swfile${fichero.running ? ' is-running' : ''}`}>
+      {/*
+        Una fila y no un bloque apilado. Antes cada fichero ocupaba cabecera, línea de datos,
+        botonera y una lista de motivos: con ocho programas la pantalla era un scroll. Aquí
+        la identidad va a la izquierda, las cifras en el medio alineadas, y los verbos a la
+        derecha, que es como se lee un inventario.
+      */}
+      <div className="swfile__id">
         <b>{fichero.name}</b>
         <span className="swfile__ver">v{fichero.version}</span>
         <span className="swfile__type">{tipo}</span>
-      </p>
+        {fichero.hidden && (
+          <span className="swfile__flag" title={`Escondido con un v${fichero.hidden_with}`}>
+            oculto
+          </span>
+        )}
+      </div>
 
-      <p className="swfile__meta">
-        {fichero.size} de disco · {fichero.ram} de RAM
-        {fichero.hidden && ` · escondido con un v${fichero.hidden_with}`}
-      </p>
+      <div className="swfile__nums">
+        <span title="Ocupa en disco">{fichero.size}▪</span>
+        <span title="Pide de RAM al cargarse">{fichero.ram}▫</span>
+      </div>
 
-      <p className="swfile__actions">
+      <div className="swfile__actions">
         {verbos.map((verbo) => (
           <button
             key={verbo.label}
@@ -102,10 +113,8 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
         </button>
 
         {/*
-          Mover es un select y no un boton porque la pregunta no es «¿mover?» sino «¿a
-          donde?»: con un boton habria que abrir algo despues para responderla. Cargado en
-          memoria no se mueve -- primero se descarga --, y el motivo va en el title en vez de
-          esconder el control, igual que hacen los demas verbos de esta tarjeta.
+          Mover es un select y no un botón porque la pregunta no es «¿mover?» sino «¿a
+          dónde?». Cargado en memoria no se mueve: primero se descarga.
         */}
         {destinos.length > 0 && (
           <select
@@ -114,7 +123,7 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
             disabled={fichero.running}
             title={
               fichero.running
-                ? 'Sacalo de memoria antes de moverlo.'
+                ? 'Sácalo de memoria antes de moverlo.'
                 : 'Llevarlo a otro equipo. Hace falta cable entre los dos, o salida a Internet en ambos.'
             }
             onChange={(event) => {
@@ -133,21 +142,26 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
             ))}
           </select>
         )}
-      </p>
+      </div>
 
+      {/*
+        Los verbos que no valen siguen saliendo apagados y con su motivo, que era el punto de
+        antes —esconderlos deja la duda de por qué no se puede—, pero en una línea seguida en
+        vez de una lista con viñetas: es el bloque que más alto hacía la tarjeta.
+      */}
       {(pegas.length > 0 || avisos.length > 0) && (
-        <ul className="swfile__why">
+        <p className="swfile__why">
           {pegas.map((verbo) => (
-            <li className="is-blocked" key={verbo.label}>
+            <span className="is-blocked" key={verbo.label}>
               <b>{verbo.label}:</b> {verbo.motivo}
-            </li>
+            </span>
           ))}
           {avisos.map((verbo) => (
-            <li key={verbo.label}>
+            <span key={verbo.label}>
               <b>{verbo.label}:</b> {verbo.nota}
-            </li>
+            </span>
           ))}
-        </ul>
+        </p>
       )}
     </article>
   );

@@ -193,7 +193,11 @@ export function HardwarePage() {
       <h2>Hardware</h2>
       <StatusMessage text={status.message} as="block" />
 
-      <MachineSelector machines={machines} selected={selected} onSelect={setSelected} />
+      <MachineSelector
+        machines={machines.map((detail) => detail.machine)}
+        selected={selected}
+        onSelect={setSelected}
+      />
 
       {actual && (
         <MachineCard

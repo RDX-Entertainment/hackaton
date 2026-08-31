@@ -1,7 +1,11 @@
-import type { MachineDetail } from '../../utils/api';
+/**
+ * Lo mínimo que necesita para pintar: un id y un nombre. Así sirve igual en Hardware, donde
+ * lo que hay son fichas completas, y en Software, donde solo hacen falta los equipos.
+ */
+type Equipo = { id: number; name: string };
 
 type MachineSelectorProps = {
-  machines: MachineDetail[];
+  machines: Equipo[];
   /** El equipo que se está viendo. */
   selected: number;
   onSelect: (machine: number) => void;
@@ -23,9 +27,9 @@ type MachineSelectorProps = {
  * el jugador pueda perder.
  */
 export function MachineSelector({ machines, selected, onSelect }: MachineSelectorProps) {
-  const index = machines.findIndex((detail) => detail.machine.id === selected);
+  const index = machines.findIndex((equipo) => equipo.id === selected);
   const actual = index < 0 ? 0 : index;
-  const machine = machines[actual]?.machine;
+  const machine = machines[actual];
 
   if (!machine) {
     return null;
@@ -33,7 +37,7 @@ export function MachineSelector({ machines, selected, onSelect }: MachineSelecto
 
   const mover = (paso: number) => {
     const siguiente = (actual + paso + machines.length) % machines.length;
-    onSelect(machines[siguiente].machine.id);
+    onSelect(machines[siguiente].id);
   };
 
   const solo = machines.length < 2;
