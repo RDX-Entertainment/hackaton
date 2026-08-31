@@ -262,8 +262,9 @@ export function SoftwarePage() {
         </p>
 
         <WriteFileForm
+          maquinas={maquinas}
+          ficheros={ficheros}
           tipos={tipos}
-          discoLibre={Math.max(0, capacidad.hdd - discoEnUso(ficheros))}
           onEscrito={cargar}
         />
       </section>

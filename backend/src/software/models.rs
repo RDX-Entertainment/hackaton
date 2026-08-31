@@ -13,6 +13,8 @@ pub struct SoftwareRow {
     pub soft_hidden_with: i32,
     pub is_folder: bool,
     pub running: bool,
+    /// En que equipo esta guardado.
+    pub server_id: i64,
 }
 
 #[derive(Debug, Clone, FromRow)]

@@ -428,13 +428,16 @@ pub async fn uninstall(
             )));
         }
     } else if part.kind == "hdd" {
-        let left = repo::total_capacity(&mut tx, user_id, "hdd").await?
+        // El disco se mide contra **esta** maquina y no contra la flota. Es mas estricto que
+        // antes a proposito: el software que hay aqui ya no puede apoyarse en el disco de
+        // otro equipo, porque no vive alli. Si no cabe, hay que moverlo o borrarlo primero.
+        let left = repo::machine_capacity(&mut tx, machine, "hdd").await?
             - part.power as i64;
-        let needed = repo::disk_in_use(&mut tx, user_id).await?;
+        let needed = repo::machine_disk_in_use(&mut tx, machine).await?;
 
         if left < needed {
             return Err(ApiError::BadRequest(format!(
-                "DISK_IN_USE: quedarian {left} MB y hay {needed} MB guardados"
+                "DISK_IN_USE: en ese equipo quedarian {left} MB y tiene {needed} MB guardados;                  mueve el software a otro o borralo antes"
             )));
         }
     }

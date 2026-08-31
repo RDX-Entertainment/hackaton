@@ -72,6 +72,11 @@ export type OwnedFile = RemoteFile & {
   hidden: boolean;
   hidden_with: number;
   running: boolean;
+  /**
+   * En que equipo esta guardado. Un fichero propio vive en un disco concreto; los remotos
+   * (`RemoteFile`) no lo llevan porque de la maquina ajena solo se ve lo que hay dentro.
+   */
+  server_id: number;
 };
 
 export type Visited = {

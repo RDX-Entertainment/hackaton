@@ -40,6 +40,9 @@ pub struct SoftwareResponse {
     pub hidden_with: i32,
     pub running: bool,
     pub folder: bool,
+    /// En que equipo vive. Sin esto la interfaz no puede agrupar por maquina, que es lo
+    /// unico que hace legible una lista cuando el software deja de ser «del jugador».
+    pub server_id: i64,
 }
 
 impl From<SoftwareRow> for SoftwareResponse {
@@ -55,6 +58,7 @@ impl From<SoftwareRow> for SoftwareResponse {
             hidden_with: value.soft_hidden_with,
             running: value.running,
             folder: value.is_folder,
+            server_id: value.server_id,
         }
     }
 }
@@ -65,6 +69,8 @@ pub struct NewSoftwareRequest {
     pub soft_type: i16,
     pub size: i32,
     pub ram: i32,
+    /// En que equipo se escribe. Un programa nace en un disco, no «en el jugador».
+    pub server_id: i64,
 }
 
 #[derive(Debug, Serialize)]

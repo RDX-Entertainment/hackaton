@@ -1091,3 +1091,44 @@ pub async fn clear_public_ip(
 
     Ok(())
 }
+
+/// Cuanto suma un tipo de pieza **en una maquina**, no en toda la flota.
+///
+/// El agregado por dueno sigue existiendo para la memoria, que todavia es un deposito comun;
+/// el disco ya no, desde que el software vive en un equipo concreto.
+pub async fn machine_capacity(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+    kind: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(sum(k.power), 0)::bigint
+        FROM hardware_components c
+        JOIN hardware_parts k ON k.id = c.part_id
+        WHERE c.installed_in = $1
+          AND k.kind = $2
+        "#,
+    )
+    .bind(machine)
+    .bind(kind)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// Lo que ocupa el software guardado en esa maquina.
+pub async fn machine_disk_in_use(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(sum(soft_size), 0)::bigint
+        FROM software
+        WHERE server_id = $1
+        "#,
+    )
+    .bind(machine)
+    .fetch_one(&mut **tx)
+    .await
+}

@@ -29,7 +29,8 @@ pub async fn find_user_software(
             s.soft_hidden,
             s.soft_hidden_with,
             s.is_folder,
-            (r.soft_id IS NOT NULL) AS running
+            (r.soft_id IS NOT NULL) AS running,
+            s.server_id
         FROM software s
 
         LEFT JOIN software_running r
@@ -46,36 +47,45 @@ pub async fn find_user_software(
     .await
 }
 
-pub async fn total_hdd(
+/// El disco de **una** maquina, no la suma de las del dueno.
+///
+/// Antes esto sumaba todas: meter un disco en cualquier caja daba sitio a todo el software
+/// del jugador, estuviera donde estuviera. Con el software viviendo en un equipo concreto, lo
+/// que decide si algo cabe es el disco de ese equipo y solo ese.
+pub async fn machine_hdd(
     pool: &PgPool,
+    machine: i64,
     user_id: i64,
 ) -> Result<Option<f32>, sqlx::Error> {
     sqlx::query_scalar(
         r#"
-        SELECT SUM(hdd)::real
+        SELECT hdd::real
         FROM hardware
-        WHERE user_id = $1
+        WHERE server_id = $1
+          AND user_id = $2
           AND NOT is_npc
         "#,
     )
+    .bind(machine)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_optional(pool)
     .await
+    .map(Option::flatten)
 }
 
+/// Lo que ocupa el software guardado en esa maquina.
 pub async fn used_hdd(
     pool: &PgPool,
-    user_id: i64,
+    machine: i64,
 ) -> Result<Option<i64>, sqlx::Error> {
     sqlx::query_scalar(
         r#"
         SELECT SUM(soft_size)::bigint
         FROM software
-        WHERE user_id = $1
-          AND NOT is_npc
+        WHERE server_id = $1
         "#,
     )
-    .bind(user_id)
+    .bind(machine)
     .fetch_one(pool)
     .await
 }
@@ -83,6 +93,7 @@ pub async fn used_hdd(
 pub async fn create_software(
     pool: &PgPool,
     user_id: i64,
+    machine: i64,
     name: &str,
     size: i32,
     ram: i32,
@@ -92,17 +103,19 @@ pub async fn create_software(
         r#"
         INSERT INTO software(
             user_id,
+            server_id,
             soft_name,
             soft_version,
             soft_size,
             soft_ram,
             soft_type
         )
-        VALUES($1, $2, 1, $3, $4, $5)
+        VALUES($1, $2, $3, 1, $4, $5, $6)
         RETURNING id
         "#,
     )
     .bind(user_id)
+    .bind(machine)
     .bind(name)
     .bind(size)
     .bind(ram)

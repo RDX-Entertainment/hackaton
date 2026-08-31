@@ -102,31 +102,26 @@ pub async fn create_software(
         );
     }
 
-    let total = repo::total_hdd(
-        pool,
-        user_id,
-    )
-    .await?
-    .unwrap_or(0.0) as i64;
+    // El equipo tiene que ser suyo. `machine_hdd` filtra por dueno, asi que un `None` aqui
+    // significa «esa maquina no existe o no es tuya» -- las dos merecen la misma respuesta,
+    // porque distinguirlas le diria a cualquiera que maquinas hay.
+    let Some(total) = repo::machine_hdd(pool, input.server_id, user_id).await? else {
+        return Err(ApiError::BadRequest("unknown machine".into()));
+    };
 
-    let used = repo::used_hdd(
-        pool,
-        user_id,
-    )
-    .await?
-    .unwrap_or(0);
+    let total = total as i64;
+    let used = repo::used_hdd(pool, input.server_id).await?.unwrap_or(0);
 
     if total < used + input.size as i64 {
-        return Err(
-            ApiError::BadRequest(
-                "NO_DISK_SPACE".into(),
-            ),
-        );
+        return Err(ApiError::BadRequest(format!(
+            "NO_DISK_SPACE: en ese equipo caben {total} MB y ya hay {used} MB"
+        )));
     }
 
     let id = repo::create_software(
         pool,
         user_id,
+        input.server_id,
         name,
         input.size,
         input.ram,

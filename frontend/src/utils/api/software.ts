@@ -10,12 +10,14 @@ export function createSoftware(
   softType: number,
   size: number,
   ram: number,
+  serverId: number,
 ): Promise<CreatedRecord> {
   return post<CreatedRecord>('/software', {
     name,
     soft_type: softType,
     size,
     ram,
+    server_id: serverId,
   });
 }
 
