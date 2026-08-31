@@ -5,7 +5,6 @@ import { FileCard } from '../components/software/FileCard';
 import { Meter } from '../components/software/Meter';
 import { contextoDe, discoEnUso, ramEnUso } from '../components/software/rules';
 import { MachineSelector } from '../components/hardware/MachineSelector';
-import { WriteFileForm } from '../components/software/WriteFileForm';
 import { EmptyNotice } from '../components/Notice';
 import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
@@ -117,13 +116,14 @@ export function SoftwarePage() {
     [tipos],
   );
 
-  // Lo que hay en el equipo que se está mirando. La memoria se queda fuera del filtro
-  // porque todavía es un depósito común: lo cargado ocupa RAM de todos, mires donde mires.
+  // Lo que hay en el equipo que se está mirando, cargado o no. Un programa corre en la
+  // máquina donde está guardado, así que lo que aparece en memoria también es de este equipo.
+  // Lo que sigue siendo común es el medidor de RAM, que es otra cosa.
   const aqui = ficheros.filter((uno) => uno.server_id === equipo);
 
   const elegido = maquinas.find((maquina) => maquina.id === equipo);
 
-  const enMemoria = ficheros.filter((uno) => uno.running);
+  const enMemoria = aqui.filter((uno) => uno.running);
   const enDisco = aqui.filter((uno) => !uno.running && !uno.hidden);
   const ocultos = aqui.filter((uno) => uno.hidden);
   const compilacionActiva = compilaciones.find((una) => !una.completed);
@@ -280,8 +280,7 @@ export function SoftwarePage() {
         ) : (
           <EmptyNotice>
             {elegido?.name ?? 'Este equipo'} no tiene nada guardado. Compílalo en{' '}
-            <Link to="/arsenal">Arsenal</Link>, róbalo por ahí, tráelo de otro equipo o
-            escríbelo a mano aquí abajo.
+            <Link to="/arsenal">Arsenal</Link>, róbalo por ahí o tráelo de otro equipo.
           </EmptyNotice>
         )}
       </section>
@@ -301,22 +300,6 @@ export function SoftwarePage() {
         </section>
       )}
 
-      <section className="swgroup">
-        <h3>Escribir un fichero a mano</h3>
-
-        <p className="muted">
-          La vía del legado: eliges tipo, tamaño y RAM y aparece el programa. Para armarte, lo
-          que quieres es <Link to="/arsenal">Arsenal</Link>; esto es para las herramientas que
-          el sistema modular todavía no cubre, como el Hidder y el Seeker.
-        </p>
-
-        <WriteFileForm
-          maquinas={maquinas}
-          ficheros={ficheros}
-          tipos={tipos}
-          onEscrito={cargar}
-        />
-      </section>
     </>
   );
 }
