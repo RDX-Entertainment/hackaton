@@ -106,3 +106,43 @@
 .swfile__why li.is-blocked b {
   color: var(--color-danger);
 }
+
+/*
+ * Los ficheros, agrupados por el equipo donde estan. El grupo lleva una franja a la
+ * izquierda en vez de un marco entero: separa sin encerrar, que es lo que hace falta cuando
+ * dentro ya hay tarjetas con su propio borde.
+ */
+.swmachine {
+  margin: 0.9rem 0 0;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--color-border);
+}
+
+.swmachine:first-of-type {
+  margin-top: 0.4rem;
+}
+
+.swmachine__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin: 0 0 0.45rem;
+  color: var(--color-accent);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.swmachine__head small {
+  color: var(--color-text-subtle);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.swmachine__empty {
+  margin: 0 0 0.3rem;
+  font-size: 0.7rem;
+}

@@ -85,12 +85,13 @@ export function SoftwarePage() {
   }, [cargar]);
 
   // El worker suma la flota entera para el disco y para la memoria, así que aquí igual.
+  /**
+   * La memoria, sumada. Ya no se suma el disco: cada fichero vive en un equipo y lo que
+   * decide si cabe es ese disco y solo ese. La RAM sigue siendo un depósito común hasta que
+   * la fase 3 la baje también a la máquina.
+   */
   const capacidad = useMemo(
-    () =>
-      maquinas.reduce(
-        (total, maquina) => ({ hdd: total.hdd + maquina.hdd, ram: total.ram + maquina.ram }),
-        { hdd: 0, ram: 0 },
-      ),
+    () => ({ ram: maquinas.reduce((total, maquina) => total + maquina.ram, 0) }),
     [maquinas],
   );
 
@@ -150,14 +151,24 @@ export function SoftwarePage() {
         una tarea, y el resultado se ve en <Link to="/processes">Procesos</Link>.
       </p>
 
+      {/*
+        Un medidor de disco por equipo, y no uno solo.
+        Sumarlos daria un numero que no decide nada: un fichero cabe o no cabe en **un**
+        disco, y con el total en pantalla se vería sitio de sobra justo cuando el equipo
+        donde intentas escribir está lleno.
+        La memoria sigue siendo una sola: todavía es un depósito común.
+      */}
       <div className="swmeters">
-        <Meter
-          label="Disco"
-          usado={discoEnUso(ficheros)}
-          total={capacidad.hdd}
-          unidad=""
-          nota="Lo ocupa todo lo que tienes, corra o no."
-        />
+        {maquinas.map((maquina) => (
+          <Meter
+            key={maquina.id}
+            label={`Disco · ${maquina.name}`}
+            usado={discoEnUso(ficheros.filter((fichero) => fichero.server_id === maquina.id))}
+            total={maquina.hdd}
+            unidad=""
+            nota="Lo que hay guardado en este equipo, corra o no."
+          />
+        ))}
         <Meter
           label="Memoria"
           usado={ramEnUso(ficheros)}
@@ -222,13 +233,39 @@ export function SoftwarePage() {
         )}
       </section>
 
+      {/*
+        Guardado, y en qué equipo. Antes era una lista sola porque el software era «del
+        jugador»; ahora cada fichero está en un disco y saber en cuál es la mitad de lo que
+        hay que saber para moverlo o para atacar con él.
+      */}
       <section className="swgroup">
         <h3>
           En el disco <small>{enDisco.length}</small>
         </h3>
 
         {enDisco.length ? (
-          pintar(enDisco)
+          maquinas.map((maquina) => {
+            const suyos = enDisco.filter((fichero) => fichero.server_id === maquina.id);
+
+            return (
+              <div className="swmachine" key={maquina.id}>
+                <h4 className="swmachine__head">
+                  {maquina.name}
+                  <small>
+                    {suyos.length ? `${discoEnUso(suyos)} de ${maquina.hdd}` : 'vacío'}
+                  </small>
+                </h4>
+
+                {suyos.length ? (
+                  pintar(suyos)
+                ) : (
+                  <p className="muted swmachine__empty">
+                    Sin nada guardado. Cabe todo su disco.
+                  </p>
+                )}
+              </div>
+            );
+          })
         ) : (
           <EmptyNotice>
             El disco está vacío. Compila algo en <Link to="/arsenal">Arsenal</Link>, róbalo por
