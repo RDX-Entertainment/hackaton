@@ -1,4 +1,4 @@
-import { get, post } from './client';
+import { get, post, put } from './client';
 import type { CreatedRecord, OwnedFile, SoftwareType } from './types';
 
 export function listSoftware(): Promise<OwnedFile[]> {
@@ -23,4 +23,9 @@ export function createSoftware(
 
 export function listSoftwareTypes(): Promise<SoftwareType[]> {
   return get<SoftwareType[]>('/game/software-types');
+}
+
+/** Llevar un fichero a otro equipo. Hace falta cable entre ambos, o salida a Internet en los dos. */
+export function moveSoftware(id: number, serverId: number): Promise<void> {
+  return put<void>(`/software/${id}/machine`, { server_id: serverId });
 }

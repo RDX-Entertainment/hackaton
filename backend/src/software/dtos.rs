@@ -199,3 +199,9 @@ pub struct AdminSoftwareRequest {
 pub struct AdminSoftwareRunningRequest {
     pub running: bool,
 }
+
+/// Llevar un fichero a otro equipo.
+#[derive(Debug, Deserialize)]
+pub struct MoveSoftwareRequest {
+    pub server_id: i64,
+}

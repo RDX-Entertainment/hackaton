@@ -11,6 +11,7 @@ use crate::{
 
 use super::{
     dtos::{
+        MoveSoftwareRequest,
         NewSoftwareRequest,
         AdminSoftwareRequest,
         AdminSoftwareRunningRequest,
@@ -60,6 +61,14 @@ pub fn configure(
         .route(
             "/research",
             web::post().to(start_research),
+        )
+        //
+        // Mover un fichero a otro equipo. Es un PUT sobre el fichero y no un POST a un
+        // «traslado» porque no crea nada: cambia donde vive algo que ya existe.
+        //
+        .route(
+            "/software/{id}/machine",
+            web::put().to(move_software),
         );
 
     //
@@ -203,5 +212,22 @@ pub async fn admin_delete_software(state: web::Data<AppState>, _: Ctx, path: web
 pub async fn admin_set_software_running(state: web::Data<AppState>, _: Ctx, path: web::Path<(i64, i64)>, input: web::Json<AdminSoftwareRunningRequest>) -> Result<HttpResponse, ApiError> {
     let (user, software) = path.into_inner();
     services::admin_set_software_running(&state.pool, user, software, input.running).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn move_software(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<MoveSoftwareRequest>,
+) -> Result<HttpResponse, ApiError> {
+    services::move_software(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+        input.into_inner(),
+    )
+    .await?;
+
     Ok(HttpResponse::NoContent().finish())
 }

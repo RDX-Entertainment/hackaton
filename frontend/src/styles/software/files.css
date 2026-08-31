@@ -146,3 +146,19 @@
   margin: 0 0 0.3rem;
   font-size: 0.7rem;
 }
+
+/* «Mover a…» va con los verbos, pero es un select: se le quita el aire de campo de formulario. */
+.swfile__move {
+  padding: 0.28rem 0.5rem;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.72rem;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+  cursor: pointer;
+}
+
+.swfile__move:disabled {
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
+}

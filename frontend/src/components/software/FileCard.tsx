@@ -32,6 +32,9 @@ type FileCardProps = {
   ctx: Contexto;
   onTarea: (accion: number, label: string) => void;
   onInvestigar: () => void;
+  /** Los otros equipos a los que se puede llevar. Vacio si solo hay uno. */
+  destinos: { id: number; name: string }[];
+  onMover: (destino: number) => void;
 };
 
 /**
@@ -41,7 +44,7 @@ type FileCardProps = {
  * Esconderlos dejaría la misma duda que antes —«¿y por qué no puedo instalarlo?»— con un
  * botón menos donde buscar la respuesta.
  */
-export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar }: FileCardProps) {
+export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, onMover }: FileCardProps) {
   const verbos: Verbo[] = [
     fichero.running
       ? { label: 'Sacar de memoria', accion: ACCION.descargar, motivo: noSePuedeDescargar(fichero) }
@@ -97,6 +100,39 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar }: FileCard
         <button title={`Sube a la v${fichero.version + 1}.`} onClick={onInvestigar}>
           Investigar
         </button>
+
+        {/*
+          Mover es un select y no un boton porque la pregunta no es «¿mover?» sino «¿a
+          donde?»: con un boton habria que abrir algo despues para responderla. Cargado en
+          memoria no se mueve -- primero se descarga --, y el motivo va en el title en vez de
+          esconder el control, igual que hacen los demas verbos de esta tarjeta.
+        */}
+        {destinos.length > 0 && (
+          <select
+            className="swfile__move"
+            value=""
+            disabled={fichero.running}
+            title={
+              fichero.running
+                ? 'Sacalo de memoria antes de moverlo.'
+                : 'Llevarlo a otro equipo. Hace falta cable entre los dos, o salida a Internet en ambos.'
+            }
+            onChange={(event) => {
+              const destino = Number(event.target.value);
+
+              if (destino) {
+                onMover(destino);
+              }
+            }}
+          >
+            <option value="">Mover a…</option>
+            {destinos.map((destino) => (
+              <option key={destino.id} value={destino.id}>
+                {destino.name}
+              </option>
+            ))}
+          </select>
+        )}
       </p>
 
       {(pegas.length > 0 || avisos.length > 0) && (

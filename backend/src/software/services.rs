@@ -9,6 +9,7 @@ use super::{
     dtos::{
         DeleteSoftwareStartedResponse,
         AdminSoftwareRequest,
+        MoveSoftwareRequest,
         NewSoftwareRequest,
         RemoteSoftwareResponse,
         ResearchHistoryResponse,
@@ -452,5 +453,87 @@ pub async fn admin_delete_software(pool: &PgPool, user_id: i64, software_id: i64
 
 pub async fn admin_set_software_running(pool: &PgPool, user_id: i64, software_id: i64, running: bool) -> Result<(), ApiError> {
     if !repo::set_admin_software_running(pool, user_id, software_id, running).await? { return Err(ApiError::NotFound); }
+    Ok(())
+}
+
+//
+// ==============================
+// MOVER ENTRE MAQUINAS
+// ==============================
+//
+
+/// Llevar un fichero de un equipo a otro.
+///
+/// Desde que el software vive en un disco concreto, esto deja de ser un lujo: sin forma de
+/// moverlo, lo que caiga en el equipo pequeño se queda ahi para siempre y la unica salida es
+/// borrarlo.
+///
+/// ## Hace falta un camino
+///
+/// Un fichero no salta por el aire entre dos maquinas: o comparten cable, o las dos salen a
+/// Internet y se lo pasan por ahi. Una maquina sin tarjeta y sin cable esta aislada de
+/// verdad, y eso es lo que hace que aislar algo signifique algo -- lo que metes ahi, ahi se
+/// queda hasta que le tiendas un cable.
+///
+/// Exigir solo cable habria sido mas puro y habria bloqueado el juego: una placa domestica
+/// tiene una boca, y si la ocupa la salida a Internet no queda ninguna para cablear.
+pub async fn move_software(
+    pool: &PgPool,
+    user_id: i64,
+    software: i64,
+    input: MoveSoftwareRequest,
+) -> Result<(), ApiError> {
+    let Some((origen, size, running)) =
+        repo::find_owned_software(pool, software, user_id).await?
+    else {
+        return Err(ApiError::BadRequest("unknown software".into()));
+    };
+
+    let destino = input.server_id;
+
+    if origen == destino {
+        return Err(ApiError::BadRequest(
+            "SAME_MACHINE: ese fichero ya esta en ese equipo".into(),
+        ));
+    }
+
+    // Cargado en memoria no se mueve: primero se descarga. Mover algo que esta corriendo
+    // seria sacarle el disco de debajo a un programa en marcha.
+    if running {
+        return Err(ApiError::BadRequest(
+            "SOFTWARE_RUNNING: descargalo de memoria antes de moverlo".into(),
+        ));
+    }
+
+    // `machine_hdd` filtra por dueno: un `None` es «no existe o no es tuya», y las dos
+    // merecen la misma respuesta.
+    let Some(disco) = repo::machine_hdd(pool, destino, user_id).await? else {
+        return Err(ApiError::BadRequest("unknown machine".into()));
+    };
+
+    let ocupado = repo::used_hdd(pool, destino).await?.unwrap_or(0);
+    let disco = disco as i64;
+
+    if disco < ocupado + size as i64 {
+        return Err(ApiError::BadRequest(format!(
+            "NO_DISK_SPACE: en ese equipo caben {disco} MB y ya hay {ocupado} MB"
+        )));
+    }
+
+    let por_cable = repo::are_linked(pool, origen, destino).await?;
+
+    let por_internet = repo::has_public_ip(pool, origen).await?
+        && repo::has_public_ip(pool, destino).await?;
+
+    if !por_cable && !por_internet {
+        return Err(ApiError::BadRequest(
+            "NO_ROUTE: esos dos equipos no se ven; tiendeles un cable o dales salida a \
+             Internet a los dos"
+                .into(),
+        ));
+    }
+
+    repo::set_software_machine(pool, software, destino).await?;
+
     Ok(())
 }

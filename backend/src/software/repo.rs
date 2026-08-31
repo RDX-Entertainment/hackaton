@@ -527,3 +527,85 @@ pub async fn set_admin_software_running(
     }
     Ok(true)
 }
+
+//
+// ==============================
+// MOVER ENTRE MAQUINAS
+// ==============================
+//
+
+/// Un fichero propio, con lo que hace falta para decidir si se puede mover: donde esta,
+/// cuanto ocupa y si esta cargado.
+pub async fn find_owned_software(
+    pool: &PgPool,
+    software: i64,
+    user_id: i64,
+) -> Result<Option<(i64, i32, bool)>, sqlx::Error> {
+    sqlx::query_as::<_, (i64, i32, bool)>(
+        r#"
+        SELECT
+            s.server_id,
+            s.soft_size,
+            (r.soft_id IS NOT NULL) AS running
+        FROM software s
+        LEFT JOIN software_running r ON r.soft_id = s.id
+        WHERE s.id = $1
+          AND s.user_id = $2
+          AND NOT s.is_npc
+        "#,
+    )
+    .bind(software)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Si hay cable entre esas dos, mirado por los dos extremos.
+pub async fn are_linked(
+    pool: &PgPool,
+    a: i64,
+    b: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT count(*)
+        FROM hardware_links
+        WHERE (from_server = $1 AND to_server = $2)
+           OR (from_server = $2 AND to_server = $1)
+        "#,
+    )
+    .bind(a)
+    .bind(b)
+    .fetch_one(pool)
+    .await
+    .map(|found| found > 0)
+}
+
+/// Si la maquina sale a Internet. Dos que salen pueden pasarse un fichero por ahi aunque no
+/// compartan cable.
+pub async fn has_public_ip(
+    pool: &PgPool,
+    machine: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, Option<i64>>(
+        "SELECT public_ip FROM hardware WHERE server_id = $1",
+    )
+    .bind(machine)
+    .fetch_optional(pool)
+    .await
+    .map(|found| found.flatten().is_some())
+}
+
+pub async fn set_software_machine(
+    pool: &PgPool,
+    software: i64,
+    machine: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE software SET server_id = $2 WHERE id = $1")
+        .bind(software)
+        .bind(machine)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}

@@ -129,6 +129,23 @@ export function SoftwarePage() {
     }
   };
 
+  /**
+   * Llevar un fichero a otro equipo.
+   *
+   * Recarga entera al terminar en vez de tocar la lista a mano: al moverse cambian dos
+   * medidores de disco a la vez -- el de origen y el de destino -- y actualizarlos por
+   * separado es la clase de cuenta que se desincroniza a la primera.
+   */
+  const mover = async (fichero: number, destino: number) => {
+    try {
+      await softwareApi.moveSoftware(fichero, destino);
+      status.report('Fichero movido.');
+      await cargar();
+    } catch (error) {
+      status.reportError(error);
+    }
+  };
+
   const pintar = (lista: OwnedFile[]) =>
     lista.map((fichero) => (
       <FileCard
@@ -138,6 +155,8 @@ export function SoftwarePage() {
         ctx={ctx}
         onTarea={(accion, label) => void encolar(accion, label, fichero.id)}
         onInvestigar={() => void investigar(fichero.id)}
+        destinos={maquinas.filter((maquina) => maquina.id !== fichero.server_id)}
+        onMover={(destino) => void mover(fichero.id, destino)}
       />
     ));
 
