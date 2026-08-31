@@ -290,45 +290,7 @@ pub async fn record_spend(
 // ==============================
 //
 
-/// Lo que ya ocupa el disco: quitar una pieza por debajo de esto dejaria ficheros fuera.
-pub async fn disk_in_use(
-    tx: &mut Transaction<'_, Postgres>,
-    user_id: i64,
-) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar(
-        r#"
-        SELECT COALESCE(sum(soft_size), 0)::bigint
-        FROM software
-        WHERE user_id = $1
-          AND NOT is_npc
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(&mut **tx)
-    .await
-}
 
-/// Lo que ya consume la memoria por el software cargado.
-pub async fn memory_in_use(
-    tx: &mut Transaction<'_, Postgres>,
-    user_id: i64,
-) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar(
-        r#"
-        SELECT COALESCE(sum(s.soft_ram), 0)::bigint
-        FROM software s
-
-        JOIN software_running r
-            ON r.soft_id = s.id
-
-        WHERE r.user_id = $1
-          AND NOT r.is_npc
-        "#,
-    )
-    .bind(user_id)
-    .fetch_one(&mut **tx)
-    .await
-}
 
 //
 // ==============================
@@ -696,29 +658,6 @@ pub async fn installed_power(
     .await
 }
 
-/// Capacidad total del jugador para un tipo, sumando todas sus maquinas. Es el numero que
-/// el resto del juego lee, asi que es el que hay que comparar con lo que esta en uso.
-pub async fn total_capacity(
-    tx: &mut Transaction<'_, Postgres>,
-    user_id: i64,
-    kind: &str,
-) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar(
-        r#"
-        SELECT COALESCE(sum(k.power), 0)::bigint
-        FROM hardware_components c
-        JOIN hardware_parts k ON k.id = c.part_id
-        WHERE c.user_id = $1
-          AND NOT c.is_npc
-          AND c.installed_in IS NOT NULL
-          AND k.kind = $2
-        "#,
-    )
-    .bind(user_id)
-    .bind(kind)
-    .fetch_one(&mut **tx)
-    .await
-}
 
 /// Rehace las cuatro columnas desde lo que hay puesto. Es la unica escritura de capacidad
 /// que queda en el sistema: cualquier movimiento de pieza termina aqui.
@@ -1126,6 +1065,24 @@ pub async fn machine_disk_in_use(
         SELECT COALESCE(sum(soft_size), 0)::bigint
         FROM software
         WHERE server_id = $1
+        "#,
+    )
+    .bind(machine)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// La memoria que ocupa lo que corre **en esa maquina**.
+pub async fn machine_memory_in_use(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(sum(s.soft_ram), 0)::bigint
+        FROM software s
+        JOIN software_running r ON r.soft_id = s.id
+        WHERE s.server_id = $1
         "#,
     )
     .bind(machine)

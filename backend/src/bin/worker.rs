@@ -1054,14 +1054,23 @@ async fn install_effect(
     if already {
         return Ok(());
     }
-    // calculateRamUsage: total ram of the machine against what is already loaded on it.
-    let total: Option<f32> =
-        sqlx::query_scalar("SELECT sum(ram)::real FROM hardware WHERE user_id=$1 AND is_npc=$2")
-            .bind(owner)
-            .bind(owner_is_npc)
-            .fetch_one(pool)
-            .await?;
-    let used:Option<i64>=sqlx::query_scalar("SELECT sum(s.soft_ram)::bigint FROM software s JOIN software_running r ON r.soft_id=s.id WHERE r.user_id=$1 AND r.is_npc=$2").bind(owner).bind(owner_is_npc).fetch_one(pool).await?;
+    // calculateRamUsage, ahora de verdad **de la maquina**: el comentario decia eso desde el
+    // principio pero las dos consultas sumaban la flota entera, asi que un programa cabia en
+    // un equipo pequeno mientras el dueno tuviera memoria en otro. Un programa corre donde
+    // esta guardado, y la memoria que gasta es la de ese equipo.
+    let total: Option<f32> = sqlx::query_scalar(
+        "SELECT h.ram::real FROM hardware h JOIN software s ON s.server_id = h.server_id WHERE s.id = $1",
+    )
+    .bind(soft)
+    .fetch_optional(pool)
+    .await?
+    .flatten();
+    let used: Option<i64> = sqlx::query_scalar(
+        "SELECT sum(s.soft_ram)::bigint FROM software s JOIN software_running r ON r.soft_id = s.id WHERE s.server_id = (SELECT server_id FROM software WHERE id = $1)",
+    )
+    .bind(soft)
+    .fetch_one(pool)
+    .await?;
     if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + need as i64 {
         return Ok(());
     }

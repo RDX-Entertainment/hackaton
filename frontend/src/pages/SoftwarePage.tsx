@@ -98,30 +98,24 @@ export function SoftwarePage() {
     return () => window.clearInterval(timer);
   }, [cargar]);
 
-  // El worker suma la flota entera para el disco y para la memoria, así que aquí igual.
-  /**
-   * La memoria, sumada. Ya no se suma el disco: cada fichero vive en un equipo y lo que
-   * decide si cabe es ese disco y solo ese. La RAM sigue siendo un depósito común hasta que
-   * la fase 3 la baje también a la máquina.
-   */
-  const capacidad = useMemo(
-    () => ({ ram: maquinas.reduce((total, maquina) => total + maquina.ram, 0) }),
-    [maquinas],
-  );
-
-  const ctx = useMemo(() => contextoDe(ficheros, capacidad.ram), [ficheros, capacidad.ram]);
-
   const nombreDeTipo = useMemo(
     () => new Map(tipos.map((uno) => [uno.id, uno.name])),
     [tipos],
   );
 
   // Lo que hay en el equipo que se está mirando, cargado o no. Un programa corre en la
-  // máquina donde está guardado, así que lo que aparece en memoria también es de este equipo.
-  // Lo que sigue siendo común es el medidor de RAM, que es otra cosa.
+  // máquina donde está guardado y gasta su disco y su memoria, así que todo lo de esta
+  // pantalla es de este equipo.
   const aqui = ficheros.filter((uno) => uno.server_id === equipo);
 
   const elegido = maquinas.find((maquina) => maquina.id === equipo);
+
+  // Las reglas de «¿cabe en memoria?» se miden contra este equipo: un programa corre donde
+  // está guardado y gasta la RAM de ahí. El backend hace la misma cuenta al cargarlo.
+  const ctx = useMemo(
+    () => contextoDe(aqui, elegido?.ram ?? 0),
+    [aqui, elegido?.ram],
+  );
 
   const enMemoria = aqui.filter((uno) => uno.running);
   const enDisco = aqui.filter((uno) => !uno.running && !uno.hidden);
@@ -207,11 +201,11 @@ export function SoftwarePage() {
           nota="Lo que hay guardado en este equipo, corra o no."
         />
         <Meter
-          label="Memoria"
-          usado={ramEnUso(ficheros)}
-          total={capacidad.ram}
+          label={`Memoria · ${elegido?.name ?? '—'}`}
+          usado={ramEnUso(aqui)}
+          total={elegido?.ram ?? 0}
           unidad=""
-          nota="Solo la ocupa lo cargado, y se cuenta entre todos los equipos."
+          nota="Solo la ocupa lo cargado en este equipo."
         />
       </div>
 

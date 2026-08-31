@@ -418,9 +418,12 @@ pub async fn uninstall(
             )));
         }
     } else if part.kind == "ram" {
-        let left = repo::total_capacity(&mut tx, user_id, "ram").await?
+        // Como el disco: la memoria que se saca es de **esta** maquina, y lo que tiene que
+        // seguir cabiendo es lo que corre aqui. Antes se miraba contra la flota, y sacar RAM
+        // de un equipo pasaba la comprobacion gracias a la memoria de otro.
+        let left = repo::machine_capacity(&mut tx, machine, "ram").await?
             - part.power as i64;
-        let needed = repo::memory_in_use(&mut tx, user_id).await?;
+        let needed = repo::machine_memory_in_use(&mut tx, machine).await?;
 
         if left < needed {
             return Err(ApiError::BadRequest(format!(
