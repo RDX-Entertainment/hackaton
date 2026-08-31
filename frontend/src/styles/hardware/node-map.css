@@ -1,0 +1,304 @@
+/*
+ * El selector de equipo y el mapa de nodos.
+ *
+ * Los dos hablan del mismo objeto —un equipo— desde dos sitios distintos, así que el nodo
+ * seleccionado en el mapa y el nombre del selector se marcan con el mismo acento: es lo que
+ * ata las dos mitades de la pantalla.
+ */
+
+/* ── El selector: ‹ Servidor › ───────────────────────────────────────────── */
+
+.mchooser {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  margin: 0 0 0.8rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.mchooser__arrow {
+  margin: 0;
+  padding: 0 0.55rem;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  line-height: 1.3;
+  background: none;
+  border: var(--border-width) solid transparent;
+  cursor: pointer;
+}
+
+.mchooser__arrow:hover:not(:disabled) {
+  border-color: var(--color-accent-dim);
+}
+
+.mchooser__arrow:disabled {
+  color: var(--color-text-subtle);
+  cursor: default;
+}
+
+.mchooser__name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 12rem;
+  justify-content: center;
+}
+
+.mchooser__name b {
+  color: var(--color-accent);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+
+.mchooser__name small {
+  color: var(--color-text-subtle);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── El mapa ─────────────────────────────────────────────────────────────── */
+
+.nodemap {
+  position: relative;
+  margin: 0.4rem 0 0.2rem;
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+  /* La rejilla da referencia al arrastrar: sin ella no se nota que el nodo se mueve. */
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: -1px -1px;
+  touch-action: none;
+}
+
+.nodemap.is-linking {
+  cursor: crosshair;
+}
+
+.nodemap__legend {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.6rem;
+  z-index: 3;
+  color: var(--color-text-subtle);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* El SVG cubre el lienzo entero; solo los cables reciben el ratón. */
+.nodemap__cables {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.nodemap__cable {
+  stroke: var(--color-accent-dim);
+  stroke-width: 2;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.nodemap__cable:hover {
+  stroke: var(--color-danger);
+  stroke-width: 3;
+}
+
+.nodemap__node {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.55rem;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  cursor: grab;
+  user-select: none;
+}
+
+.nodemap__node:active {
+  cursor: grabbing;
+}
+
+.nodemap__node.is-selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+.nodemap__node.is-source {
+  border-color: var(--color-highlight);
+  border-style: dashed;
+}
+
+.nodemap__name {
+  color: var(--color-text);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodemap__board {
+  color: var(--color-text-subtle);
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Las bocas de red: una por ranura de la placa, llenas las que ya tienen cable. */
+.nodemap__ports {
+  display: flex;
+  gap: 0.22rem;
+  margin-top: 0.2rem;
+}
+
+.nodemap__ports em {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: transparent;
+  border: var(--border-width) solid var(--color-accent-dim);
+  cursor: pointer;
+}
+
+.nodemap__ports em:hover:not(.is-used) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-glow);
+}
+
+.nodemap__ports em.is-used {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  cursor: default;
+}
+
+.nodemap__noports {
+  color: var(--color-text-subtle);
+  font-size: 0.55rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── El nodo de Internet ─────────────────────────────────────────────────── */
+
+/*
+ * Redondo y azul, como en el mapa de organizaciones: es la unica cosa del lienzo que no es
+ * un equipo, y la forma lo dice antes que el texto. No se puede seleccionar ni cablear a
+ * mano -- solo se arrastra-- porque no es una maquina, es a donde llegan las que tienen
+ * tarjeta de red.
+ */
+.nodemap__web {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  justify-items: center;
+  gap: 0.22rem;
+  padding: 0.25rem;
+  color: var(--color-highlight);
+  background: transparent;
+  border: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.nodemap__web:active {
+  cursor: grabbing;
+}
+
+.nodemap__web-icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  color: var(--color-highlight);
+  border: 2px solid currentcolor;
+  border-radius: 50%;
+  box-shadow: 0 0 0.8rem var(--color-highlight-dim);
+}
+
+.nodemap__web-icon svg {
+  width: 1.7rem;
+  height: 1.7rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.7;
+}
+
+.nodemap__web b {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+}
+
+.nodemap__web small {
+  color: var(--color-text-subtle);
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+
+/*
+ * La salida a Internet va punteada y no se puede pulsar: no es un cable que se quite desde
+ * el mapa, se quita sacando la tarjeta de red. Un trazo distinto evita que alguien lo
+ * intente y crea que la interfaz no responde.
+ */
+.nodemap__uplink {
+  stroke: var(--color-highlight-dim);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  pointer-events: none;
+}
+
+/* ── Zona del equipo ─────────────────────────────────────────────────────── */
+
+.nodemap__zone {
+  color: var(--color-text-subtle);
+  font-size: 0.52rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.nodemap__node--public .nodemap__zone {
+  color: var(--color-highlight);
+}
+
+/* Una franja lateral: se ve de un vistazo cuales estan expuestos y cuales no. */
+.nodemap__node--public {
+  border-left: 3px solid var(--color-highlight);
+}
+
+.nodemap__node--internal {
+  border-left: 3px solid var(--color-border);
+}
+
+/*
+ * La boca que se lleva la salida a Internet. Va del color del gateway y no del acento de los
+ * cables: ocupa sitio igual, pero no se libera quitando un cable sino sacando la tarjeta.
+ */
+.nodemap__ports em.is-uplink {
+  background: var(--color-highlight);
+  border-color: var(--color-highlight);
+}
+
+/* La direccion del nodo. Tabular para que las cifras no bailen al arrastrar. */
+.nodemap__ip {
+  color: var(--color-accent);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.nodemap__node--internal .nodemap__ip {
+  color: var(--color-text-muted);
+}

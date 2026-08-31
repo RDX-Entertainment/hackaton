@@ -9,6 +9,23 @@ export type Machine = {
   hdd: number;
   ram: number;
   net: number;
+  /** Donde esta puesto en el mapa de nodos, en pixeles desde la esquina del lienzo. */
+  map_x: number;
+  map_y: number;
+  /** Como se la alcanza desde fuera. `null` = sin tarjeta de red, no sale a Internet. */
+  public_ip: number | null;
+  /** Como se la nombra dentro de la red de su dueno. La tienen todas. */
+  lan_ip: number | null;
+};
+
+/**
+ * Un cable LAN entre dos equipos. No tiene direccion: `from` y `to` son solo el orden en
+ * que se tendio, y el backend trata A-B y B-A como el mismo cable.
+ */
+export type MachineLink = {
+  id: number;
+  from_server: number;
+  to_server: number;
 };
 
 export type Chipset = {

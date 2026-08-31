@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::models::{ChipsetRow, ComponentRow, MachineRow, PartRow};
+use super::models::{ChipsetRow, ComponentRow, LinkRow, MachineRow, PartRow};
 
 //
 // ==============================
@@ -16,6 +16,10 @@ pub struct MachineResponse {
     pub hdd: f32,
     pub ram: f32,
     pub net: f32,
+    pub map_x: i32,
+    pub map_y: i32,
+    pub public_ip: Option<i64>,
+    pub lan_ip: Option<i64>,
 }
 
 impl From<MachineRow> for MachineResponse {
@@ -27,6 +31,42 @@ impl From<MachineRow> for MachineResponse {
             hdd: value.hdd,
             ram: value.ram,
             net: value.net,
+            map_x: value.map_x,
+            map_y: value.map_y,
+            public_ip: value.public_ip,
+            lan_ip: value.lan_ip,
+        }
+    }
+}
+
+/// Mover un equipo por el mapa. Solo la posicion: el resto de la ficha no cambia
+/// porque arrastrar un nodo no es editarlo.
+#[derive(Debug, Deserialize)]
+pub struct MoveMachineRequest {
+    pub map_x: i32,
+    pub map_y: i32,
+}
+
+/// Tender un cable entre dos equipos.
+#[derive(Debug, Deserialize)]
+pub struct LinkRequest {
+    pub from: i64,
+    pub to: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LinkResponse {
+    pub id: i64,
+    pub from_server: i64,
+    pub to_server: i64,
+}
+
+impl From<LinkRow> for LinkResponse {
+    fn from(value: LinkRow) -> Self {
+        Self {
+            id: value.id,
+            from_server: value.from_server,
+            to_server: value.to_server,
         }
     }
 }

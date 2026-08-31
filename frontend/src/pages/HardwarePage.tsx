@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { useAppSelector } from '../app/hooks';
 import { AccountSelect } from '../components/AccountSelect';
 import { Drawer } from '../components/hardware/Drawer';
 import { KitShop } from '../components/hardware/KitShop';
 import { MachineShop } from '../components/hardware/MachineShop';
 import { MachineCard } from '../components/hardware/MachineCard';
+import { MachineNodeMap } from '../components/hardware/MachineNodeMap';
+import { MachineSelector } from '../components/hardware/MachineSelector';
 import { Shop } from '../components/hardware/Shop';
 import { Loading } from '../components/Notice';
 import { StatusMessage } from '../components/StatusMessage';
@@ -14,6 +17,7 @@ import {
   type Component,
   type Kit,
   type MachineDetail,
+  type MachineLink,
   type MachineQuote,
   type Part,
   type UnknownRow,
@@ -23,8 +27,16 @@ import { useStatusMessage } from '../utils/useStatusMessage';
 
 export function HardwarePage() {
   const status = useStatusMessage();
+  // La direccion que se ve desde fuera. La pinta el nodo de Internet del mapa.
+  const gameIp = useAppSelector((state) => state.auth.user?.game_ip);
 
   const [machines, setMachines] = useState<MachineDetail[]>();
+  const [links, setLinks] = useState<MachineLink[]>([]);
+  /**
+   * El equipo que se esta viendo. 0 hasta la primera carga: entonces se elige el primero.
+   * Se conserva entre recargas para que instalar una pieza no devuelva la vista al equipo 1.
+   */
+  const [selected, setSelected] = useState(0);
   const [components, setComponents] = useState<Component[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [kits, setKits] = useState<Kit[]>([]);
@@ -34,15 +46,23 @@ export function HardwarePage() {
   const [busy, setBusy] = useState(false);
 
   const reload = useCallback(async () => {
-    const [detail, owned, next] = await Promise.all([
+    const [detail, owned, next, cables] = await Promise.all([
       hardwareApi.listMachineDetail(),
       hardwareApi.listComponents(),
       hardwareApi.machineQuote(),
+      hardwareApi.listLinks(),
     ]);
 
     setMachines(detail);
     setComponents(owned);
     setQuote(next);
+    setLinks(cables);
+
+    // Si el equipo que se estaba viendo ya no existe -- se dio de baja -- la vista cae al
+    // primero en vez de quedarse en blanco.
+    setSelected((actual) =>
+      detail.some((item) => item.machine.id === actual) ? actual : detail[0]?.machine.id ?? 0,
+    );
   }, []);
 
   const loadAccounts = useCallback(() => {
@@ -106,6 +126,35 @@ export function HardwarePage() {
       return `${name} dado de baja.`;
     });
 
+  /**
+   * Mover no pasa por `run`: `run` marca la pagina como ocupada y recarga entera, y
+   * arrastrar un nodo no puede bloquear la interfaz ni repintarlo todo al soltar. La
+   * posicion ya esta en pantalla; esto solo la deja escrita.
+   */
+  const move = (machine: number, x: number, y: number) => {
+    setMachines((actuales) =>
+      actuales?.map((item) =>
+        item.machine.id === machine
+          ? { ...item, machine: { ...item.machine, map_x: x, map_y: y } }
+          : item,
+      ),
+    );
+
+    hardwareApi.moveMachine(machine, x, y).catch((error) => status.reportError(error));
+  };
+
+  const link = (from: number, to: number) =>
+    void run(async () => {
+      await hardwareApi.createLink(from, to);
+      return 'Cable tendido.';
+    });
+
+  const unlink = (cable: MachineLink) =>
+    void run(async () => {
+      await hardwareApi.deleteLink(cable.id);
+      return 'Cable retirado.';
+    });
+
   const buyMachine = (name: string) => {
     if (!account) {
       status.report('Elige antes la cuenta que paga.');
@@ -137,23 +186,39 @@ export function HardwarePage() {
   }
 
   const drawer = components.filter((part) => part.installed_in === null);
+  const actual = machines.find((detail) => detail.machine.id === selected) ?? machines[0];
 
   return (
     <>
       <h2>Hardware</h2>
       <StatusMessage text={status.message} as="block" />
 
-      {machines.map((detail) => (
+      <MachineSelector machines={machines} selected={selected} onSelect={setSelected} />
+
+      {actual && (
         <MachineCard
-          key={detail.machine.id}
-          detail={detail}
+          key={actual.machine.id}
+          detail={actual}
           only={machines.length === 1}
           busy={busy}
           onUninstall={uninstall}
           onRename={rename}
           onScrap={scrap}
         />
-      ))}
+      )}
+
+      <h3>Red</h3>
+      <MachineNodeMap
+        machines={machines}
+        links={links}
+        selected={selected}
+        busy={busy}
+        gameIp={gameIp}
+        onSelect={setSelected}
+        onMove={move}
+        onLink={link}
+        onUnlink={unlink}
+      />
 
       <h3>Cajón</h3>
       <Drawer components={drawer} machines={machines} busy={busy} onInstall={install} />

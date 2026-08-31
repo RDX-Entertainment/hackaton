@@ -2,7 +2,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{
     dtos::PartInput,
-    models::{BoardRow, ChipsetRow, ComponentRow, MachineRow, PartRow},
+    models::{BoardRow, ChipsetRow, ComponentRow, LinkRow, MachineRow, PartRow},
 };
 
 //
@@ -23,7 +23,11 @@ pub async fn find_machines(
             cpu,
             hdd,
             ram,
-            net
+            net,
+            map_x,
+            map_y,
+            public_ip,
+            lan_ip
         FROM hardware
         WHERE user_id = $1
           AND NOT is_npc
@@ -62,8 +66,16 @@ pub async fn insert_machine(
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar(
         r#"
-        INSERT INTO hardware(user_id, name, cpu, ram, hdd, net)
-        VALUES($1, $2, 0, 0, 0, 0)
+        INSERT INTO hardware(user_id, name, cpu, ram, hdd, net, lan_ip)
+        VALUES(
+            $1, $2, 0, 0, 0, 0,
+            -- La siguiente libre de su red, empezando por 10.0.0.1. Se calcula aqui y no
+            -- fuera porque dentro del INSERT va en la misma transaccion que la crea: dos
+            -- altas a la vez no pueden mirar el mismo hueco y quedarse con el.
+            (SELECT (10::bigint << 24) | (coalesce(max(lan_ip & 255), 0) + 1)
+             FROM hardware
+             WHERE user_id = $1 AND NOT is_npc)
+        )
         RETURNING server_id
         "#,
     )
@@ -837,4 +849,245 @@ pub async fn insert_chipset(
     .bind(name)
     .fetch_one(pool)
     .await
+}
+
+//
+// ==============================
+// MAPA DE NODOS
+// ==============================
+//
+
+/// Mover un equipo por el mapa. Devuelve cuantas filas cambiaron: 0 significa que ese
+/// equipo no es de quien lo pide, y el servicio lo traduce a un error.
+pub async fn move_machine(
+    pool: &PgPool,
+    machine: i64,
+    user_id: i64,
+    map_x: i32,
+    map_y: i32,
+) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query(
+        r#"
+        UPDATE hardware
+        SET map_x = $3,
+            map_y = $4
+        WHERE server_id = $1
+          AND user_id = $2
+          AND NOT is_npc
+        "#,
+    )
+    .bind(machine)
+    .bind(user_id)
+    .bind(map_x)
+    .bind(map_y)
+    .execute(pool)
+    .await?;
+
+    Ok(done.rows_affected())
+}
+
+pub async fn find_links(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<Vec<LinkRow>, sqlx::Error> {
+    sqlx::query_as::<_, LinkRow>(
+        r#"
+        SELECT id, from_server, to_server
+        FROM hardware_links
+        WHERE user_id = $1
+        ORDER BY id
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+/// Si ese equipo es suyo. Se comprueban los dos extremos antes de cablear: sin esto,
+/// bastaria mandar el id de la maquina de otro para colgarse de su red.
+pub async fn owns_machine(
+    pool: &PgPool,
+    machine: i64,
+    user_id: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT count(*)
+        FROM hardware
+        WHERE server_id = $1
+          AND user_id = $2
+          AND NOT is_npc
+        "#,
+    )
+    .bind(machine)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .map(|found| found > 0)
+}
+
+/// Cuantas bocas de red da la placa que tiene puesta ahora mismo. Es el mismo dato que
+/// `lan_total` en las redes de organizacion, y sale del mismo sitio: sin placa no hay
+/// puertos, y cambiar de placa cambia el limite.
+pub async fn lan_ports(
+    pool: &PgPool,
+    machine: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar::<_, Option<i64>>(
+        r#"
+        SELECT mobo.net_slots::bigint
+        FROM hardware_components c
+        JOIN hardware_parts mobo ON mobo.id = c.part_id
+        WHERE c.installed_in = $1
+          AND mobo.kind = 'mobo'
+        LIMIT 1
+        "#,
+    )
+    .bind(machine)
+    .fetch_optional(pool)
+    .await
+    .map(|found| found.flatten().unwrap_or(0))
+}
+
+/// Cables que ya salen de ese equipo, mirando por los dos extremos.
+pub async fn count_links_of(
+    pool: &PgPool,
+    machine: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT count(*)
+        FROM hardware_links
+        WHERE from_server = $1
+           OR to_server = $1
+        "#,
+    )
+    .bind(machine)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn insert_link(
+    pool: &PgPool,
+    user_id: i64,
+    from: i64,
+    to: i64,
+) -> Result<LinkRow, sqlx::Error> {
+    sqlx::query_as::<_, LinkRow>(
+        r#"
+        INSERT INTO hardware_links (user_id, from_server, to_server)
+        VALUES ($1, $2, $3)
+        RETURNING id, from_server, to_server
+        "#,
+    )
+    .bind(user_id)
+    .bind(from)
+    .bind(to)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn delete_link(
+    pool: &PgPool,
+    link: i64,
+    user_id: i64,
+) -> Result<u64, sqlx::Error> {
+    let done = sqlx::query(
+        r#"
+        DELETE FROM hardware_links
+        WHERE id = $1
+          AND user_id = $2
+        "#,
+    )
+    .bind(link)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(done.rows_affected())
+}
+
+/// Si el equipo tiene tarjeta de red puesta, que es lo que le da salida a Internet.
+///
+/// Esa salida ocupa boca igual que un cable a otro equipo: es la misma regla que aplica el
+/// mapa de organizaciones, donde un nodo publico cuenta `INTERNET` entre sus conexiones.
+pub async fn has_uplink(
+    pool: &PgPool,
+    machine: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT count(*)
+        FROM hardware_components c
+        JOIN hardware_parts p ON p.id = c.part_id
+        WHERE c.installed_in = $1
+          AND p.kind = 'net'
+        "#,
+    )
+    .bind(machine)
+    .fetch_one(pool)
+    .await
+    .map(|found| found > 0)
+}
+
+//
+// ==============================
+// DIRECCIONES DE LA MAQUINA
+// ==============================
+//
+
+/// Cuantas tarjetas de red lleva puestas. Es lo que decide si tiene salida a Internet, y
+/// por tanto si le toca direccion publica.
+pub async fn count_nics(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT count(*)
+        FROM hardware_components c
+        JOIN hardware_parts p ON p.id = c.part_id
+        WHERE c.installed_in = $1
+          AND p.kind = 'net'
+        "#,
+    )
+    .bind(machine)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+/// Darle direccion publica, si no tenia. Sortearla dentro de la transaccion es lo que
+/// impide que dos instalaciones a la vez se lleven la misma: `random_free_ip()` ya mira la
+/// tabla, y el indice unico remata lo que se le escape.
+pub async fn assign_public_ip(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE hardware
+        SET public_ip = random_free_ip()
+        WHERE server_id = $1
+          AND public_ip IS NULL
+        "#,
+    )
+    .bind(machine)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Quitarsela. La direccion vuelve al bombo: quien saca la tarjeta deja de estar en
+/// Internet, y guardarle el numero seria reservar algo que ya no usa.
+pub async fn clear_public_ip(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE hardware SET public_ip = NULL WHERE server_id = $1")
+        .bind(machine)
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
 }

@@ -16,6 +16,8 @@ use super::{
         ChipsetInput,
         GrantRequest,
         InstallRequest,
+        LinkRequest,
+        MoveMachineRequest,
         PartInput,
         RenameMachineRequest,
     },
@@ -76,10 +78,97 @@ pub fn configure(
             "/hardware/shop",
             web::post().to(buy_hardware),
         )
+        // ── El mapa de nodos ────────────────────────────────────────────────
+        //
+        // La posicion cuelga de la maquina y no de un recurso "mapa": es un
+        // atributo suyo, como el nombre. Los cables si son recurso propio,
+        // porque no pertenecen a ninguno de los dos extremos.
+        .route(
+            "/hardware/machines/{id}/position",
+            web::put().to(move_machine),
+        )
+        .route(
+            "/hardware/links",
+            web::get().to(links),
+        )
+        .route(
+            "/hardware/links",
+            web::post().to(create_link),
+        )
+        .route(
+            "/hardware/links/{id}",
+            web::delete().to(delete_link),
+        )
         .route(
             "/stats",
             web::get().to(server_stats),
         );
+}
+
+//
+// ==============================
+// MAPA DE NODOS
+// ==============================
+//
+
+pub async fn move_machine(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<MoveMachineRequest>,
+) -> Result<HttpResponse, ApiError> {
+    services::move_machine(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn links(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+) -> Result<HttpResponse, ApiError> {
+    let found = services::links(
+        &state.pool,
+        ctx.id,
+    )
+    .await?;
+
+    Ok(HttpResponse::Ok().json(found))
+}
+
+pub async fn create_link(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<LinkRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let created = services::create_link(
+        &state.pool,
+        ctx.id,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::Ok().json(created))
+}
+
+pub async fn delete_link(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::delete_link(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Rutas del panel para el catalogo de piezas. Se montan dentro del scope `/admin`, que

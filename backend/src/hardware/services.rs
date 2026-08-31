@@ -11,12 +11,15 @@ use super::{
         ComponentResponse,
         GrantRequest,
         InstallRequest,
+        LinkRequest,
+        LinkResponse,
         PartInput,
         PartResponse,
         MachineBoughtResponse,
         MachineDetailResponse,
         MachineQuoteResponse,
         MachineResponse,
+        MoveMachineRequest,
         RenameMachineRequest,
         PartBoughtResponse,
         SlotsResponse,
@@ -364,6 +367,21 @@ pub async fn install(
         repo::recompute_machine(&mut tx, previous).await?;
     }
 
+    // La tarjeta de red es el interruptor de la direccion publica: ponerla es salir a
+    // Internet, y salir a Internet es tener donde te alcancen. Va dentro de la misma
+    // transaccion que la instalacion porque son el mismo hecho -- una maquina con tarjeta y
+    // sin direccion es un estado que no deberia existir ni un instante.
+    if part.kind == "net" {
+        repo::assign_public_ip(&mut tx, input.machine).await?;
+
+        // Mover la tarjeta desde otra maquina deja a aquella sin salida, si era la unica.
+        if let Some(previous) = previous {
+            if repo::count_nics(&mut tx, previous).await? == 0 {
+                repo::clear_public_ip(&mut tx, previous).await?;
+            }
+        }
+    }
+
     tx.commit().await?;
 
     Ok(ComponentResponse {
@@ -423,6 +441,13 @@ pub async fn uninstall(
 
     repo::set_installed(&mut tx, component_id, None).await?;
     repo::recompute_machine(&mut tx, machine).await?;
+
+    // Sacar la ultima tarjeta saca a la maquina de Internet, y su direccion vuelve al bombo.
+    // Se comprueba que no quede ninguna en vez de asumirlo: una placa de servidor admite
+    // varias, y quitar una de cuatro no deja a nadie sin salida.
+    if part.kind == "net" && repo::count_nics(&mut tx, machine).await? == 0 {
+        repo::clear_public_ip(&mut tx, machine).await?;
+    }
 
     tx.commit().await?;
 
@@ -753,6 +778,123 @@ pub async fn remove_chipset(
 
     if repo::delete_chipset(pool, id).await? == 0 {
         return Err(ApiError::BadRequest("unknown chipset".into()));
+    }
+
+    Ok(())
+}
+
+//
+// ==============================
+// MAPA DE NODOS
+// ==============================
+//
+
+/// Colocar un equipo en el mapa.
+///
+/// El lienzo no tiene bordes duros en el cliente, pero un nodo en -4000 es un nodo que no
+/// se puede volver a coger: se recorta a un rango que siempre queda a la vista.
+pub async fn move_machine(
+    pool: &PgPool,
+    user_id: i64,
+    machine: i64,
+    input: MoveMachineRequest,
+) -> Result<(), ApiError> {
+    const LIMITE: i32 = 4000;
+
+    let map_x = input.map_x.clamp(0, LIMITE);
+    let map_y = input.map_y.clamp(0, LIMITE);
+
+    if repo::move_machine(pool, machine, user_id, map_x, map_y).await? == 0 {
+        return Err(ApiError::BadRequest("unknown machine".into()));
+    }
+
+    Ok(())
+}
+
+pub async fn links(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<Vec<LinkResponse>, ApiError> {
+    let found = repo::find_links(pool, user_id)
+        .await?
+        .into_iter()
+        .map(LinkResponse::from)
+        .collect();
+
+    Ok(found)
+}
+
+/// Tender un cable entre dos equipos del jugador.
+///
+/// Cuatro cosas tienen que cumplirse, y ninguna se puede dar por hecha desde el cliente:
+/// que los dos sean suyos, que no sean el mismo, que a los dos les quede boca libre, y que
+/// no estuvieran ya unidos. La ultima la impone ademas el indice unico de la tabla, que es
+/// quien gana si dos peticiones llegan a la vez.
+pub async fn create_link(
+    pool: &PgPool,
+    user_id: i64,
+    input: LinkRequest,
+) -> Result<LinkResponse, ApiError> {
+    let LinkRequest { from, to } = input;
+
+    if from == to {
+        return Err(ApiError::BadRequest(
+            "SAME_MACHINE: un equipo no se cablea consigo mismo".into(),
+        ));
+    }
+
+    for machine in [from, to] {
+        if !repo::owns_machine(pool, machine, user_id).await? {
+            return Err(ApiError::BadRequest("unknown machine".into()));
+        }
+    }
+
+    for machine in [from, to] {
+        let ports = repo::lan_ports(pool, machine).await?;
+
+        if ports == 0 {
+            return Err(ApiError::BadRequest(
+                "NO_BOARD: un equipo sin placa no tiene bocas de red".into(),
+            ));
+        }
+
+        // La salida a Internet ocupa boca como cualquier cable. Un equipo con tarjeta de
+        // red ya esta enchufado a algo, aunque ese algo no se dibuje como cable: es la
+        // misma cuenta que hace el mapa de organizaciones, donde un nodo publico lleva
+        // `INTERNET` entre sus conexiones y le come un puerto.
+        let uplink = i64::from(repo::has_uplink(pool, machine).await?);
+        let usadas = repo::count_links_of(pool, machine).await? + uplink;
+
+        if usadas >= ports {
+            return Err(ApiError::BadRequest(format!(
+                "NO_LAN_PORTS: esa placa da {ports} bocas y ya hay {usadas} ocupadas \
+                 (la salida a Internet cuenta como una)"
+            )));
+        }
+    }
+
+    match repo::insert_link(pool, user_id, from, to).await {
+        Ok(row) => Ok(LinkResponse::from(row)),
+
+        // 23505 es la violacion del indice unico del par: ya estaban cableados. Es un
+        // error del que pide, no del servidor, y merece decirlo asi.
+        Err(sqlx::Error::Database(error)) if error.code().as_deref() == Some("23505") => {
+            Err(ApiError::BadRequest(
+                "ALREADY_LINKED: esos dos equipos ya estan cableados".into(),
+            ))
+        }
+
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub async fn delete_link(
+    pool: &PgPool,
+    user_id: i64,
+    link: i64,
+) -> Result<(), ApiError> {
+    if repo::delete_link(pool, link, user_id).await? == 0 {
+        return Err(ApiError::BadRequest("unknown link".into()));
     }
 
     Ok(())

@@ -4,6 +4,7 @@ import type {
   Kit,
   KitBought,
   Machine,
+  MachineLink,
   MachineBought,
   MachineDetail,
   MachineQuote,
@@ -65,4 +66,24 @@ export function renameMachine(id: number, name: string): Promise<void> {
 
 export function scrapMachine(id: number): Promise<void> {
   return del<void>(`/hardware/machines/${id}`);
+}
+
+//
+// El mapa de nodos.
+//
+
+export function moveMachine(id: number, mapX: number, mapY: number): Promise<void> {
+  return put<void>(`/hardware/machines/${id}/position`, { map_x: mapX, map_y: mapY });
+}
+
+export function listLinks(): Promise<MachineLink[]> {
+  return get<MachineLink[]>('/hardware/links');
+}
+
+export function createLink(from: number, to: number): Promise<MachineLink> {
+  return post<MachineLink>('/hardware/links', { from, to });
+}
+
+export function deleteLink(id: number): Promise<void> {
+  return del<void>(`/hardware/links/${id}`);
 }

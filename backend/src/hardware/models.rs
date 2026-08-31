@@ -8,6 +8,21 @@ pub struct MachineRow {
     pub hdd: f32,
     pub ram: f32,
     pub net: f32,
+    /// Donde lo puso el jugador en el mapa de nodos.
+    pub map_x: i32,
+    pub map_y: i32,
+    /// Como se la alcanza desde fuera. `None` = sin tarjeta de red, no sale a Internet.
+    pub public_ip: Option<i64>,
+    /// Como se la nombra dentro de la red de su dueno. La tienen todas.
+    pub lan_ip: Option<i64>,
+}
+
+/// Un cable LAN entre dos equipos del jugador.
+#[derive(Debug, Clone, FromRow)]
+pub struct LinkRow {
+    pub id: i64,
+    pub from_server: i64,
+    pub to_server: i64,
 }
 
 /// Plantilla de pieza. Define QUE es un componente, no de quien es.
