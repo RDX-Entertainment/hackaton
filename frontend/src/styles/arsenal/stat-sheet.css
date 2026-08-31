@@ -1,8 +1,8 @@
 /*
  * La hoja de atributos de un programa. Comparte el lenguaje visual de las estadísticas de
  * hardware —etiqueta, cifra y una barra de 3px— porque son la misma clase de dato leído de
- * la misma manera; lo que cambia es que aquí hay seis y se comparan entre sí, así que van en
- * rejilla y no en columna.
+ * la misma manera; lo que cambia es que aquí son doce y se comparan por pares, así que van
+ * enfrentados en filas y no en columna.
  */
 .asheet {
   margin: 0.7rem 0 0.2rem;
@@ -11,6 +11,69 @@
   border: var(--border-width) solid var(--color-border);
 }
 
+/*
+ * Los pares. Cada fila es una fase del combate: el atributo que empuja a la izquierda y el
+ * que responde a la derecha, con el nombre de la fase delante. Enfrentarlos en la misma fila
+ * es la unica forma de que se lean como lo que son -una comparacion- y no como doce cifras.
+ */
+.asheet__pairs {
+  display: grid;
+  gap: 0.5rem 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.apair {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 1fr;
+  gap: 0 1.1rem;
+  align-items: start;
+}
+
+.apair__phase {
+  color: var(--color-text-subtle);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding-top: 0.15rem;
+}
+
+/* La estabilidad, sin pareja, alineada con la columna de ataque. */
+.asheet__lone {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 1fr;
+  gap: 0 1.1rem;
+  margin: 0.5rem 0 0;
+}
+
+.asheet__lone .astat {
+  grid-column: 2;
+}
+
+/*
+ * Ataque y defensa se distinguen por color, no por posicion: la posicion ya la da la rejilla,
+ * y sin color las dos mitades de una fila se leen como un solo bloque de numeros.
+ */
+.astat--def .astat__value {
+  color: var(--color-text);
+}
+
+.astat--def .astat__fill {
+  background: var(--color-text-muted);
+  box-shadow: none;
+}
+
+.astat--neutro .astat__value {
+  color: var(--color-text-muted);
+}
+
+.astat--neutro .astat__fill {
+  background: var(--color-text-subtle);
+  box-shadow: none;
+}
+
+/* Mantiene el layout viejo por si queda algun consumidor de la rejilla plana. */
 .asheet__attrs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
