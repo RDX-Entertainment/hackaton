@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+
+# API y worker del juego. Se compila en una imagen y se ejecuta en otra: el
+# compilador de Rust y las fuentes pasan del gigabyte, y en el servidor solo
+# hacen falta dos binarios.
+
+FROM rust:1-slim-bookworm AS builder
+
+WORKDIR /src
+
+# **Las dependencias primero, contra ficheros vacíos.** Cambian mucho menos que
+# el juego, así que compilarlas en su propia capa hace que tocar el código
+# recompile en segundos en vez de rehacer el árbol entero de crates.
+COPY Cargo.toml Cargo.lock ./
+COPY backend/Cargo.toml backend/Cargo.toml
+RUN mkdir -p backend/src/bin \
+ && echo 'fn main() {}' > backend/src/main.rs \
+ && echo 'fn main() {}' > backend/src/bin/worker.rs \
+ && cargo build --release \
+ && rm -rf backend/src
+
+COPY backend backend
+# `cargo` decide qué recompilar por marca de tiempo. Sin este `touch` puede
+# quedarse con los binarios vacíos de la capa anterior y desplegar una API que
+# arranca y no hace nada.
+RUN touch backend/src/main.rs backend/src/bin/worker.rs \
+ && cargo build --release --bins
+
+
+FROM debian:bookworm-slim AS runtime
+
+# `ca-certificates` porque sqlx habla TLS por rustls y necesita las raíces del
+# sistema para verificar el certificado de PostgreSQL.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# Sin privilegios: el juego no necesita root para nada.
+RUN useradd --system --create-home --uid 10001 juego
+
+COPY --from=builder /src/target/release/legacy-api /usr/local/bin/legacy-api
+COPY --from=builder /src/target/release/worker /usr/local/bin/worker
+
+USER juego
+
+# Las 47 migraciones viajan **dentro** del binario: `sqlx::migrate!` las embebe
+# al compilar. Por eso aquí no se copia la carpeta, y por eso el contenedor se
+# aplica sus propias migraciones al arrancar.
+EXPOSE 8080
+CMD ["legacy-api"]

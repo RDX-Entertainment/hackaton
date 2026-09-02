@@ -1,0 +1,84 @@
+# Despliegue del juego en el servidor de casa.
+#
+# En desarrollo esto son cuatro procesos a mano —Postgres en Docker, `cargo run`
+# de la API, otro del worker y Vite—; aquí son cuatro contenedores que se
+# levantan juntos y se reinician solos.
+#
+#     docker compose -f deploy/compose.yml up -d --build
+#
+# El puerto 4000 es el que ya usaba el despliegue anterior, así que el túnel de
+# Cloudflare sigue apuntando donde debe sin tocar nada en el panel.
+
+name: hackaton
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hacker_experience}
+      POSTGRES_USER: ${POSTGRES_USER:-hackaton}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+    volumes:
+      - datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  api:
+    build:
+      # El contexto es la raíz del repositorio: el workspace de Cargo vive ahí y
+      # el Dockerfile necesita ver `Cargo.toml` y `backend/` a la vez.
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    image: hackaton-api:latest
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-hackaton}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hacker_experience}
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET}
+      # Dentro del contenedor hay que escuchar en todas las interfaces: si se
+      # queda en loopback, nginx no lo alcanza desde el suyo.
+      HOST: 0.0.0.0
+      PORT: "8080"
+      # La cuenta de administrador se crea al arrancar si no existe.
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?falta ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?falta ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    # **La misma imagen que la API, con otro comando.** Es el mismo crate y el
+    # mismo binario compilado: construirla dos veces solo duplicaría el tiempo.
+    image: hackaton-api:latest
+    command: ["worker"]
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-hackaton}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hacker_experience}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    image: hackaton-web:latest
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "${HACKATON_BIND:-0.0.0.0:4000}:80"
+    depends_on:
+      - api
+
+volumes:
+  datos:

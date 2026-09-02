@@ -8,3 +8,6 @@
 
 .playwright-cli/
 /output/
+
+# Secretos del despliegue: se generan en el servidor, no viajan en el repo.
+deploy/.env
