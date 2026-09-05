@@ -70,10 +70,17 @@ pub async fn find_npc_by_ip(
             n.npc_type,
             n.down_until > now() AS down,
             COALESCE(i.name, '') AS name,
-            i.web
+            i.web,
+            h.server_id
         FROM npc n
         LEFT JOIN npc_info i
             ON i.npc_id = n.id
+
+        -- La maquina que responde. Desde la 0049 lleva puesta la `npc_ip`, asi que se une por
+        -- ella y no por el dueno: es la direccion la que identifica el nodo.
+        LEFT JOIN hardware h
+            ON h.public_ip = n.npc_ip
+           AND h.is_npc
         JOIN npc_internet_exposure e
             ON e.npc_id = n.id
         WHERE n.npc_ip = $1
@@ -98,11 +105,18 @@ pub async fn find_player_by_ip(
         SELECT
             u.id,
             u.login,
-            p.web
-        FROM users u
+            p.web,
+            h.server_id
+        FROM hardware h
+
+        JOIN users u
+            ON u.id = h.user_id
+
         LEFT JOIN player_profiles p
             ON p.user_id = u.id
-        WHERE u.game_ip = $1
+
+        WHERE h.public_ip = $1
+          AND NOT h.is_npc
         "#,
     )
     .bind(ip)

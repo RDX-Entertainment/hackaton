@@ -36,6 +36,16 @@ const LOG_EDIT_SECONDS: i32 = 30;
 // ==============================
 //
 
+/// Que hay en una direccion.
+///
+/// **Devuelve el nodo, no solo el dueno.** Hasta la 0049 la direccion de un jugador era
+/// `users.game_ip`, una columna suelta que no pertenecia a ninguna de sus maquinas: con varias
+/// por cuenta, «quien es» y «que hay aqui» dejaron de tener la misma respuesta, y esta funcion
+/// solo sabia contestar la primera. Ahora se resuelve por la direccion que lleva puesta la
+/// maquina, y lo que sale dice ademas cual es.
+///
+/// `is_npc` sigue aqui y no sobra todavia: de el cuelgan las tablas del dueno. Lo que cambia es
+/// que ya no es lo unico que se sabe del otro lado.
 pub async fn resolve_ip(
     pool: &PgPool,
     ip: i64,
@@ -55,6 +65,7 @@ pub async fn resolve_ip(
             npc_type: npc.npc_type,
             down: npc.down,
             web: npc.web,
+            server_id: npc.server_id,
         });
     }
 
@@ -70,6 +81,7 @@ pub async fn resolve_ip(
         npc_type: 0,
         down: false,
         web: player.web,
+        server_id: player.server_id,
     })
 }
 
