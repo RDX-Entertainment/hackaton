@@ -16,17 +16,24 @@
 //!
 //! `data-*` no es un manejador de eventos: `on...=` sigue prohibido, y el HTML del autor
 //! sigue sin poder traer una linea de codigo.
+//!
+//! Los elementos llegan ya parseados desde [`crate::internet::document`]. Antes este modulo
+//! se los buscaba por su cuenta —retrocediendo hasta el `<` mas cercano y leyendo el
+//! atributo entre comillas—, y eso era una segunda lectura del HTML que no tenia por que
+//! coincidir con la del navegador. Ahora las dos comprobaciones miran el mismo arbol.
+
+use crate::internet::document::Element;
 
 use super::catalog::{self, Effect, Target};
 
-/// Recorre los `data-action` del HTML y devuelve el motivo del primero que este mal.
-pub fn check(html: &str) -> Result<(), String> {
-    for tag in tags_with_actions(html) {
-        let Some(verb) = attribute(&tag, "data-action") else {
+/// Recorre los `data-action` de la pagina y devuelve el motivo del primero que este mal.
+pub fn check(elements: &[Element]) -> Result<(), String> {
+    for element in elements {
+        let Some(verb) = element.attribute("data-action") else {
             continue;
         };
 
-        let Some(spec) = catalog::find(&verb) else {
+        let Some(spec) = catalog::find(verb) else {
             return Err(format!(
                 "ACTION_UNKNOWN: `{verb}` no es una orden. Hay {}",
                 catalog::verbs()
@@ -40,9 +47,9 @@ pub fn check(html: &str) -> Result<(), String> {
             ));
         }
 
-        let target = match attribute(&tag, "data-target") {
-            Some(target) => target,
-            None if spec.target == Target::None => String::new(),
+        let target = match element.attribute("data-target") {
+            Some(target) => target.trim(),
+            None if spec.target == Target::None => "",
             None => {
                 return Err(format!(
                     "ACTION_TARGET: al boton de `{}` le falta `data-target`. {}",
@@ -51,31 +58,30 @@ pub fn check(html: &str) -> Result<(), String> {
             }
         };
 
-        super::parser::check_target(spec, &target)?;
+        super::parser::check_target(spec, target)?;
 
         for declared in spec.params {
             let name = format!("data-{}", declared.name);
-            let value = attribute(&tag, &name);
 
-            match value {
+            match element.attribute(&name) {
                 None if declared.required => {
                     return Err(format!(
                         "ACTION_PARAM: al boton de `{}` le falta `{name}`. {}",
                         spec.verb, spec.help
                     ));
                 }
-                Some(ref value) => {
-                    super::parser::check_value(&name, declared.kind, value)?;
+                Some(value) => {
+                    super::parser::check_value(&name, declared.kind, value.trim())?;
                 }
                 _ => {}
             }
         }
     }
 
-    check_named(html, "data-field", catalog::FIELDS, "se puede teclear")?;
-    check_named(html, "data-bind", catalog::BINDS, "rellena el juego")?;
-    check_named(html, "data-list", catalog::LISTS, "repite el juego")?;
-    check_named(html, "data-when", catalog::WHENS, "decide cuando se ve")?;
+    check_named(elements, "data-field", catalog::FIELDS, "se puede teclear")?;
+    check_named(elements, "data-bind", catalog::BINDS, "rellena el juego")?;
+    check_named(elements, "data-list", catalog::LISTS, "repite el juego")?;
+    check_named(elements, "data-when", catalog::WHENS, "decide cuando se ve")?;
 
     Ok(())
 }
@@ -85,17 +91,17 @@ pub fn check(html: &str) -> Result<(), String> {
 /// Sin esto, escribir `data-bind="saldo"` en vez de `balance` dejaria un hueco que no se
 /// rellena nunca y sin una sola pista de por que.
 fn check_named(
-    html: &str,
+    elements: &[Element],
     attribute_name: &str,
     known: &[&str],
     what: &str,
 ) -> Result<(), String> {
-    for tag in tags_with(html, attribute_name) {
-        let Some(value) = attribute(&tag, attribute_name) else {
+    for element in elements {
+        let Some(value) = element.attribute(attribute_name) else {
             continue;
         };
 
-        if !known.contains(&value.to_lowercase().as_str()) {
+        if !known.contains(&value.trim().to_lowercase().as_str()) {
             return Err(format!(
                 "ACTION_FIELD: `{attribute_name}=\"{value}\"` no existe. Lo que {what} es: {}",
                 known.join(", ")
@@ -106,50 +112,15 @@ fn check_named(
     Ok(())
 }
 
-/// Las etiquetas que llevan un `data-action`, cada una entera para poder leerle el resto.
-fn tags_with_actions(html: &str) -> Vec<String> {
-    tags_with(html, "data-action")
-}
-
-fn tags_with(html: &str, attribute_name: &str) -> Vec<String> {
-    let lower = html.to_lowercase();
-    let mut found = Vec::new();
-
-    for (at, _) in lower.match_indices(attribute_name) {
-        // Retroceder hasta el `<` que abre la etiqueta y avanzar hasta el `>` que la cierra.
-        let Some(open) = lower[..at].rfind('<') else {
-            continue;
-        };
-
-        let end = lower[at..].find('>').map_or(html.len(), |to| at + to);
-
-        found.push(html[open..end].to_owned());
-    }
-
-    found
-}
-
-/// El valor de un atributo dentro de una etiqueta. Admite comillas dobles y simples.
-fn attribute(tag: &str, name: &str) -> Option<String> {
-    let lower = tag.to_lowercase();
-    let at = lower.find(&format!("{name}="))?;
-    let rest = &tag[at + name.len() + 1..];
-
-    let quote = rest.chars().next()?;
-
-    if quote != '"' && quote != '\'' {
-        return None;
-    }
-
-    let value = &rest[1..];
-    let end = value.find(quote)?;
-
-    Some(value[..end].trim().to_owned())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::internet::document;
+
+    fn check(html: &str) -> Result<(), String> {
+        super::check(&document::parse(html))
+    }
 
     #[test]
     fn acepta_un_boton_bien_escrito() {
