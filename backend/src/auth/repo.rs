@@ -142,7 +142,13 @@ pub async fn insert_user(
 /// register.php; aqui van juntas y dentro de la misma transaccion que el alta.
 const BOOTSTRAP: &[&str] = &[
     "INSERT INTO users_stats(uid) VALUES($1)",
-    "INSERT INTO hardware(user_id,name) VALUES($1,'Server #1')",
+    // **Nace con la direccion puesta y siendo la principal.** El alta ya sorteo una en
+    // `users.game_ip`, y desde que se navega por la maquina esa direccion tiene que vivir en
+    // una: crear el equipo sin ella dejaba al jugador existiendo y sin responder. No pasa por
+    // `assign_public_ip` porque no hay tarjeta que instalar todavia -- las componentes del kit
+    // entran por SQL justo debajo -- asi que la lleva desde el primer momento.
+    "INSERT INTO hardware(user_id,name,public_ip,is_gateway)
+     VALUES($1,'Server #1',(SELECT game_ip FROM users WHERE id=$1),true)",
     // El equipo de arranque sale del kit marcado por defecto, que un administrador puede
     // cambiar desde el panel. Sin componentes la maquina nace a cero y no podria ni cargar
     // software: la capacidad es la suma de lo instalado. Si no hay kit por defecto esto no

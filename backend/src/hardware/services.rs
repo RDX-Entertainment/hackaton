@@ -452,6 +452,19 @@ pub async fn uninstall(
     // Se comprueba que no quede ninguna en vez de asumirlo: una placa de servidor admite
     // varias, y quitar una de cuatro no deja a nadie sin salida.
     if part.kind == "net" && repo::count_nics(&mut tx, machine).await? == 0 {
+        // Salvo en la principal. Su direccion es la del jugador: la que sale en el ranking,
+        // la que firma en el banco y la que queda en las evidencias. Dejarla sin salida no
+        // seria esconder un equipo, seria borrar a alguien del mapa mientras sigue jugando.
+        // Esconder maquinas quitandoles la tarjeta es lo que trae la fase 5, y sera para las
+        // otras.
+        if repo::is_gateway(&mut tx, machine).await? {
+            return Err(ApiError::BadRequest(
+                "GATEWAY_NEEDS_NIC: esa es tu maquina principal y por ahi te alcanzan. \
+                 Nombra principal a otra antes de dejar esta sin salida"
+                    .into(),
+            ));
+        }
+
         repo::clear_public_ip(&mut tx, machine).await?;
     }
 

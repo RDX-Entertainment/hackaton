@@ -1019,6 +1019,21 @@ pub async fn assign_public_ip(
 
 /// Quitarsela. La direccion vuelve al bombo: quien saca la tarjeta deja de estar en
 /// Internet, y guardarle el numero seria reservar algo que ya no usa.
+/// Si un equipo es la maquina principal de su dueno.
+///
+/// Se pregunta antes de dejarlo sin salida: la principal lleva la direccion con la que el
+/// jugador aparece en todas partes, asi que apagarla no es lo mismo que apagar cualquier otra.
+pub async fn is_gateway(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT is_gateway FROM hardware WHERE server_id = $1")
+        .bind(machine)
+        .fetch_optional(&mut **tx)
+        .await
+        .map(|found| found.unwrap_or(false))
+}
+
 pub async fn clear_public_ip(
     tx: &mut Transaction<'_, Postgres>,
     machine: i64,
