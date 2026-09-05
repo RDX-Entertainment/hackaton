@@ -5,7 +5,7 @@ use sqlx::PgPool;
 use crate::{
     auth::Ctx,
     error::ApiError,
-    hardware::{fitting, repo as hardware, services::MAX_MACHINES},
+    hardware::{fitting, repo as hardware, services::server_slot_ceiling},
 };
 
 use super::{
@@ -351,9 +351,17 @@ pub async fn buy(
 
     let machines = hardware::count_machines(&mut tx, user_id).await?;
 
-    if machines >= MAX_MACHINES {
+    // **Un kit llena una plaza, no la compra.** Lo que se paga aqui son las piezas; el sitio
+    // donde van se compra aparte, y eso es justo lo que separa comprar un equipo de comprar
+    // capacidad. Si no queda plaza libre, primero se consigue una.
+    let slots = hardware::machine_slots(&mut tx, user_id).await?;
+
+    if machines >= slots {
+        let ceiling = server_slot_ceiling();
+
         return Err(ApiError::BadRequest(format!(
-            "TOO_MANY_MACHINES: ya tienes {machines} equipos, el maximo es {MAX_MACHINES}"
+            "NO_FREE_SLOT: tienes {slots} plazas y las {machines} estan ocupadas; \
+             compra una plaza antes de montar otro equipo (este servidor admite {ceiling})"
         )));
     }
 
