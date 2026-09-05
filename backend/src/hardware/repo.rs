@@ -825,6 +825,109 @@ pub async fn move_machine(
     Ok(done.rows_affected())
 }
 
+//
+// ==============================
+// CLUSTERS
+// ==============================
+//
+
+/// Los equipos que cuelgan del controlador **siguiendo cables**, sin salir de su dueno.
+///
+/// Un cluster se monta sobre el cable y no al reves: lo que no esta conectado no se agrupa. La
+/// consulta recorre la red desde el controlador y devuelve todo lo que se alcanza por cable,
+/// que es el conjunto entre el que se puede elegir. No hace falta que los miembros esten
+/// cableados **al** controlador directamente; basta que se llegue.
+pub async fn cabled_component(
+    tx: &mut Transaction<'_, Postgres>,
+    controller: i64,
+) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        WITH RECURSIVE alcanzables(server_id) AS (
+            SELECT $1::bigint
+
+            UNION
+
+            SELECT CASE
+                       WHEN l.from_server = a.server_id THEN l.to_server
+                       ELSE l.from_server
+                   END
+            FROM alcanzables a
+            JOIN hardware_links l
+              ON l.from_server = a.server_id
+              OR l.to_server   = a.server_id
+        )
+        SELECT server_id FROM alcanzables
+        "#,
+    )
+    .bind(controller)
+    .fetch_all(&mut **tx)
+    .await
+}
+
+pub async fn insert_cluster(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: i64,
+    name: &str,
+    controller: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        "INSERT INTO hardware_clusters(user_id, name, controller_server)          VALUES($1, $2, $3) RETURNING id",
+    )
+    .bind(user_id)
+    .bind(name)
+    .bind(controller)
+    .fetch_one(&mut **tx)
+    .await
+}
+
+pub async fn join_cluster(
+    tx: &mut Transaction<'_, Postgres>,
+    cluster: i64,
+    machines: &[i64],
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE hardware SET cluster_id = $1 WHERE server_id = ANY($2)")
+        .bind(cluster)
+        .bind(machines)
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
+}
+
+/// Deshacer un grupo. Los equipos vuelven a ser lo que eran, con lo suyo.
+pub async fn dissolve_cluster(
+    tx: &mut Transaction<'_, Postgres>,
+    cluster: i64,
+    user_id: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query("UPDATE hardware SET cluster_id = NULL WHERE cluster_id = $1")
+        .bind(cluster)
+        .execute(&mut **tx)
+        .await?;
+
+    let borrados = sqlx::query("DELETE FROM hardware_clusters WHERE id = $1 AND user_id = $2")
+        .bind(cluster)
+        .bind(user_id)
+        .execute(&mut **tx)
+        .await?
+        .rows_affected();
+
+    Ok(borrados > 0)
+}
+
+/// Si un equipo ya esta en algun grupo. Un equipo pertenece a uno como mucho.
+pub async fn cluster_of(
+    tx: &mut Transaction<'_, Postgres>,
+    machine: i64,
+) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT cluster_id FROM hardware WHERE server_id = $1")
+        .bind(machine)
+        .fetch_optional(&mut **tx)
+        .await
+        .map(Option::flatten)
+}
+
 pub async fn find_links(
     pool: &PgPool,
     user_id: i64,

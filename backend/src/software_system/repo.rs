@@ -149,13 +149,24 @@ pub async fn origin_machine(
     sqlx::query_as(
         r#"
         SELECT h.server_id,
-               COALESCE(h.cpu, 0)::integer AS cpu,
-               COALESCE(h.ram, 0)::integer AS ram,
-               COALESCE(h.net, 0)::integer AS net
+
+               -- **Si el equipo esta en un grupo, cuenta el grupo entero.** Es lo unico que
+               -- hace un cluster y por lo que va el ultimo de su rumbo: suma recursos, y para
+               -- sumarlos habia que haberlos separado antes. Hacia fuera el grupo se comporta
+               -- como un solo ordenador, y esta es la cuenta que lo dice.
+               COALESCE(g.cpu, h.cpu, 0)::integer AS cpu,
+               COALESCE(g.ram, h.ram, 0)::integer AS ram,
+               COALESCE(g.net, h.net, 0)::integer AS net
 
         FROM software s
         JOIN hardware h
             ON h.server_id = s.server_id
+
+        LEFT JOIN LATERAL (
+            SELECT sum(m.cpu) AS cpu, sum(m.ram) AS ram, sum(m.net) AS net
+            FROM hardware m
+            WHERE m.cluster_id = h.cluster_id
+        ) g ON h.cluster_id IS NOT NULL
 
         WHERE s.id = $1
         "#,

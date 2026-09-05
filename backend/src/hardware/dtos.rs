@@ -364,3 +364,22 @@ pub struct PartBoughtResponse {
     pub power: i32,
     pub paid: i64,
 }
+
+/// Lo que hace falta para montar un grupo: como se llama, quien manda y quien va dentro.
+#[derive(Debug, Deserialize)]
+pub struct ClusterRequest {
+    pub name: String,
+    pub controller: i64,
+
+    /// Los demas equipos. El controlador tambien es miembro, asi que no hace falta repetirlo.
+    #[serde(default)]
+    pub members: Vec<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ClusterResponse {
+    pub id: i64,
+    pub name: String,
+    pub controller: i64,
+    pub members: Vec<i64>,
+}
