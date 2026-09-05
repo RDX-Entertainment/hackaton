@@ -45,6 +45,12 @@ services:
       # queda en loopback, nginx no lo alcanza desde el suyo.
       HOST: 0.0.0.0
       PORT: "8080"
+      # **Vacio a proposito.** Aqui nginx sirve el juego y hace de proxy de
+      # `/api`, asi que el navegador ve un solo origen y no llega a preguntar
+      # por CORS. Solo hace falta donde el front vive aparte, que es Vite en
+      # desarrollo. Se deja declarado para que se vea que la decision es esa y
+      # no un olvido.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       # La cuenta de administrador se crea al arrancar si no existe.
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?falta ADMIN_EMAIL}

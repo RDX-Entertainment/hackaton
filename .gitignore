@@ -3,8 +3,14 @@
 /frontend/dist/
 /frontend/*.tsbuildinfo
 *.log
-# backend/.env va versionado a proposito: es un entorno de desarrollo local y
-# tener sus credenciales en el repositorio es lo que hace que un clon arranque solo.
+
+# Los secretos no viajan en el repositorio, ni siquiera los de desarrollo. Durante un
+# tiempo `backend/.env` si estuvo versionado, con el argumento de que asi un clon
+# arrancaba solo; la auditoria del 2026-08-25 lo anoto como SEC-01 y tenia razon: el
+# JWT_SECRET y la cuenta de administrador quedaban al alcance de cualquiera con acceso
+# al repositorio, y el juego ya esta publicado. El arranque en frio es copiar el
+# ejemplo una vez, que es barato.
+backend/.env
 
 .playwright-cli/
 /output/

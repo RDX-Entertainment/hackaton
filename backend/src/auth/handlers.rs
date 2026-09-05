@@ -1,5 +1,8 @@
+use actix_governor::governor::middleware::NoOpMiddleware;
+use actix_governor::{Governor, GovernorConfig};
 use actix_web::{
     web,
+    HttpRequest,
     HttpResponse,
 };
 
@@ -11,6 +14,7 @@ use crate::{
 use super::{
     dtos::{LoginRequest, RegisterRequest},
     middleware::Ctx,
+    ratelimit::ClientIp,
     services,
 };
 
@@ -20,17 +24,22 @@ use super::{
 // ==============================
 //
 
+/// Las dos rutas que se pueden llamar sin haber entrado llevan el limite de intentos
+/// encima; `/me` no, porque ya exige un token.
 pub fn configure(
     cfg: &mut web::ServiceConfig,
+    attempts: &GovernorConfig<ClientIp, NoOpMiddleware>,
 ) {
     cfg
-        .route(
-            "/auth/login",
-            web::post().to(login),
+        .service(
+            web::resource("/auth/login")
+                .wrap(Governor::new(attempts))
+                .route(web::post().to(login)),
         )
-        .route(
-            "/auth/register",
-            web::post().to(register),
+        .service(
+            web::resource("/auth/register")
+                .wrap(Governor::new(attempts))
+                .route(web::post().to(register)),
         )
         .route(
             "/me",
@@ -45,15 +54,38 @@ pub fn configure(
 //
 
 pub async fn login(
+    request: HttpRequest,
     state: web::Data<AppState>,
     input: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, ApiError> {
+    let input = input.into_inner();
+
+    // Para la bitacora, no para la respuesta: al que llama se le sigue contestando lo
+    // mismo tanto si el nombre no existe como si la contrasena no es esa. Decirle cual de
+    // las dos cosa falla es regalarle la mitad del trabajo.
+    let identifier = input.username.trim().to_owned();
+
     let response = services::login(
         &state.pool,
         &state.jwt_secret,
-        input.into_inner(),
+        input,
     )
-    .await?;
+    .await
+    .inspect_err(|error| {
+        if matches!(error, ApiError::Unauthorized) {
+            let origin = request
+                .connection_info()
+                .realip_remote_addr()
+                .unwrap_or("desconocido")
+                .to_owned();
+
+            tracing::warn!(
+                identifier = %identifier,
+                origin = %origin,
+                "intento de entrada fallido",
+            );
+        }
+    })?;
 
     Ok(
         HttpResponse::Ok()

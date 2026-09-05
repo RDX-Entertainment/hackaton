@@ -1,7 +1,7 @@
 //! Que se puede escribir en la pagina de una maquina.
 //!
-//! El cliente ya pinta estos sitios en un marco con `sandbox` y sin permisos, asi que
-//! aunque llegara un `<script>` no se ejecutaria. Eso no basta: el visor es una defensa
+//! El cliente pinta estos sitios en un marco aislado y **sin permiso para ejecutar nada**,
+//! asi que aunque llegara un `<script>` no correria. Eso no basta: el visor es una defensa
 //! prestada. Si manana alguien pinta el mismo HTML en otro sitio -- una vista previa mal
 //! hecha, un correo, una exportacion -- el guion viajaria con el.
 //!
@@ -20,23 +20,76 @@
 //! Lo segundo no es paranoia sobrante: una imagen alojada fuera es un contador de
 //! visitas. En un juego donde la direccion IP es la moneda, poner un pixel en tu pagina
 //! seria registrar la de todo el que pase, sin hackear nada.
+//!
+//! # Como se comprueba
+//!
+//! **Por lista blanca y sobre el arbol parseado**, no buscando texto sospechoso. La version
+//! anterior preguntaba si el HTML contenia `"<script"`, `"src="` o `"url("`, y una lista de
+//! lo prohibido siempre va por detras: `src = "x"` con espacios pasaba, y un parrafo que
+//! mencionara `url(` se rechazaba sin cargar nada. Ahora se lee con el mismo motor que un
+//! navegador ([`super::document`]) y lo que no esta permitido, no entra. Lo que se le
+//! escape a la lista sera algo nuevo que nadie ha permitido todavia, no una forma distinta
+//! de escribir lo de siempre.
 
 use crate::error::ApiError;
+
+use super::css;
+use super::document::{self, Element};
 
 /// Doce mil caracteres dan para una pagina con su hoja dentro y no para un vertedero.
 pub const MAX_LENGTH: usize = 16_384;
 
-/// Etiquetas que no entran. `<style>` no esta aqui a proposito: es el punto. `<action>`
-/// tampoco, pero eso no es un hueco: lo que lleva dentro lo revisa `webscript`.
-const FORBIDDEN_TAGS: [&str; 10] = [
-    "script", "iframe", "object", "embed", "applet", "form", "base", "link", "meta",
-    "noscript",
+/// Lo que puede haber en un sitio.
+///
+/// `style` esta a proposito: es el punto, cada sitio trae su aspecto. `action` tambien, y
+/// lo que lleva dentro lo revisa `webscript`. `html`, `head` y `body` estan porque el
+/// parser envuelve todo fragmento en ellos; escribirlos a mano no rompe nada.
+///
+/// **No estan `img` ni `video` ni `audio`**, y no por descuido: sin poder traer un fichero
+/// de fuera, una imagen es una etiqueta vacia. Que falte la etiqueta lo explica mejor que
+/// un `src` rechazado.
+const ALLOWED_TAGS: &[&str] = &[
+    "html", "head", "body", "style", "action", //
+    "div", "span", "p", "section", "article", "header", "footer", "main", "nav", "aside", //
+    "h1", "h2", "h3", "h4", "h5", "h6", "hr", "br", //
+    "b", "strong", "i", "em", "u", "s", "small", "mark", "sub", "sup", //
+    "code", "pre", "kbd", "samp", "abbr", "blockquote", "q", "cite", "time", //
+    "ul", "ol", "li", "dl", "dt", "dd", //
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", //
+    "a", "button", "input", "label",
 ];
 
-/// Lo que traeria algo de fuera.
-const FORBIDDEN_LOADS: [&str; 5] = ["src=", "@import", "url(", "srcset=", "background="];
+/// Atributos que valen en cualquier elemento. Los `data-*` van aparte, por prefijo: son
+/// los que usa el juego para reconocer botones y huecos, y los revisa `webscript`.
+const ALLOWED_GLOBAL: &[&str] = &["class", "id", "title", "lang", "dir", "hidden"];
 
-const FORBIDDEN_SCHEMES: [&str; 3] = ["javascript:", "vbscript:", "data:text/html"];
+/// Y los que solo valen en el suyo.
+const ALLOWED_PER_TAG: &[(&str, &[&str])] = &[
+    ("a", &["href"]),
+    ("th", &["colspan", "rowspan", "scope"]),
+    ("td", &["colspan", "rowspan"]),
+    ("label", &["for"]),
+    (
+        "input",
+        &[
+            "type",
+            "placeholder",
+            "value",
+            "name",
+            "maxlength",
+            "readonly",
+            "disabled",
+            "autocomplete",
+            "inputmode",
+        ],
+    ),
+];
+
+/// Los `type` de `input` que tienen sentido en un sitio del juego. Fuera quedan `image`
+/// —que carga un fichero— y `file`, que subiria uno.
+const ALLOWED_INPUT_TYPES: &[&str] = &[
+    "text", "password", "number", "search", "tel", "email", "checkbox", "hidden",
+];
 
 pub fn check(html: &str) -> Result<(), ApiError> {
     if html.len() > MAX_LENGTH {
@@ -46,89 +99,109 @@ pub fn check(html: &str) -> Result<(), ApiError> {
         )));
     }
 
-    let lower = html.to_lowercase();
+    let elements = document::parse(html);
 
-    for tag in FORBIDDEN_TAGS {
-        if lower.contains(&format!("<{tag}")) {
-            return Err(ApiError::BadRequest(format!(
-                "TAG_NOT_ALLOWED: <{tag}> no se permite. Un sitio es texto, estructura y CSS"
-            )));
-        }
-    }
-
-    for scheme in FORBIDDEN_SCHEMES {
-        if lower.contains(scheme) {
-            return Err(ApiError::BadRequest(format!(
-                "SCHEME_NOT_ALLOWED: {scheme} no se permite"
-            )));
-        }
-    }
-
-    for load in FORBIDDEN_LOADS {
-        if lower.contains(load) {
-            return Err(ApiError::BadRequest(format!(
-                "EXTERNAL_NOT_ALLOWED: {load} traeria un recurso de fuera, y eso convierte \
-                 la pagina en un contador de visitas. El sitio tiene que bastarse solo"
-            )));
-        }
-    }
-
-    if let Some(handler) = find_handler(&lower) {
-        return Err(ApiError::BadRequest(format!(
-            "HANDLER_NOT_ALLOWED: {handler} es un manejador de eventos, y eso es codigo"
-        )));
+    for element in &elements {
+        check_element(element)?;
     }
 
     // Lo ultimo, cuando ya se sabe que no hay nada peligroso suelto: que lo que haya dentro
     // de un `<action>` sean ordenes del juego y no otra cosa.
-    super::webscript::check(html)?;
+    super::webscript::check(html, &elements)?;
 
     Ok(())
 }
 
-/// Busca un atributo `on...=`, que es como se cuela un guion sin escribir `<script>`.
-///
-/// A mano y no con una expresion regular porque es la unica que haria falta en todo el
-/// proyecto, y la regla cabe en veinte lineas: un `on` que empieza atributo, letras
-/// detras, y un `=` despues de los espacios que haya.
-fn find_handler(lower: &str) -> Option<String> {
-    let bytes = lower.as_bytes();
+fn check_element(element: &Element) -> Result<(), ApiError> {
+    if !ALLOWED_TAGS.contains(&element.name.as_str()) {
+        return Err(ApiError::BadRequest(format!(
+            "TAG_NOT_ALLOWED: <{}> no se permite. Un sitio es texto, estructura y CSS",
+            element.name
+        )));
+    }
 
-    for (start, _) in lower.match_indices("on") {
-        // Tiene que empezar un atributo: antes va un espacio o el signo de la etiqueta.
-        let opens = match start.checked_sub(1).map(|before| bytes[before]) {
-            None => false,
-            Some(before) => before.is_ascii_whitespace() || before == b'<' || before == b'"'
-                || before == b'\'' || before == b'/',
-        };
+    for (name, value) in &element.attributes {
+        check_attribute(element, name, value)?;
+    }
 
-        if !opens {
-            continue;
-        }
+    if element.name == "style" {
+        css::check(&element.text, "la hoja de estilo").map_err(ApiError::BadRequest)?;
+    }
 
-        let mut at = start + 2;
+    Ok(())
+}
 
-        while at < bytes.len() && bytes[at].is_ascii_alphabetic() {
-            at += 1;
-        }
+fn check_attribute(element: &Element, name: &str, value: &str) -> Result<(), ApiError> {
+    // Un manejador tiene su propio mensaje porque es el error que mas se comete de buena
+    // fe: quien lo escribe cree que esta poniendo un boton, no un guion.
+    if name.starts_with("on") && name.len() > 2 {
+        return Err(ApiError::BadRequest(format!(
+            "HANDLER_NOT_ALLOWED: {name} es un manejador de eventos, y eso es codigo"
+        )));
+    }
 
-        // `on` a secas no es un manejador; `onclick` si.
-        if at == start + 2 {
-            continue;
-        }
+    // El estilo suelto vale, pero se lee igual que la hoja: nada que cargue de fuera.
+    if name == "style" {
+        return css::check(value, "un atributo `style`").map_err(ApiError::BadRequest);
+    }
 
-        let name = &lower[start..at];
+    // Los `data-*` son el vocabulario del juego. Que existan lo decide `webscript`; aqui
+    // basta con saber que no son codigo.
+    if name.starts_with("data-") {
+        return Ok(());
+    }
 
-        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
-            at += 1;
-        }
+    if ALLOWED_GLOBAL.contains(&name) {
+        return Ok(());
+    }
 
-        if bytes.get(at) == Some(&b'=') {
-            return Some(name.to_string());
+    let allowed_here = ALLOWED_PER_TAG
+        .iter()
+        .find(|(tag, _)| *tag == element.name)
+        .is_some_and(|(_, names)| names.contains(&name));
+
+    if !allowed_here {
+        return Err(ApiError::BadRequest(format!(
+            "ATTR_NOT_ALLOWED: `{name}` no se permite en <{}>",
+            element.name
+        )));
+    }
+
+    if element.name == "a" && name == "href" {
+        return check_href(value);
+    }
+
+    if element.name == "input" && name == "type" {
+        let kind = value.trim().to_lowercase();
+
+        if !ALLOWED_INPUT_TYPES.contains(&kind.as_str()) {
+            return Err(ApiError::BadRequest(format!(
+                "ATTR_NOT_ALLOWED: `type=\"{kind}\"` no se permite. Los que valen son: {}",
+                ALLOWED_INPUT_TYPES.join(", ")
+            )));
         }
     }
 
-    None
+    Ok(())
+}
+
+/// Un enlace solo puede llevar a un sitio: a este.
+///
+/// Salir se hace con `data-action="go_to"`, que es una orden del juego y pasa por el
+/// navegador. Un `href` a otra maquina de verdad sacaria al jugador del juego, y uno a
+/// `http://` cargaria la pagina de un tercero dentro del marco, que es exactamente el
+/// contador de visitas que esto viene a impedir.
+fn check_href(value: &str) -> Result<(), ApiError> {
+    let target = value.trim();
+
+    if target.starts_with('#') {
+        return Ok(());
+    }
+
+    Err(ApiError::BadRequest(format!(
+        "LINK_NOT_ALLOWED: `href=\"{target}\"` sale del sitio. Dentro de la pagina vale \
+         `href=\"#donde-sea\"`; para ir a otra maquina, `data-action=\"go_to\"`"
+    )))
 }
 
 #[cfg(test)]
@@ -175,4 +248,98 @@ mod tests {
     fn rejects_a_page_that_is_too_long() {
         assert!(rejects(&"a".repeat(MAX_LENGTH + 1)));
     }
+
+    //
+    // Lo que el filtro por subcadenas dejaba pasar.
+    //
+
+    #[test]
+    fn el_espacio_ya_no_esquiva_la_carga() {
+        // `contains("src=")` no encontraba nada aqui, y el navegador carga la imagen igual.
+        assert!(rejects("<img src = \"http://tracker.example/pixel.gif\">"));
+        assert!(rejects("<style>body{background:url ('http://x.example/a.png')}</style>"));
+    }
+
+    #[test]
+    fn lo_que_no_es_una_etiqueta_conocida_tampoco_entra() {
+        // El parser no saca un `<script>` de aqui, saca un elemento con un nombre absurdo.
+        // Con una lista de lo prohibido habria que haberlo previsto; con una de lo
+        // permitido, no hace falta saber que era.
+        assert!(rejects("<scr<script>ipt>alert(1)</script>"));
+        assert!(rejects("<marquee>hola</marquee>"));
+    }
+
+    #[test]
+    fn lo_que_carga_de_fuera_no_entra_aunque_cambie_de_nombre() {
+        assert!(rejects("<svg><use href=\"http://x.example/a.svg#i\"></use></svg>"));
+        assert!(rejects("<video><source src=\"http://x.example/a.mp4\"></video>"));
+        assert!(rejects("<div style=\"background:url(http://x.example/a.png)\">x</div>"));
+    }
+
+    #[test]
+    fn un_enlace_no_saca_del_sitio() {
+        assert!(rejects("<a href=\"http://x.example\">fuera</a>"));
+        assert!(check("<a href=\"#precios\">dentro</a>").is_ok());
+        assert!(check("<a data-action=\"go_to\" data-target=\"45.123.10.5\">ir</a>").is_ok());
+    }
+
+    //
+    // Lo que rechazaba de mas.
+    //
+
+    #[test]
+    fn hablar_de_una_carga_no_es_hacerla() {
+        assert!(check("<p>escribe url(...) en la hoja y no te dejara</p>").is_ok());
+        assert!(check("<p>el atributo src= no se permite</p>").is_ok());
+    }
+
+    //
+    // Que las paginas que ya existen siguen siendo validas.
+    //
+
+    #[test]
+    fn la_plantilla_de_un_npc_sigue_valiendo() {
+        let html = r#"<style>
+            body{margin:0;background:#12100c;color:#e8dfc8;font:14px/1.6 Georgia,serif}
+            header{padding:28px 32px;border-bottom:3px double #7a5c1f}
+            h1{margin:0;font-size:26px;letter-spacing:.5px;color:#e8c46a}
+            .sub{margin:6px 0 0;color:#8c7a55;font-style:italic}
+            table{width:100%;border-collapse:collapse;font-size:13px}
+            th{text-align:left;padding:6px 8px;border-bottom:2px solid #3a3120}
+          </style>
+          <header>
+            <h1>Meridian Labs</h1>
+            <p class="sub">Investigacion aplicada desde 1987</p>
+          </header>
+          <main>
+            <p class="notice">Acceso al repositorio restringido al personal acreditado.</p>
+            <table>
+              <tr><th>Referencia</th><th>Linea de trabajo</th><th>Estado</th></tr>
+              <tr><td class="ref">AX-114</td><td>Sintesis de materiales</td><td>en curso</td></tr>
+            </table>
+          </main>
+          <footer>Meridian Labs &mdash; documento generado automaticamente</footer>"#;
+
+        assert!(check(html).is_ok());
+    }
+
+    #[test]
+    fn un_banco_con_sus_campos_y_sus_botones_sigue_valiendo() {
+        let html = r#"<style>.caja{padding:1rem}</style>
+          <div class="caja" data-when="out">
+            <input data-field="account" type="text" placeholder="Cuenta">
+            <input data-field="pin" type="password" placeholder="PIN">
+            <button data-action="bank_login">Entrar</button>
+          </div>
+          <div class="caja" data-when="in">
+            <p>Saldo: <span data-bind="balance">--</span></p>
+            <ul data-list="movements">
+              <li><span data-bind="concept"></span> <span data-bind="amount"></span></li>
+            </ul>
+            <button data-action="bank_logout">Salir</button>
+          </div>"#;
+
+        assert!(check(html).is_ok());
+    }
 }
+

@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { formatIp } from '../../utils/ip';
-import { isSiteMessage, withRuntime, type SiteFill, type SiteMessage } from './siteRuntime';
+import { attach, fill, type SiteFill, type SiteMessage } from './siteRuntime';
 
 /**
  * El contenedor donde se pinta la página que sirve una máquina.
  *
- * Va en un `iframe` con `sandbox`. La única autorización que lleva es `allow-scripts`, y
- * **nunca `allow-same-origin`**: sin lo segundo el documento queda en un origen opaco, así
- * que no alcanza el DOM de la aplicación, ni su almacenamiento, ni sus cookies.
+ * Va en un `iframe` con `sandbox`. La única autorización que lleva es `allow-same-origin`, y
+ * **nunca `allow-scripts`**: sin lo segundo el navegador no ejecuta un guion ahí dentro
+ * aunque lo encuentre escrito. Esa es la diferencia con lo que había antes, que era justo al
+ * revés —`allow-scripts` sin `allow-same-origin`, porque el juego metía su propio guion en el
+ * marco para enterarse de los clics—. Ese trabajo lo hace ahora la aplicación desde fuera
+ * (ver `siteRuntime`), así que el permiso sobra, y quitarlo convierte «el servidor rechaza
+ * `<script>` al guardar» en «además, no correría».
  *
- * Los scripts hacen falta para un solo guion, el que inyecta el juego para enterarse de los
- * clics en los botones de un sitio. El HTML del autor sigue sin poder traer código: el
- * servidor rechaza `<script>` y los `on…=` al guardar.
+ * Lo que `allow-same-origin` concede es que la aplicación llegue al DOM del marco. En el par
+ * conocido como peligroso los dos permisos van juntos, y lo son porque un guion de dentro
+ * puede quitarle el `sandbox` a su propio marco. Sin `allow-scripts` no hay quien lo intente.
  *
- * El aislamiento va en las dos direcciones, y eso es lo que hace que funcione: cada sitio
- * trae su propio CSS —fondos claros, tipografías con serifa, lo que sea— sin pisar el del
- * juego, y el del juego no se cuela dentro para uniformarlo todo.
+ * El aislamiento de estilos sigue igual y es lo que hace que esto funcione: cada sitio trae su
+ * propio CSS —fondos claros, tipografías con serifa, lo que sea— sin pisar el del juego, y el
+ * del juego no se cuela dentro para uniformarlo todo.
  */
 
 /** Lo que se sirve cuando no hay nada configurado. Un servidor recién instalado. */
@@ -64,24 +68,50 @@ export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrame
   const [big, setBig] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
 
-  useEffect(() => {
-    if (!onAction) {
+  /** Lo que hay que soltar del documento anterior antes de engancharse al siguiente. */
+  const release = useRef<(() => void) | null>(null);
+
+  // Las dos llamadas viven en referencias porque quien las usa es el `onLoad` del marco, y
+  // ese no se vuelve a montar cuando el padre se repinta.
+  const action = useRef(onAction);
+  const ready = useRef(onReady);
+  action.current = onAction;
+  ready.current = onReady;
+
+  useEffect(() => () => release.current?.(), []);
+
+  /**
+   * El marco acaba de pintar una página. Es el único momento en que existe su documento:
+   * cambiar de página lo reemplaza entero, y con él se va todo lo que hubiera enganchado.
+   */
+  const bound = () => {
+    release.current?.();
+    release.current = null;
+
+    // Nulo en los marcos de solo lectura, que van con el `sandbox` cerrado del todo y por
+    // eso quedan en un origen opaco. Ahí no hay nada que enganchar.
+    const inside = frame.current?.contentDocument;
+
+    if (!inside) {
       return;
     }
 
-    const listener = (event: MessageEvent) => {
-      // Solo se atiende a nuestro propio marco: cualquier otra ventana que mande un mensaje
-      // parecido se ignora.
-      if (event.source !== frame.current?.contentWindow || !isSiteMessage(event.data)) {
-        return;
-      }
+    const reply = (data: SiteFill) => {
+      const current = frame.current?.contentDocument;
 
-      onAction(event.data, (fill) => frame.current?.contentWindow?.postMessage(fill, '*'));
+      if (current) {
+        fill(current, data);
+      }
     };
 
-    window.addEventListener('message', listener);
-    return () => window.removeEventListener('message', listener);
-  }, [onAction]);
+    const onSiteAction = action.current;
+
+    if (onSiteAction) {
+      release.current = attach(inside, (message) => onSiteAction(message, reply));
+    }
+
+    ready.current?.(reply);
+  };
 
   if (down) {
     return (
@@ -96,7 +126,6 @@ export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrame
 
   const served = Boolean(html && html.trim());
   const page = served ? (html as string) : blankPage(ip);
-  const source = onAction ? withRuntime(page) : page;
 
   return (
     <div className={big ? 'site is-big' : 'site'}>
@@ -114,12 +143,10 @@ export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrame
         ref={frame}
         className="site__frame"
         title={`Página de ${name || formatIp(ip)}`}
-        sandbox={onAction ? 'allow-scripts' : ''}
+        sandbox={onAction ? 'allow-same-origin' : ''}
         loading="lazy"
-        srcDoc={source}
-        onLoad={() =>
-          onReady?.((fill) => frame.current?.contentWindow?.postMessage(fill, '*'))
-        }
+        srcDoc={page}
+        onLoad={bound}
       />
     </div>
   );

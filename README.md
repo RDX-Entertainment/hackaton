@@ -11,6 +11,8 @@ El proyecto está separado deliberadamente en dos aplicaciones:
 
 Copia `backend/.env.example` a `backend/.env`, configura `DATABASE_URL` y `JWT_SECRET`; el backend aplica las migraciones PostgreSQL al arrancar. La base local usada por este port es `hacker_experience`.
 
+`backend/.env` **no se versiona**: durante un tiempo sí lo estuvo, para que un clon arrancara solo, y la auditoría del 2026-08-25 lo anotó como SEC-01. Copiar el ejemplo es el paso que sustituye a aquello, y el `JWT_SECRET` conviene generarlo (`openssl rand -base64 32`) en vez de dejar el de muestra. Los secretos del despliegue son otros y viven en `deploy/.env`, fuera del repositorio.
+
 ```sh
 distrobox enter rust-dev -- bash -lc 'cd /home/raul/Projects/hackaton && cargo run -p legacy-api'
 distrobox enter web-dev -- bash -lc 'cd /home/raul/Projects/hackaton/frontend && npm install && npm run dev'

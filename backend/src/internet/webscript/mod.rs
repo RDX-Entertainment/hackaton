@@ -3,10 +3,10 @@
 //! No es JavaScript ni se le parece: es una lista de ordenes, una por linea, que el
 //! navegador del juego lee y convierte en controles suyos. Ese rodeo no es un capricho.
 //!
-//! Un sitio se pinta en un `iframe` con `sandbox` y sin permisos: no puede ejecutar guiones
-//! ni hablar con la aplicacion que lo rodea. Si la navegacion viviera dentro del marco, un
-//! clic no tendria forma de llegar al navegador del juego. Por eso el bloque **declara** lo
-//! que el sitio ofrece y es el juego quien lo pinta y lo obedece, fuera del marco.
+//! Un sitio se pinta en un `iframe` con `sandbox` y **sin permiso para ejecutar guiones**:
+//! aunque llegara uno escrito, el navegador no lo correria. Si la navegacion viviera dentro
+//! del marco haria falta codigo ahi dentro, y no lo hay. Por eso el bloque **declara** lo
+//! que el sitio ofrece y es el juego quien lo pinta y lo obedece, desde fuera.
 //!
 //! La etiqueta es `<action>` y no `<script>` a proposito. `<script>` sigue prohibido y no
 //! hace falta tocar esa regla: asi no hay forma de confundir una orden del juego con codigo,
@@ -54,6 +54,7 @@ use serde::Serialize;
 
 use crate::error::ApiError;
 
+use super::document::Element;
 use catalog::Effect;
 use parser::Chunk;
 
@@ -159,7 +160,7 @@ pub fn parse(html: &str) -> Site {
 ///
 /// Se llama al guardar, junto al resto de reglas del sanitizador: una orden que no se
 /// entiende es una orden que el jugador tiene que poder arreglar antes de publicarla.
-pub fn check(html: &str) -> Result<(), ApiError> {
+pub fn check(html: &str, elements: &[Element]) -> Result<(), ApiError> {
     let mut total = 0;
     let mut open = 0;
 
@@ -196,7 +197,7 @@ pub fn check(html: &str) -> Result<(), ApiError> {
     }
 
     // Y los botones escritos en el propio HTML, que son la otra forma de declarar una orden.
-    markup::check(html).map_err(ApiError::BadRequest)?;
+    markup::check(elements).map_err(ApiError::BadRequest)?;
 
     Ok(())
 }
@@ -232,6 +233,12 @@ fn apply(site: &mut Site, line: parser::Line) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Los tests hablan de HTML, y `check` ya pide el arbol: se lo damos igual que hace
+    /// `sanitize`, que es el unico que lo llama de verdad.
+    fn check(html: &str) -> Result<(), ApiError> {
+        super::check(html, &crate::internet::document::parse(html))
+    }
 
     #[test]
     fn un_sitio_sin_ordenes_es_una_pagina_sola() {

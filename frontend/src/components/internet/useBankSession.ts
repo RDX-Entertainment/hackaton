@@ -4,7 +4,6 @@ import { bankApi, financesApi, type BankAccess } from '../../utils/api';
 import { messageFrom } from '../../utils/errors';
 import { formatMoney } from '../../utils/format';
 import type { SiteFill, SiteMessage } from './siteRuntime';
-import { SITE_FILL } from './siteRuntime';
 
 type Bank = { id: number; name: string };
 
@@ -64,7 +63,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
       };
 
       const say = (status: string, extra?: Partial<SiteFill>) =>
-        send({ source: SITE_FILL, values: { status, bank: bank.name }, ...extra });
+        send({ values: { status, bank: bank.name }, ...extra });
 
       const shown = (access: BankAccess) => ({
         bank: bank.name,
@@ -78,7 +77,6 @@ export function useBankSession(bank: Bank | null, ip: number) {
           session.current = null;
           setHolder(null);
           send({
-            source: SITE_FILL,
             values: { status: 'Sesión cerrada.', account: '', holder: '', balance: '—' },
             clear: true,
           });
@@ -88,7 +86,6 @@ export function useBankSession(bank: Bank | null, ip: number) {
         if (message.kind === 'bank_open') {
           const opened = await financesApi.openAccount(bank.id, fields.pin ?? '');
           send({
-            source: SITE_FILL,
             values: {
               status: `Cuenta ${opened.account} abierta. Entra con ella y ese PIN.`,
               account: String(opened.account),
@@ -107,7 +104,6 @@ export function useBankSession(bank: Bank | null, ip: number) {
           session.current = { access, pin: fields.pin ?? '' };
           setHolder(access.holder);
           send({
-            source: SITE_FILL,
             values: { ...shown(access), status: `Hola, ${access.holder}.` },
             clear: true,
           });
@@ -135,7 +131,6 @@ export function useBankSession(bank: Bank | null, ip: number) {
           const access = { ...open.access, cash: movement.balance };
           session.current = { ...open, access };
           send({
-            source: SITE_FILL,
             values: {
               ...shown(access),
               status: `Enviados ${formatMoney(amount)} a ${fields.to_account}.`,
@@ -152,7 +147,6 @@ export function useBankSession(bank: Bank | null, ip: number) {
           });
 
           send({
-            source: SITE_FILL,
             values: { ...shown(open.access), status: `${rows.length} movimientos.` },
             lists: {
               movements: rows.length
@@ -183,7 +177,6 @@ export function useBankSession(bank: Bank | null, ip: number) {
   /** Vuelve a pintar lo que la sesión ya sabía, en la página que acaba de cargar. */
   const restore = useCallback((reply: (fill: SiteFill) => void) => {
     reply(painted.current ?? {
-      source: SITE_FILL,
       session: session.current !== null,
     });
   }, []);
