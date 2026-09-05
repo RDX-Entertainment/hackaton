@@ -49,6 +49,7 @@ const LOG_EDIT_SECONDS: i32 = 30;
 pub async fn resolve_ip(
     pool: &PgPool,
     ip: i64,
+    viewer: i64,
 ) -> Result<Remote, ApiError> {
     //
     // IMPORTANTE:
@@ -69,19 +70,34 @@ pub async fn resolve_ip(
         });
     }
 
-    let player =
-        repo::find_player_by_ip(pool, ip)
-            .await?
-            .ok_or(ApiError::NotFound)?;
+    if let Some(player) = repo::find_player_by_ip(pool, ip).await? {
+        return Ok(Remote {
+            is_npc: false,
+            id: player.id,
+            name: player.login,
+            npc_type: 0,
+            down: false,
+            web: player.web,
+            server_id: player.server_id,
+        });
+    }
+
+    // Y lo ultimo: una direccion de red interna. No esta en Internet, asi que conocerla no
+    // basta -- hace falta estar dentro, con acceso vivo en una maquina cableada a ella. Para
+    // quien no lo tenga esto es un 404, y esa es justo la gracia: una maquina sin tarjeta de
+    // red no existe para el mundo hasta que alguien entra por otra puerta.
+    let inside = repo::find_machine_on_lan(pool, ip, viewer)
+        .await?
+        .ok_or(ApiError::NotFound)?;
 
     Ok(Remote {
-        is_npc: false,
-        id: player.id,
-        name: player.login,
+        is_npc: inside.is_npc,
+        id: inside.owner_id,
+        name: inside.name,
         npc_type: 0,
         down: false,
-        web: player.web,
-        server_id: player.server_id,
+        web: inside.web,
+        server_id: Some(inside.server_id),
     })
 }
 
@@ -178,6 +194,7 @@ pub async fn internet_navigate(
     let target = resolve_ip(
         pool,
         ip,
+        user_id,
     )
     .await?;
 
@@ -290,7 +307,7 @@ pub async fn internet_login(
     }
 
     let target =
-        resolve_ip(pool, input.ip).await?;
+        resolve_ip(pool, input.ip, user_id).await?;
 
     if target.down {
         return Err(
@@ -380,7 +397,7 @@ pub async fn internet_hack(
     }
 
     let target =
-        resolve_ip(pool, input.ip).await?;
+        resolve_ip(pool, input.ip, user_id).await?;
 
     if target.down {
         return Err(
@@ -477,7 +494,7 @@ pub async fn remote_log(
     ip: i64,
 ) -> Result<RemoteLogResponse, ApiError> {
     let target =
-        resolve_ip(pool, ip).await?;
+        resolve_ip(pool, ip, user_id).await?;
 
     require_access(
         pool,
@@ -508,7 +525,7 @@ pub async fn edit_remote_log(
     input: LogEditRequest,
 ) -> Result<LogEditStartedResponse, ApiError> {
     let target =
-        resolve_ip(pool, ip).await?;
+        resolve_ip(pool, ip, user_id).await?;
 
     require_access(
         pool,
@@ -566,7 +583,7 @@ pub async fn internet_analyze(
     input: IpRequest,
 ) -> Result<AnalyzeStartedResponse, ApiError> {
     let target =
-        resolve_ip(pool, input.ip).await?;
+        resolve_ip(pool, input.ip, user_id).await?;
 
     let analyzer =
         repo::best_running_analyzer(
@@ -655,6 +672,7 @@ pub async fn add_bookmark(
     resolve_ip(
         pool,
         input.ip,
+        user_id,
     )
     .await?;
 

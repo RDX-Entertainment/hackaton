@@ -41,6 +41,16 @@ pub struct PlayerRemoteRow {
     pub server_id: Option<i64>,
 }
 
+/// Una maquina alcanzada **por dentro**, cruzando un cable desde otra en la que ya se esta.
+#[derive(Debug, Clone, FromRow)]
+pub struct LanRemoteRow {
+    pub server_id: i64,
+    pub owner_id: i64,
+    pub is_npc: bool,
+    pub name: String,
+    pub web: Option<String>,
+}
+
 #[derive(Debug, Clone, FromRow)]
 pub struct InternetTargetRow {
     pub id: i64,
