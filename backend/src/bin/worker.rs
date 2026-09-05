@@ -64,7 +64,7 @@ async fn tick(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
 /// the player anything. Only the two actions this port can currently start are resolved;
 /// every other action still just gets marked done, exactly as before.
 async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
-    let due = sqlx::query("SELECT pid,creator_id,victim_id,action,soft_id,info FROM processes WHERE completed_at IS NULL AND NOT is_paused AND time_end<=now()")
+    let due = sqlx::query("SELECT pid,creator_id,victim_id,victim_server,action,soft_id,info FROM processes WHERE completed_at IS NULL AND NOT is_paused AND time_end<=now()")
         .fetch_all(pool).await?;
     for p in due {
         let pid: i64 = p.get("pid");
@@ -72,6 +72,8 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         let victim: i64 = p.get("victim_id");
         let action: i16 = p.get("action");
         let soft: i64 = p.get("soft_id");
+        // A que maquina iba. `victim_id` dice de quien es; esto, a cual de las suyas.
+        let victim_server: Option<i64> = p.get("victim_server");
         // Internet::hack writes "npc" or "player" into info when it starts the process,
         // which is what the legacy carried in its isNPC flag.
         let is_npc = p.get::<String, _>("info") == "npc";
@@ -88,7 +90,7 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
             13 => install_effect(pool, user, victim, is_npc, soft).await?,
             14 => uninstall_effect(pool, user, victim, is_npc, soft).await?,
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
-            11 => hack_effect(pool, user, victim, is_npc).await?,
+            11 => hack_effect(pool, user, victim, is_npc, victim_server).await?,
             15 => scan_effect(pool, user, victim, is_npc).await?,
             16 => {}
             17 => research_effect(pool, user, soft).await?,
@@ -656,13 +658,32 @@ mod tests {
 
 /// Case 11 of completeProcess. A successful brute force lands the victim's credentials in
 /// the player's compromised list, opens the machine and pays experience.
+///
+/// **Lo que se apunta es la maquina que se ataco, no su dueno.** Antes salia de `victim_ip`,
+/// que resolvia al propietario: atacaras la direccion que atacaras, en la lista quedaba la de
+/// la principal y la contrasena de la cuenta. Crackear una era crackearlo todo, y las
+/// direcciones separadas no servian de nada.
 async fn hack_effect(
     pool: &sqlx::PgPool,
     user: i64,
     victim: i64,
     is_npc: bool,
+    victim_server: Option<i64>,
 ) -> Result<(), sqlx::Error> {
-    let Some((ip, pass)) = victim_ip(pool, victim, is_npc).await? else {
+    let cracked = match victim_server {
+        Some(machine) => sqlx::query(
+            "SELECT public_ip AS ip,machine_pass AS pass FROM hardware WHERE server_id=$1 AND public_ip IS NOT NULL",
+        )
+        .bind(machine)
+        .fetch_optional(pool)
+        .await?
+        .map(|r| (r.get("ip"), r.get("pass"))),
+
+        // Un proceso de antes de que existiera la columna. Se resuelve como se resolvia.
+        None => victim_ip(pool, victim, is_npc).await?,
+    };
+
+    let Some((ip, pass)) = cracked else {
         return Ok(());
     };
     // addToList($_SESSION['id'], $ip, 'root', $pass, '0', '0'). The legacy refused a repeat
@@ -1162,10 +1183,32 @@ async fn reset_password_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sql
     else {
         return Ok(());
     };
-    sqlx::query("UPDATE users SET game_pass=substr(md5(random()::text),1,8) WHERE id=$1")
+    // **La llave es de la maquina principal, y `game_pass` la sigue**, igual que la direccion
+    // desde la fase 3. Las dos escrituras van juntas: si se separaran, la cuenta y la puerta
+    // dirian cosas distintas. Cambiar la de un equipo concreto es lo que falta, y necesita
+    // que el jugador pueda elegir cual.
+    let nueva: String =
+        sqlx::query_scalar("SELECT substr(md5(random()::text),1,8)")
+            .fetch_one(pool)
+            .await?;
+
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        "UPDATE hardware SET machine_pass=$2 WHERE user_id=$1 AND NOT is_npc AND is_gateway",
+    )
+    .bind(user)
+    .bind(&nueva)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query("UPDATE users SET game_pass=$2 WHERE id=$1")
         .bind(user)
-        .execute(pool)
+        .bind(&nueva)
+        .execute(&mut *tx)
         .await?;
+
+    tx.commit().await?;
     sqlx::query("UPDATE compromised_lists SET password='unknown',virus_id=0 WHERE ip=$1 AND password<>'exploited'")
         .bind(ip).execute(pool).await?;
     Ok(())

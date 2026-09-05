@@ -264,28 +264,23 @@ pub async fn analysis(
 // ==============================
 //
 
-pub async fn npc_password(
+/// La llave de una maquina.
+///
+/// Sustituye a `npc_password` y `player_password`, que preguntaban por el **dueno**: acertar
+/// la contrasena en cualquiera de sus direcciones abria todas las demas, y separar direcciones
+/// no servia de nada si la cerradura seguia siendo una. Los NPC ya lo tenian bien —cada uno
+/// trae la suya— y eran los jugadores los que arrastraban el modelo de una caja por cuenta.
+///
+/// `None` si la direccion no tiene maquina detras, que desde la 0049 no deberia pasar con
+/// nada alcanzable.
+pub async fn machine_password(
     pool: &PgPool,
-    npc_id: i64,
-) -> Result<String, sqlx::Error> {
-    sqlx::query_scalar(
-        "SELECT npc_pass FROM npc WHERE id = $1",
-    )
-    .bind(npc_id)
-    .fetch_one(pool)
-    .await
-}
-
-pub async fn player_password(
-    pool: &PgPool,
-    user_id: i64,
-) -> Result<String, sqlx::Error> {
-    sqlx::query_scalar(
-        "SELECT game_pass FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await
+    machine: i64,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT machine_pass FROM hardware WHERE server_id = $1")
+        .bind(machine)
+        .fetch_optional(pool)
+        .await
 }
 
 pub async fn grant_access(
@@ -410,6 +405,7 @@ pub async fn create_hack_process(
     pool: &PgPool,
     user_id: i64,
     victim_id: i64,
+    victim_server: Option<i64>,
     action: i16,
     info: &str,
     seconds: i32,
@@ -423,7 +419,11 @@ pub async fn create_hack_process(
             info,
             info_str,
             time_end,
-            time_ideal
+            time_ideal,
+            -- A que maquina va. `victim_id` sigue diciendo de quien es, pero desde que un
+            -- jugador puede tener varias eso ya no dice a cual se ataca, y el crackeo tiene
+            -- que revelar la llave de la que se ataco.
+            victim_server
         )
         VALUES(
             $1,
@@ -432,7 +432,8 @@ pub async fn create_hack_process(
             $4,
             $4,
             now() + ($5::integer * interval '1 second'),
-            $5
+            $5,
+            $6
         )
         RETURNING pid
         "#,
@@ -442,6 +443,7 @@ pub async fn create_hack_process(
     .bind(action)
     .bind(info)
     .bind(seconds)
+    .bind(victim_server)
     .fetch_one(pool)
     .await
 }
