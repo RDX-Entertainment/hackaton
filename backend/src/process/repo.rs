@@ -144,7 +144,10 @@ pub async fn insert(
             info,
             info_str,
             time_end,
-            time_ideal
+            time_ideal,
+            -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
+            -- reescribe de donde salio esto.
+            origin_server
         )
         VALUES(
             $1,
@@ -154,7 +157,8 @@ pub async fn insert(
             $5,
             $5,
             now() + ($6::integer * interval '1 second'),
-            $6
+            $6,
+            (SELECT server_id FROM software WHERE id = $4)
         )
         RETURNING pid
         "#,

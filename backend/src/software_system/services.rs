@@ -438,8 +438,12 @@ pub async fn analyze_evidence(
     if !requires_unlocked_skill("forensic_analyzer", &stats, "analyze_evidence") {
         return Err(ApiError::BadRequest("SKILL_LOCKED".into()));
     }
-    let hardware = repo::hardware(pool, user).await?;
-    if hardware.cpu < stats.cpu || hardware.ram < stats.ram || hardware.net < stats.net {
+    // El analisis sale del equipo donde vive el analizador, y con lo que ese equipo tenga.
+    let origin = repo::origin_machine(pool, analyzer.software_id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("INSUFFICIENT_RESOURCES".into()))?;
+
+    if origin.cpu < stats.cpu || origin.ram < stats.ram || origin.net < stats.net {
         return Err(ApiError::BadRequest("INSUFFICIENT_RESOURCES".into()));
     }
     let mut rolls = RuntimeRolls;
@@ -483,8 +487,12 @@ async fn start_tactical(
         return Err(ApiError::BadRequest("SKILL_LOCKED".into()));
     }
     let defense = defender.as_ref().map(stats).unwrap_or_default();
-    let hardware = repo::hardware(pool, user).await?;
-    if hardware.cpu < attack.cpu || hardware.ram < attack.ram || hardware.net < attack.net {
+    // Igual que el analisis: el ataque sale del equipo que guarda el programa que ataca.
+    let origin = repo::origin_machine(pool, attacker.software_id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("INSUFFICIENT_RESOURCES".into()))?;
+
+    if origin.cpu < attack.cpu || origin.ram < attack.ram || origin.net < attack.net {
         return Err(ApiError::BadRequest("INSUFFICIENT_RESOURCES".into()));
     }
     let mut rolls = RuntimeRolls;
@@ -680,10 +688,18 @@ pub async fn start_operation(
     let capability_definition = repo::capability(pool, &capability)
         .await?
         .ok_or_else(|| ApiError::BadRequest("unknown capability".into()))?;
-    let hardware = repo::hardware(pool, user).await?;
-    if hardware.cpu < attacker_stats.cpu
-        || hardware.ram < attacker_stats.ram
-        || hardware.net < attacker_stats.net
+    // Y la operacion tambien. Aqui importa el doble, porque de esta misma cuenta sale la
+    // presion que decide cuanto tarda: medirla contra la flota hacia que un equipo lento
+    // trabajara al ritmo del mejor de la casa sin que el ataque saliera de el.
+    let origin = repo::origin_machine(pool, attacker.software_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::BadRequest("hardware cannot run this operation".into())
+        })?;
+
+    if origin.cpu < attacker_stats.cpu
+        || origin.ram < attacker_stats.ram
+        || origin.net < attacker_stats.net
     {
         return Err(ApiError::BadRequest(
             "hardware cannot run this operation".into(),
@@ -696,9 +712,9 @@ pub async fn start_operation(
     let power =
         (attacker_stats.effectiveness + attacker_stats.penetration + attacker_stats.stability)
             .max(1);
-    let pressure = (attacker_stats.cpu * 100 / hardware.cpu.max(1)).max(
-        (attacker_stats.ram * 100 / hardware.ram.max(1))
-            .max(attacker_stats.net * 100 / hardware.net.max(1)),
+    let pressure = (attacker_stats.cpu * 100 / origin.cpu.max(1)).max(
+        (attacker_stats.ram * 100 / origin.ram.max(1))
+            .max(attacker_stats.net * 100 / origin.net.max(1)),
     );
     let seconds = crate::process::services::duration_for(
         ((work_units * 10) / (power * 100 / (100 + pressure)).max(1)).clamp(20, 900),

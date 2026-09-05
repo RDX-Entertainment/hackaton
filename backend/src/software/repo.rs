@@ -261,7 +261,10 @@ pub async fn create_transfer_process(
             info,
             info_str,
             time_end,
-            time_ideal
+            time_ideal,
+            -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
+            -- reescribe de donde salio esto.
+            origin_server
         )
         VALUES(
             $1,
@@ -271,7 +274,8 @@ pub async fn create_transfer_process(
             $5,
             $5,
             now() + ($6::integer * interval '1 second'),
-            $6
+            $6,
+            (SELECT server_id FROM software WHERE id = $4)
         )
         RETURNING pid
         "#,
@@ -304,7 +308,10 @@ pub async fn create_delete_process(
             info,
             info_str,
             time_end,
-            time_ideal
+            time_ideal,
+            -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
+            -- reescribe de donde salio esto.
+            origin_server
         )
         VALUES(
             $1,
@@ -314,7 +321,8 @@ pub async fn create_delete_process(
             $4,
             $4,
             now() + ($5::integer * interval '1 second'),
-            $5
+            $5,
+            (SELECT server_id FROM software WHERE id = $3)
         )
         RETURNING pid
         "#,
@@ -418,7 +426,10 @@ pub async fn create_research_process(
             info,
             info_str,
             time_end,
-            time_ideal
+            time_ideal,
+            -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
+            -- reescribe de donde salio esto.
+            origin_server
         )
         VALUES(
             $1,
@@ -428,7 +439,8 @@ pub async fn create_research_process(
             'local',
             'local',
             now() + ($3::integer * interval '1 second'),
-            $3
+            $3,
+            (SELECT server_id FROM software WHERE id = $2)
         )
         RETURNING pid
         "#,
