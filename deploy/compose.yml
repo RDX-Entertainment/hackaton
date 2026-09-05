@@ -51,6 +51,9 @@ services:
       # desarrollo. Se deja declarado para que se vea que la decision es esa y
       # no un olvido.
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # El techo de capacidad del servidor: cuantas plazas de flota admite. El del
+      # jugador es otro, empieza en una y sube pagando.
+      MAX_MACHINE_SLOTS: ${MAX_MACHINE_SLOTS:-4}
       # La cuenta de administrador se crea al arrancar si no existe.
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?falta ADMIN_EMAIL}

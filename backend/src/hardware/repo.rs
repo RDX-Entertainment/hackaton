@@ -998,6 +998,34 @@ pub async fn count_nics(
 /// Darle direccion publica, si no tenia. Sortearla dentro de la transaccion es lo que
 /// impide que dos instalaciones a la vez se lleven la misma: `random_free_ip()` ya mira la
 /// tabla, y el indice unico remata lo que se le escape.
+/// Cuantas plazas de flota tiene un jugador.
+///
+/// Empieza en una y sube pagando. Es el techo **del jugador**; el del servidor vive en el
+/// entorno y lo lee `server_slot_ceiling`.
+pub async fn machine_slots(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: i64,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT machine_slots::bigint FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map(|found| found.unwrap_or(1))
+}
+
+/// Una plaza mas. Se llama despues de cobrarla, dentro de la misma transaccion.
+pub async fn add_machine_slot(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE users SET machine_slots = machine_slots + 1 WHERE id = $1")
+        .bind(user_id)
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
+}
+
 pub async fn assign_public_ip(
     tx: &mut Transaction<'_, Postgres>,
     machine: i64,

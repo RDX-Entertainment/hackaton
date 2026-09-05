@@ -1,3 +1,5 @@
+use std::env;
+
 use sqlx::PgPool;
 
 use crate::{auth::Ctx, error::ApiError};
@@ -35,19 +37,31 @@ const KINDS: [&str; 5] = ["cpu", "ram", "hdd", "net", "mobo"];
 /// decide desde un formulario. Los chipsets si son abiertos, porque solo son una etiqueta.
 const TIERS: [&str; 4] = ["domestica", "gaming", "server", "industrial"];
 
-/// Cuantos equipos puede tener un jugador.
+/// Cuantas plazas admite este servidor, pase lo que pase.
 ///
-/// Sin techo, comprar equipos seria una forma de sumar capacidad sin limite: lo que cuenta
-/// el juego es la suma de todas las maquinas de alguien, no la mejor.
-pub const MAX_MACHINES: i64 = 4;
+/// **No es una regla de juego, es de capacidad**: depende de la maquina donde corre esto y no
+/// de la partida, asi que vive en el entorno junto al puerto y la base de datos. Cuatro es lo
+/// que habia antes como constante, y se mantiene de suelo para que nada cambie sin querer.
+///
+/// El techo que si es del juego lo lleva cada jugador en `users.machine_slots`, empieza en uno
+/// y sube pagando. Aqui habia una constante `MAX_MACHINES = 4` justificada como tapadera de que
+/// el hardware se sumaba entre equipos; la fase 1 quito eso de en medio y el limite unico se
+/// quedo sin motivo.
+pub fn server_slot_ceiling() -> i64 {
+    env::var("MAX_MACHINE_SLOTS")
+        .ok()
+        .and_then(|value| value.parse::<i64>().ok())
+        .filter(|value| *value >= 1)
+        .unwrap_or(4)
+}
 
-/// Lo que cuesta el segundo equipo. Cada uno despues vale el doble que el anterior, asi que
-/// el cuarto sale por cuatro veces el segundo. Tener flota es una decision, no un tramite.
+/// Lo que cuesta la segunda plaza. Cada una despues vale el doble que la anterior, asi que la
+/// cuarta sale por cuatro veces la segunda. Tener flota es una decision, no un tramite.
 const MACHINE_BASE_PRICE: i64 = 25_000;
 
-/// Lo que cuesta el siguiente equipo de alguien que ya tiene `owned`.
-fn machine_price(owned: i64) -> i64 {
-    MACHINE_BASE_PRICE << (owned - 1).max(0).min(16)
+/// Lo que cuesta la siguiente plaza de alguien que ya tiene `slots`.
+fn machine_price(slots: i64) -> i64 {
+    MACHINE_BASE_PRICE << (slots - 1).max(0).min(16)
 }
 
 //
@@ -70,20 +84,28 @@ pub async fn machines(
     Ok(machines)
 }
 
-/// Cuantos equipos tiene, cuantos caben y lo que cuesta el siguiente.
+/// Cuantos equipos tiene, cuantas plazas, y lo que cuesta la siguiente.
+///
+/// Si sobra una plaza —porque se dio de baja un equipo— montar el siguiente **no cuesta nada**:
+/// la plaza ya estaba pagada. Es lo que separa comprar un sitio de comprar una maquina.
 pub async fn machine_quote(
     pool: &PgPool,
     user_id: i64,
 ) -> Result<MachineQuoteResponse, ApiError> {
     let mut tx = pool.begin().await?;
     let owned = repo::count_machines(&mut tx, user_id).await?;
+    let slots = repo::machine_slots(&mut tx, user_id).await?;
     tx.rollback().await?;
+
+    let ceiling = server_slot_ceiling();
+    let libre = owned < slots;
 
     Ok(MachineQuoteResponse {
         machines: owned,
-        max: MAX_MACHINES,
-        price: machine_price(owned),
-        can_buy: owned < MAX_MACHINES,
+        slots,
+        max: ceiling,
+        price: if libre { 0 } else { machine_price(slots) },
+        can_buy: libre || slots < ceiling,
     })
 }
 
@@ -112,10 +134,14 @@ fn machine_name(given: Option<String>, number: i64) -> Result<String, ApiError> 
     }
 }
 
-/// Comprar un equipo vacio.
+/// Montar un equipo vacio, comprando la plaza si hace falta.
 ///
 /// Nace sin nada dentro: es un sitio donde poner una placa, no un ordenador. Lo que lo
 /// convierte en uno son las piezas, que se instalan con las mismas reglas de siempre.
+///
+/// **Lo que se paga es la plaza, no la maquina.** Si queda una libre —de un equipo dado de
+/// baja— montar el siguiente sale gratis, porque el sitio ya se compro una vez. Y el techo del
+/// servidor solo entra cuando hay que comprar una nueva: nunca impide llenar una que ya es tuya.
 pub async fn buy_machine(
     pool: &PgPool,
     user_id: i64,
@@ -124,26 +150,37 @@ pub async fn buy_machine(
     let mut tx = pool.begin().await?;
 
     let owned = repo::count_machines(&mut tx, user_id).await?;
+    let slots = repo::machine_slots(&mut tx, user_id).await?;
 
-    if owned >= MAX_MACHINES {
-        return Err(ApiError::BadRequest(format!(
-            "TOO_MANY_MACHINES: ya tienes {owned} equipos, el maximo es {MAX_MACHINES}"
-        )));
-    }
+    let price = if owned < slots {
+        0
+    } else {
+        let ceiling = server_slot_ceiling();
 
-    let price = machine_price(owned);
+        if slots >= ceiling {
+            return Err(ApiError::BadRequest(format!(
+                "TOO_MANY_MACHINES: tienes {slots} plazas y este servidor admite {ceiling}"
+            )));
+        }
+
+        machine_price(slots)
+    };
+
     let name = machine_name(input.name, owned + 1)?;
 
-    let cash = repo::lock_account_cash(&mut tx, input.account, user_id)
-        .await?
-        .unwrap_or(0);
+    if price > 0 {
+        let cash = repo::lock_account_cash(&mut tx, input.account, user_id)
+            .await?
+            .unwrap_or(0);
 
-    if cash < price {
-        return Err(ApiError::BadRequest("insufficient funds".into()));
+        if cash < price {
+            return Err(ApiError::BadRequest("insufficient funds".into()));
+        }
+
+        repo::charge_account(&mut tx, input.account, user_id, price).await?;
+        repo::record_spend(&mut tx, user_id, price).await?;
+        repo::add_machine_slot(&mut tx, user_id).await?;
     }
-
-    repo::charge_account(&mut tx, input.account, user_id, price).await?;
-    repo::record_spend(&mut tx, user_id, price).await?;
 
     let machine = repo::insert_machine(&mut tx, user_id, &name).await?;
 

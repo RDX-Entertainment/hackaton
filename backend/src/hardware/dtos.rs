@@ -304,8 +304,16 @@ pub struct RenameMachineRequest {
 /// caben y lo que cuesta el siguiente.
 #[derive(Debug, Serialize)]
 pub struct MachineQuoteResponse {
+    /// Equipos montados ahora mismo.
     pub machines: i64,
+
+    /// Plazas que se tienen. Si sobra alguna, montar el siguiente equipo no cuesta nada.
+    pub slots: i64,
+
+    /// Plazas que admite este servidor. Es el techo de capacidad, no el del jugador.
     pub max: i64,
+
+    /// Lo que cuesta la siguiente. Cero cuando se esta llenando una plaza ya pagada.
     pub price: i64,
     pub can_buy: bool,
 }
