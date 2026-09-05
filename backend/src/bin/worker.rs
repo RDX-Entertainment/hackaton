@@ -1122,11 +1122,28 @@ async fn reset_ip_effect(pool: &sqlx::PgPool, user: i64) -> Result<(), sqlx::Err
         .fetch_one(pool)
         .await?;
 
+    // **La direccion es de la maquina principal, y `game_ip` la sigue.** Antes esto cambiaba
+    // solo la columna del usuario, y desde que se resuelve por la maquina eso dejaba al
+    // jugador respondiendo en la direccion vieja mientras la nueva no llevaba a ninguna parte.
+    // Las dos escrituras van juntas o no van: si se separaran, la identidad y la puerta
+    // apuntarian a sitios distintos.
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        "UPDATE hardware SET public_ip=$2 WHERE user_id=$1 AND NOT is_npc AND is_gateway",
+    )
+    .bind(user)
+    .bind(candidate)
+    .execute(&mut *tx)
+    .await?;
+
     sqlx::query("UPDATE users SET game_ip=$2 WHERE id=$1")
         .bind(user)
         .bind(candidate)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
+
+    tx.commit().await?;
 
     Ok(())
 }
