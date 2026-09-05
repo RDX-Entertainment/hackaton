@@ -10,6 +10,8 @@ use super::{
         BuyPartRequest,
         ChipsetInput,
         ChipsetResponse,
+        ClusterRequest,
+        ClusterResponse,
         ComponentResponse,
         GrantRequest,
         InstallRequest,
@@ -886,6 +888,100 @@ pub async fn links(
 /// que los dos sean suyos, que no sean el mismo, que a los dos les quede boca libre, y que
 /// no estuvieran ya unidos. La ultima la impone ademas el indice unico de la tabla, que es
 /// quien gana si dos peticiones llegan a la vez.
+//
+// ==============================
+// CLUSTERS
+// ==============================
+//
+
+/// Montar un grupo: un nombre, un controlador y los equipos que van dentro.
+///
+/// **El cable es la condicion y el grupo es la decision.** Dos equipos cableados no forman un
+/// cluster por estar cableados, igual que dos ordenadores en la misma habitacion no son uno;
+/// pero no se agrupa lo que no esta conectado. Se comprueba que cada miembro se alcance desde
+/// el controlador siguiendo cables — no hace falta que cuelgue de el directamente, basta que
+/// se llegue, porque una red es una red.
+///
+/// Va la ultima de su rumbo a proposito: un cluster **suma** recursos, y para sumarlos habia
+/// que haberlos separado antes. Hacerlo cuando el disco de un jugador ya era la suma de todas
+/// sus maquinas no habria significado nada.
+pub async fn create_cluster(
+    pool: &PgPool,
+    user_id: i64,
+    input: ClusterRequest,
+) -> Result<ClusterResponse, ApiError> {
+    let name = checked_name(&input.name)?;
+
+    let mut miembros = input.members.clone();
+    miembros.push(input.controller);
+    miembros.sort_unstable();
+    miembros.dedup();
+
+    if miembros.len() < 2 {
+        return Err(ApiError::BadRequest(
+            "LONE_CLUSTER: un grupo de un equipo es el equipo; mete al menos otro".into(),
+        ));
+    }
+
+    let mut tx = pool.begin().await?;
+
+    for machine in &miembros {
+        if !repo::machine_belongs_to(&mut tx, *machine, user_id).await? {
+            return Err(ApiError::BadRequest("unknown machine".into()));
+        }
+
+        if let Some(otro) = repo::cluster_of(&mut tx, *machine).await? {
+            return Err(ApiError::BadRequest(format!(
+                "ALREADY_CLUSTERED: el equipo {machine} ya esta en el grupo {otro}"
+            )));
+        }
+    }
+
+    // Lo que se alcanza desde el controlador siguiendo cables. Todo miembro tiene que estar
+    // aqui dentro: es la parte fisica, y no se negocia.
+    let alcanzables = repo::cabled_component(&mut tx, input.controller).await?;
+
+    if let Some(suelto) = miembros.iter().find(|m| !alcanzables.contains(m)) {
+        return Err(ApiError::BadRequest(format!(
+            "NOT_CABLED: el equipo {suelto} no llega al controlador por cable; \
+             tiendelo antes de agruparlo"
+        )));
+    }
+
+    let cluster = repo::insert_cluster(&mut tx, user_id, &name, input.controller).await?;
+    repo::join_cluster(&mut tx, cluster, &miembros).await?;
+
+    tx.commit().await?;
+
+    Ok(ClusterResponse {
+        id: cluster,
+        name,
+        controller: input.controller,
+        members: miembros,
+    })
+}
+
+/// Deshacer un grupo.
+///
+/// **Solo por decision del jugador.** Si el controlador se cae la red queda inutilizada, pero
+/// el grupo se mantiene: uno que se deshiciera al primer golpe obligaria a rehacerlo cada vez,
+/// y eso es tramite, no juego.
+pub async fn dissolve_cluster(
+    pool: &PgPool,
+    user_id: i64,
+    cluster: i64,
+) -> Result<(), ApiError> {
+    let mut tx = pool.begin().await?;
+
+    if !repo::dissolve_cluster(&mut tx, cluster, user_id).await? {
+        return Err(ApiError::BadRequest("unknown cluster".into()));
+    }
+
+    tx.commit().await?;
+
+    Ok(())
+}
+
 pub async fn create_link(
     pool: &PgPool,
     user_id: i64,

@@ -96,6 +96,14 @@ pub fn configure(
             web::post().to(create_link),
         )
         .route(
+            "/hardware/clusters",
+            web::post().to(create_cluster),
+        )
+        .route(
+            "/hardware/clusters/{id}",
+            web::delete().to(dissolve_cluster),
+        )
+        .route(
             "/hardware/links/{id}",
             web::delete().to(delete_link),
         )
@@ -566,6 +574,28 @@ pub async fn admin_delete_chipset(
         id.into_inner(),
     )
     .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Montar un grupo de equipos cableados.
+pub async fn create_cluster(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<super::dtos::ClusterRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::create_cluster(&state.pool, ctx.id, input.into_inner()).await?;
+
+    Ok(HttpResponse::Created().json(response))
+}
+
+/// Deshacerlo. Solo lo hace el jugador; caerse el controlador no basta.
+pub async fn dissolve_cluster(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::dissolve_cluster(&state.pool, ctx.id, path.into_inner()).await?;
 
     Ok(HttpResponse::NoContent().finish())
 }
