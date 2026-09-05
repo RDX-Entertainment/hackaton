@@ -597,7 +597,10 @@ pub async fn create_analyze_process(
             info,
             info_str,
             time_end,
-            time_ideal
+            time_ideal,
+            -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
+            -- reescribe de donde salio esto.
+            origin_server
         )
         VALUES(
             $1,
@@ -607,7 +610,8 @@ pub async fn create_analyze_process(
             $4,
             $4,
             now() + ($5::integer * interval '1 second'),
-            $5
+            $5,
+            (SELECT server_id FROM software WHERE id = $3)
         )
         RETURNING pid
         "#,

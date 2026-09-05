@@ -80,8 +80,14 @@ pub struct BlueprintRow {
     pub role: String,
 }
 
+/// El equipo desde el que sale una operacion: el que guarda el programa que la hace.
+///
+/// Sustituye a `HardwareTotals`, que sumaba el procesador, la memoria y la salida de **toda**
+/// la flota. Un programa corre donde esta guardado —lo decidio la fase 1—, asi que la potencia
+/// con la que cuenta es la de ese equipo y no la de todos juntos.
 #[derive(Debug, Clone, FromRow)]
-pub struct HardwareTotals {
+pub struct OriginMachine {
+    pub server_id: i64,
     pub cpu: i32,
     pub ram: i32,
     pub net: i32,

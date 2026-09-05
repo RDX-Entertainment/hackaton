@@ -3,7 +3,7 @@ use sqlx::PgPool;
 
 use super::dtos::Stats;
 use super::models::{
-    BlueprintRow, CapabilityRow, EvidenceRow, HardwareTotals, MachineAccessRow, ModuleRow,
+    BlueprintRow, CapabilityRow, EvidenceRow, MachineAccessRow, ModuleRow, OriginMachine,
     ProgramRow, WebContentRow,
 };
 
@@ -89,6 +89,12 @@ pub async fn compilation_active(pool: &PgPool, user: i64) -> Result<bool, sqlx::
 pub async fn disk(pool: &PgPool, user: i64) -> Result<(i64, i64), sqlx::Error> {
     sqlx::query_as("SELECT COALESCE((SELECT sum(hdd)::bigint FROM hardware WHERE user_id=$1 AND NOT is_npc),0),COALESCE((SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc),0)").bind(user).fetch_one(pool).await
 }
+/// La compilacion es el unico proceso que **no** nace en una maquina, y a proposito.
+///
+/// Cuando se encola todavia no hay programa —es lo que se esta haciendo— y en que equipo
+/// aterriza el resultado lo decide el worker al terminar. Ponerle un origen aqui obligaria a
+/// elegir maquina antes de tiempo, y esa eleccion es una regla de juego que no esta tomada.
+/// `origin_server` se queda en `NULL`, que significa «no se sabe».
 pub async fn enqueue_compilation(
     pool: &PgPool,
     user: i64,
@@ -126,8 +132,37 @@ pub async fn defender_candidates(
 ) -> Result<Vec<ProgramRow>, sqlx::Error> {
     sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2)").bind(user).bind(capability).fetch_all(pool).await
 }
-pub async fn hardware(pool: &PgPool, user: i64) -> Result<HardwareTotals, sqlx::Error> {
-    sqlx::query_as("SELECT COALESCE(sum(cpu),0)::integer AS cpu,COALESCE(sum(ram),0)::integer AS ram,COALESCE(sum(net),0)::integer AS net FROM hardware WHERE user_id=$1 AND NOT is_npc").bind(user).fetch_one(pool).await
+/// El equipo del que sale una operacion, con lo que ese equipo puede darle.
+///
+/// Antes esto sumaba `WHERE user_id`: el procesador, la memoria y la salida de la flota
+/// entera. Con varias maquinas por cuenta eso convertia el hardware en un deposito comun, y
+/// una operacion que no cabia en ninguna maquina salia igual porque entre todas juntaban de
+/// sobra. Es el mismo fallo que la memoria arrastraba hasta el 2026-08-31, y se arregla
+/// igual: se mira **donde vive el programa**, que es donde corre y donde gasta.
+///
+/// Devuelve `None` si el programa no esta en ninguna maquina, que no deberia pasar desde la
+/// fase 1 pero es mejor contestarlo que suponerlo.
+pub async fn origin_machine(
+    pool: &PgPool,
+    software: i64,
+) -> Result<Option<OriginMachine>, sqlx::Error> {
+    sqlx::query_as(
+        r#"
+        SELECT h.server_id,
+               COALESCE(h.cpu, 0)::integer AS cpu,
+               COALESCE(h.ram, 0)::integer AS ram,
+               COALESCE(h.net, 0)::integer AS net
+
+        FROM software s
+        JOIN hardware h
+            ON h.server_id = s.server_id
+
+        WHERE s.id = $1
+        "#,
+    )
+    .bind(software)
+    .fetch_optional(pool)
+    .await
 }
 pub async fn enqueue_operation(
     pool: &PgPool,
@@ -139,7 +174,7 @@ pub async fn enqueue_operation(
     snapshot: Value,
     payload: Value,
 ) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$3)) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
 }
 
 pub async fn accesses(pool: &PgPool, user: i64) -> Result<Vec<MachineAccessRow>, sqlx::Error> {
@@ -178,7 +213,7 @@ pub async fn enqueue_tactical(
     snapshot: Value,
     payload: Value,
 ) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,$2,$3,$4,'tactical','tactical',now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7) RETURNING pid").bind(user).bind(target).bind(action).bind(software).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server) VALUES($1,$2,$3,$4,'tactical','tactical',now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$4)) RETURNING pid").bind(user).bind(target).bind(action).bind(software).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
 }
 pub async fn known_access(pool: &PgPool, user: i64, ip: i64) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(
