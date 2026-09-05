@@ -9,6 +9,16 @@ pub struct Remote {
     pub npc_type: i16,
     pub down: bool,
 
+    /// **La maquina que responde en esa direccion**, que es lo que de verdad hay al otro lado.
+    ///
+    /// `id` sigue diciendo de quien es —hace falta para casi todo lo que cuelga del dueno: el
+    /// ranking, el banco, las evidencias— pero ya no es la respuesta a «que hay en esta IP».
+    /// Con varias maquinas por cuenta esas dos preguntas dejaron de tener la misma respuesta.
+    ///
+    /// `None` solo si la direccion existe sin maquina detras, que la migracion 0049 dejo
+    /// imposible para todo lo alcanzable. Se contesta en vez de suponerse.
+    pub server_id: Option<i64>,
+
     /// La pagina que sirve, si sirve alguna. Los jugadores no tienen.
     pub web: Option<String>,
 }
@@ -20,6 +30,7 @@ pub struct NpcRemoteRow {
     pub down: bool,
     pub name: String,
     pub web: Option<String>,
+    pub server_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -27,6 +38,7 @@ pub struct PlayerRemoteRow {
     pub id: i64,
     pub login: String,
     pub web: Option<String>,
+    pub server_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, FromRow)]
