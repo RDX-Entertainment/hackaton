@@ -300,18 +300,16 @@ pub async fn internet_login(
         );
     }
 
-    let expected = if target.is_npc {
-        repo::npc_password(
-            pool,
-            target.id,
-        )
-        .await?
-    } else {
-        repo::player_password(
-            pool,
-            target.id,
-        )
-        .await?
+    // **La llave es de la maquina, no del dueno.** Antes se comprobaba la del propietario, asi
+    // que acertarla en una direccion abria todas las suyas y tener direcciones separadas era
+    // decorativo. Ahora cada equipo tiene la suya y entrar en uno es entrar en uno.
+    let expected = match target.server_id {
+        Some(machine) => repo::machine_password(pool, machine).await?,
+        None => None,
+    };
+
+    let Some(expected) = expected else {
+        return Err(ApiError::BadRequest("SERVER_DOWN".into()));
     };
 
     if input.password != expected {
@@ -451,6 +449,7 @@ pub async fn internet_hack(
             pool,
             user_id,
             target.id,
+            target.server_id,
             action,
             info,
             seconds,
