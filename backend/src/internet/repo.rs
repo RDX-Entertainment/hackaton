@@ -11,6 +11,7 @@ use super::models::{
     BookmarkRow,
     HistoryRow,
     InternetTargetRow,
+    LanRemoteRow,
     NpcRemoteRow,
     SiteRow,
     PlayerRemoteRow,
@@ -92,6 +93,76 @@ pub async fn find_npc_by_ip(
         "#,
     )
     .bind(ip)
+    .fetch_optional(pool)
+    .await
+}
+
+/// La maquina que hay en una direccion **de red interna**, si el que pregunta puede llegar.
+///
+/// Una `lan_ip` no esta en Internet: no la resuelve nadie desde fuera, y por eso no vale con
+/// conocerla. Hace falta **estar dentro** — tener acceso vivo a una maquina que tenga un cable
+/// hasta ella. Eso es lo que convierte el mapa de nodos en mecanica en vez de dibujo, y lo que
+/// le da sentido a esconder un equipo dejandolo sin tarjeta de red: sin salida propia, la unica
+/// forma de tocarlo es entrar antes por otro.
+///
+/// El acceso vale tanto si se obtuvo por la direccion publica del pivote como por la interna,
+/// asi que las cadenas funcionan solas: de la primera maquina a la segunda, y de la segunda a
+/// la tercera.
+///
+/// Una `lan_ip` solo es unica dentro de la red de su dueno —el indice es `(user_id, lan_ip)`—,
+/// asi que dos jugadores pueden tener la misma. No es ambiguo: lo que la resuelve no es el
+/// numero sino desde donde se pregunta, y el cable pertenece a un solo dueno.
+pub async fn find_machine_on_lan(
+    pool: &PgPool,
+    ip: i64,
+    viewer: i64,
+) -> Result<Option<LanRemoteRow>, sqlx::Error> {
+    sqlx::query_as::<_, LanRemoteRow>(
+        r#"
+        SELECT
+            destino.server_id,
+            destino.user_id AS owner_id,
+            destino.is_npc,
+            COALESCE(u.login, i.name, destino.name) AS name,
+            COALESCE(p.web, i.web) AS web
+
+        FROM hardware destino
+
+        -- El cable. Da igual en que orden se tendio: A-B y B-A son el mismo.
+        JOIN hardware_links cable
+            ON cable.from_server = destino.server_id
+            OR cable.to_server = destino.server_id
+
+        -- Y el equipo del otro extremo, que es desde donde se pivota.
+        JOIN hardware pivote
+            ON pivote.server_id = CASE
+                   WHEN cable.from_server = destino.server_id THEN cable.to_server
+                   ELSE cable.from_server
+               END
+
+        -- Acceso vivo en ese extremo. Sin esto, conocer la direccion no sirve de nada.
+        JOIN internet_access acceso
+            ON acceso.user_id = $2
+           AND acceso.ip IN (pivote.public_ip, pivote.lan_ip)
+
+        LEFT JOIN users u
+            ON u.id = destino.user_id AND NOT destino.is_npc
+        LEFT JOIN player_profiles p
+            ON p.user_id = destino.user_id AND NOT destino.is_npc
+        LEFT JOIN npc_info i
+            ON i.npc_id = destino.user_id AND destino.is_npc
+
+        WHERE destino.lan_ip = $1
+          -- Los dos extremos son de la misma red, que es lo que significa un cable.
+          AND pivote.user_id = destino.user_id
+          AND pivote.is_npc  = destino.is_npc
+
+        ORDER BY destino.server_id
+        LIMIT 1
+        "#,
+    )
+    .bind(ip)
+    .bind(viewer)
     .fetch_optional(pool)
     .await
 }

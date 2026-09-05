@@ -233,6 +233,7 @@ pub async fn remote_software(
         services::resolve_ip(
             &state.pool,
             ip,
+            ctx.id,
         )
         .await?;
 
@@ -266,6 +267,7 @@ pub async fn transfer_software(
         services::resolve_ip(
             &state.pool,
             ip,
+            ctx.id,
         )
         .await?;
 
@@ -304,6 +306,7 @@ pub async fn delete_remote_software(
         services::resolve_ip(
             &state.pool,
             ip,
+            ctx.id,
         )
         .await?;
 
