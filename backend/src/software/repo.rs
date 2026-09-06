@@ -469,6 +469,11 @@ pub async fn user_exists(pool: &PgPool, user_id: i64) -> Result<bool, sqlx::Erro
         .await
 }
 
+/// Un fichero regalado por un administrador cae en la maquina principal de su dueno.
+///
+/// Devuelve `None` cuando ese jugador no tiene ninguna: desde la 0047 un programa vive en un
+/// disco, y no hay disco donde ponerlo. Antes esto insertaba sin decir la maquina y reventaba
+/// contra el `NOT NULL`.
 pub async fn create_admin_software(
     pool: &PgPool,
     user_id: i64,
@@ -477,9 +482,17 @@ pub async fn create_admin_software(
     size: i32,
     ram: i32,
     soft_type: i16,
-) -> Result<i64, sqlx::Error> {
+) -> Result<Option<i64>, sqlx::Error> {
     sqlx::query_scalar(
-        "INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,$3,$4,$5,$6) RETURNING id",
+        r#"
+        INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,server_id)
+        SELECT $1,$2,$3,$4,$5,$6,h.server_id
+          FROM hardware h
+         WHERE h.user_id = $1 AND NOT h.is_npc AND h.is_gateway
+         ORDER BY h.server_id
+         LIMIT 1
+        RETURNING id
+        "#,
     )
     .bind(user_id)
     .bind(name)
@@ -487,7 +500,7 @@ pub async fn create_admin_software(
     .bind(size)
     .bind(ram)
     .bind(soft_type)
-    .fetch_one(pool)
+    .fetch_optional(pool)
     .await
 }
 

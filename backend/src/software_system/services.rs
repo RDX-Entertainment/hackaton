@@ -642,8 +642,8 @@ pub async fn compile(
             "COMPILATION_ACTIVE: termina la compilacion en curso antes de iniciar otra".into(),
         ));
     }
-    let (capacity, used) = repo::disk(pool, user).await?;
-    if capacity - used < i64::from(stats.weight) {
+    let free = repo::largest_free_disk(pool, user).await?;
+    if free < i64::from(stats.weight) {
         return Err(ApiError::BadRequest(
             "DISK_FULL: no hay espacio suficiente para compilar este programa".into(),
         ));
@@ -658,7 +658,7 @@ pub async fn compile(
         pool,
         user,
         seconds,
-        json!({"disk_needed":stats.weight,"disk_free":capacity-used}),
+        json!({"disk_needed":stats.weight,"disk_free":free}),
         payload,
     )
     .await?;

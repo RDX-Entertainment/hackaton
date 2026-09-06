@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 
+import { authenticated } from '../app/authSlice';
+import type { RootState } from '../app/store';
 import { Loading } from '../components/Notice';
 import { StatusMessage } from '../components/StatusMessage';
-import { accountApi, type Settings } from '../utils/api';
+import { IDIOMAS, NOMBRE_DEL_IDIOMA, esIdioma } from '../i18n';
+import { accountApi, authApi, type Settings } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export function SettingsPage() {
   const status = useStatusMessage();
+  const dispatch = useDispatch();
+  const session = useSelector((state: RootState) => state.auth);
 
   const [settings, setSettings] = useState<Settings>();
   const [email, setEmail] = useState('');
@@ -40,6 +46,25 @@ export function SettingsPage() {
     }
   };
 
+  /**
+   * El idioma se guarda solo al elegirlo, sin boton: es una preferencia, no un formulario, y
+   * el efecto se ve en el acto. Se vuelve a meter la sesion entera en el store porque la
+   * lengua viaja dentro del usuario, y de ahi la recoge el catalogo.
+   */
+  const cambiarIdioma = async (lang: string) => {
+    if (!session.token || !esIdioma(lang)) {
+      return;
+    }
+
+    try {
+      const user = await authApi.setLanguage(lang);
+      dispatch(authenticated({ token: session.token, user }));
+      status.report('Idioma guardado.');
+    } catch (error) {
+      status.reportError(error);
+    }
+  };
+
   if (!settings) {
     return <Loading />;
   }
@@ -47,6 +72,22 @@ export function SettingsPage() {
   return (
     <>
       <h2>Settings · {settings.login}</h2>
+
+      <form className="compose" onSubmit={(event) => event.preventDefault()}>
+        <label>
+          Idioma
+          <select
+            value={session.user?.lang ?? 'es'}
+            onChange={(event) => void cambiarIdioma(event.target.value)}
+          >
+            {IDIOMAS.map((lang) => (
+              <option key={lang} value={lang}>
+                {NOMBRE_DEL_IDIOMA[lang]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </form>
 
       <form className="compose" onSubmit={save}>
         <label>

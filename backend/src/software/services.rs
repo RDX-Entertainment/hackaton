@@ -436,7 +436,9 @@ pub async fn admin_software(pool: &PgPool, user_id: i64) -> Result<Vec<SoftwareR
 pub async fn admin_create_software(pool: &PgPool, user_id: i64, input: AdminSoftwareRequest) -> Result<i64, ApiError> {
     let name = validate_admin_software(&input)?;
     if !repo::user_exists(pool, user_id).await? { return Err(ApiError::NotFound); }
-    let id = repo::create_admin_software(pool, user_id, name, input.version, input.size, input.ram, input.soft_type).await?;
+    let Some(id) = repo::create_admin_software(pool, user_id, name, input.version, input.size, input.ram, input.soft_type).await? else {
+        return Err(ApiError::BadRequest("NO_MACHINE".into()));
+    };
     repo::set_admin_software_running(pool, user_id, id, input.running).await?;
     Ok(id)
 }

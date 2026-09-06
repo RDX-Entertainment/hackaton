@@ -37,16 +37,28 @@ function buildHeaders(hasBody: boolean): HeadersInit {
 export class HttpError extends Error {
   readonly status: number;
 
-  constructor(message: string, status: number) {
+  /**
+   * El codigo estable del fallo: `NO_CERTIFICATION`, `DISK_FULL`, `NOT_FOUND`. Es lo que se
+   * traduce. El `message` que lo acompaña es la frase que mando el servidor, y sirve de
+   * respaldo mientras un codigo no tenga entrada en ningun catalogo.
+   */
+  readonly code: string | null;
+
+  constructor(message: string, status: number, code: string | null = null) {
     super(message);
     this.name = 'HttpError';
     this.status = status;
+    this.code = code;
   }
 }
 
 async function errorFrom(response: Response): Promise<HttpError> {
-  const body = (await response.json().catch(() => ({}))) as { error?: string };
-  return new HttpError(body.error || `Request failed (${response.status})`, response.status);
+  const body = (await response.json().catch(() => ({}))) as { error?: string; code?: string };
+  return new HttpError(
+    body.error || `Request failed (${response.status})`,
+    response.status,
+    body.code ?? null,
+  );
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {

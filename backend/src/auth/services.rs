@@ -207,6 +207,23 @@ pub async fn me(
     Ok(user.into())
 }
 
+/// Las tres que el juego sabe hablar. La base tiene la misma lista en un CHECK: aqui se
+/// comprueba para poder contestar algo legible, alli para que sea verdad pase lo que pase.
+const LENGUAS: [&str; 3] = ["es", "pt", "en"];
+
+pub async fn set_language(
+    pool: &PgPool,
+    user_id: i64,
+    lang: &str,
+) -> Result<UserResponse, ApiError> {
+    let lang = lang.trim().to_ascii_lowercase();
+    if !LENGUAS.contains(&lang.as_str()) {
+        return Err(ApiError::BadRequest("UNKNOWN_LANGUAGE".into()));
+    }
+    repo::set_language(pool, user_id, &lang).await?;
+    me(pool, user_id).await
+}
+
 //
 // ==============================
 // VALIDATION

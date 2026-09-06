@@ -40,6 +40,7 @@ pub struct UserResponse {
     pub email: String,
     pub game_ip: i64,
     pub premium: bool,
+    pub lang: String,
 }
 
 impl From<UserRow> for UserResponse {
@@ -50,6 +51,7 @@ impl From<UserRow> for UserResponse {
             email: value.email,
             game_ip: value.game_ip,
             premium: value.premium,
+            lang: value.lang,
         }
     }
 }
@@ -63,8 +65,15 @@ impl From<CredentialsRow> for UserResponse {
             email: value.email,
             game_ip: value.game_ip,
             premium: value.premium,
+            lang: value.lang,
         }
     }
+}
+
+/// La lengua en la que quiere leer el jugador.
+#[derive(Debug, Deserialize)]
+pub struct LanguageRequest {
+    pub lang: String,
 }
 
 #[derive(Debug, Serialize)]
