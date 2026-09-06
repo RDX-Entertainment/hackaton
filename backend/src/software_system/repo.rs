@@ -174,6 +174,17 @@ pub async fn origin_machine(
     .fetch_optional(pool)
     .await
 }
+/// Encola una operacion contra un jugador.
+///
+/// **No nombra una maquina, y por eso va a su puerta principal.** Una operacion se pide contra
+/// un dueno —`target_user_id` y nada mas—, sin pasar por una direccion, asi que el equipo al
+/// que llega es el que lleva la del jugador. Es lo que pasaba antes sin escribirlo: `victim_ip`
+/// resolvia su `game_ip`, que desde la fase 3 de direcciones es la de esa maquina. Anotarlo al
+/// encolar y no deducirlo al terminar importa, porque entre una cosa y otra el jugador puede
+/// haber cambiado cual manda.
+///
+/// La victima es siempre un jugador aqui: el worker lee `info` para decidirlo y en una
+/// operacion `info` es la capacidad, nunca `'npc'`.
 pub async fn enqueue_operation(
     pool: &PgPool,
     user: i64,
@@ -184,7 +195,7 @@ pub async fn enqueue_operation(
     snapshot: Value,
     payload: Value,
 ) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$3)) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server,victim_server) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$3),(SELECT server_id FROM hardware WHERE user_id=$2 AND NOT is_npc AND is_gateway)) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
 }
 
 pub async fn accesses(pool: &PgPool, user: i64) -> Result<Vec<MachineAccessRow>, sqlx::Error> {
@@ -213,17 +224,31 @@ pub async fn hidden_evidence_for_target(pool: &PgPool, user: i64) -> Result<Opti
         .bind(user).fetch_optional(pool).await
 }
 
+/// La maquina que hay en una direccion publica.
+///
+/// Una accion tactica se lanza contra una direccion —es lo que el jugador tiene delante, la
+/// del acceso que ya consiguio— y desde la fase 2 esa direccion **es** una maquina concreta.
+/// Traducirla aqui es lo que deja escrito en el proceso a cual va, para que el efecto no
+/// termine aterrizando en la principal de su dueno.
+pub async fn machine_at(pool: &PgPool, ip: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT server_id FROM hardware WHERE public_ip = $1")
+        .bind(ip)
+        .fetch_optional(pool)
+        .await
+}
+
 pub async fn enqueue_tactical(
     pool: &PgPool,
     user: i64,
     target: i64,
+    target_server: Option<i64>,
     software: i64,
     action: i16,
     seconds: i32,
     snapshot: Value,
     payload: Value,
 ) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server) VALUES($1,$2,$3,$4,'tactical','tactical',now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$4)) RETURNING pid").bind(user).bind(target).bind(action).bind(software).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server,victim_server) VALUES($1,$2,$3,$4,'tactical','tactical',now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$4),$8) RETURNING pid").bind(user).bind(target).bind(action).bind(software).bind(seconds).bind(snapshot).bind(payload).bind(target_server).fetch_one(pool).await
 }
 pub async fn known_access(pool: &PgPool, user: i64, ip: i64) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(

@@ -451,7 +451,8 @@ pub async fn analyze_evidence(
     let seconds = crate::process::services::duration_for(
         (30 + stats.cpu / 40 + (100 - stats.stability) / 2).clamp(20, 120),
     );
-    let process=repo::enqueue_tactical(pool,user,user,analyzer.software_id,95,seconds,json!({"cpu":stats.cpu,"ram":stats.ram,"net":stats.net}),json!({"capability":"forensic_analyzer","phase_plan":{"primary":{"probability":resolution.probability,"roll":resolution.roll},"detection":{"probability":100,"roll":1}},"payload":{"evidence_id":evidence}})).await?;
+    // Analizar una evidencia no va contra ninguna maquina: se hace sobre lo que uno ya tiene.
+    let process=repo::enqueue_tactical(pool,user,user,None,analyzer.software_id,95,seconds,json!({"cpu":stats.cpu,"ram":stats.ram,"net":stats.net}),json!({"capability":"forensic_analyzer","phase_plan":{"primary":{"probability":resolution.probability,"roll":resolution.roll},"detection":{"probability":100,"roll":1}},"payload":{"evidence_id":evidence}})).await?;
     Ok(TacticalActionStarted {
         process_id: process,
         seconds,
@@ -500,7 +501,11 @@ async fn start_tactical(
     let seconds = crate::process::services::duration_for(
         (40 + attack.cpu / 40 + attack.ram / 32 + (100 - attack.stability) / 2).clamp(20, 180),
     );
-    let process=repo::enqueue_tactical(pool,user,access.target_user_id,attacker.software_id,action,seconds,json!({"cpu":attack.cpu,"ram":attack.ram,"net":attack.net}),json!({"ip":ip,"target_is_npc":access.target_is_npc,"capability":capability,"permission":permission,"frozen":{"attacker":attack,"defender":defense,"access":{"identity":access.identity,"privilege":access.privilege,"scope":access.scope,"permissions":access.permissions}},"phase_plan":{"primary":{"probability":primary.probability,"roll":primary.roll},"detection":{"probability":detection.probability,"roll":detection.roll}},"payload":extra})).await?;
+    // A que maquina va: la direccion que el jugador tiene delante ya **es** una maquina desde
+    // la fase 2, asi que se deja escrito cual y el efecto no aterriza en la principal.
+    let target_server = repo::machine_at(pool, ip).await?;
+
+    let process=repo::enqueue_tactical(pool,user,access.target_user_id,target_server,attacker.software_id,action,seconds,json!({"cpu":attack.cpu,"ram":attack.ram,"net":attack.net}),json!({"ip":ip,"target_is_npc":access.target_is_npc,"capability":capability,"permission":permission,"frozen":{"attacker":attack,"defender":defense,"access":{"identity":access.identity,"privilege":access.privilege,"scope":access.scope,"permissions":access.permissions}},"phase_plan":{"primary":{"probability":primary.probability,"roll":primary.roll},"detection":{"probability":detection.probability,"roll":detection.roll}},"payload":extra})).await?;
     Ok(TacticalActionStarted {
         process_id: process,
         seconds,
