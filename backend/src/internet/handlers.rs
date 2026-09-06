@@ -284,6 +284,7 @@ pub async fn transfer_software(
             ctx.id,
             target.id,
             target.is_npc,
+            target.server_id,
             input.into_inner(),
         )
         .await?;
@@ -323,6 +324,7 @@ pub async fn delete_remote_software(
             ctx.id,
             target.id,
             target.is_npc,
+            target.server_id,
             software_id,
         )
         .await?;

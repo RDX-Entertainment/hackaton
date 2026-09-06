@@ -548,6 +548,7 @@ pub async fn edit_remote_log(
             &mut tx,
             user_id,
             target.id,
+            target.server_id,
             info,
             seconds,
         )
@@ -625,6 +626,7 @@ pub async fn internet_analyze(
             pool,
             user_id,
             target.id,
+            target.server_id,
             analyzer.id,
             info,
             seconds,

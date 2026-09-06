@@ -78,29 +78,29 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         // which is what the legacy carried in its isNPC flag.
         let is_npc = p.get::<String, _>("info") == "npc";
         let exploit_succeeded = if action == 16 {
-            Some(exploit_effect(pool, user, victim, is_npc).await?)
+            Some(exploit_effect(pool, user, victim, is_npc, victim_server).await?)
         } else {
             None
         };
         match action {
-            1 | 2 => transfer_effect(pool, user, victim, is_npc, soft, action).await?,
-            3 => delete_effect(pool, user, victim, is_npc, soft).await?,
+            1 | 2 => transfer_effect(pool, user, victim, is_npc, victim_server, soft, action).await?,
+            3 => delete_effect(pool, user, victim, is_npc, victim_server, soft).await?,
             4 => hide_effect(pool, user, victim, is_npc, soft).await?,
             5 => seek_effect(pool, user, victim, is_npc, soft).await?,
             13 => install_effect(pool, user, victim, is_npc, soft).await?,
             14 => uninstall_effect(pool, user, victim, is_npc, soft).await?,
             8 => edit_log_effect(pool, pid, victim, is_npc).await?,
             11 => hack_effect(pool, user, victim, is_npc, victim_server).await?,
-            15 => scan_effect(pool, user, victim, is_npc).await?,
+            15 => scan_effect(pool, user, victim, is_npc, victim_server).await?,
             16 => {}
             17 => research_effect(pool, user, soft).await?,
             18 => park_effect(pool, user, soft).await?,
             19 => unpark_effect(pool, user, soft).await?,
             20 => discard_effect(pool, user, soft).await?,
-            23 => analyze_effect(pool, user, victim, is_npc, soft).await?,
+            23 => analyze_effect(pool, user, victim, is_npc, victim_server, soft).await?,
             25 => reset_ip_effect(pool, user).await?,
             26 => reset_password_effect(pool, user).await?,
-            90 => modular_operation_effect(pool, pid, user, victim, soft).await?,
+            90 => modular_operation_effect(pool, pid, user, victim, victim_server, soft).await?,
             91 => compilation_effect(pool, pid, user).await?,
             92 | 93 | 94 | 95 => tactical_effect(pool, pid, user, victim, action).await?,
             _ => {}
@@ -332,6 +332,7 @@ async fn modular_operation_effect(
     pid: i64,
     user: i64,
     victim: i64,
+    victim_server: Option<i64>,
     soft: i64,
 ) -> Result<(), sqlx::Error> {
     let row = sqlx::query("SELECT process_payload FROM processes WHERE pid=$1")
@@ -385,9 +386,9 @@ async fn modular_operation_effect(
     let refused = if won {
         match kind.as_deref() {
             Some("intrude") => {
-                intrusion_effect(pool, user, victim, login, resistance, &payload).await?
+                intrusion_effect(pool, user, victim, victim_server, login, resistance, &payload).await?
             }
-            Some("infect") => infection_effect(pool, user, victim, soft).await?,
+            Some("infect") => infection_effect(pool, user, victim, victim_server, soft).await?,
             // A kind nobody has given a consequence yet resolves and leaves the world alone.
             _ => None,
         }
@@ -437,7 +438,7 @@ async fn modular_operation_effect(
         .bind(user)
         .fetch_one(pool)
         .await?;
-    if let Some((target_ip, _)) = victim_ip(pool, victim, false).await? {
+    if let Some((target_ip, _)) = victim_ip(pool, victim, false, victim_server).await? {
         add_log(
             pool,
             user,
@@ -463,7 +464,7 @@ async fn modular_operation_effect(
             .await?;
         }
     }
-    if let Some((target_ip, _)) = victim_ip(pool, victim, false).await? {
+    if let Some((target_ip, _)) = victim_ip(pool, victim, false, victim_server).await? {
         sqlx::query("INSERT INTO game_evidence(process_id,target_user_id,target_is_npc,action_code,real_origin_ip,real_identity,program_signature,integrity,concealment,state,attribution_confidence,visible_to_target,details) VALUES($1,$2,false,$3,$4,$5,$6,100,$7,$8,100,$9,$10) ON CONFLICT(process_id,action_code) DO NOTHING")
             .bind(pid).bind(victim).bind(&capability).bind(attacker_ip).bind(format!("user:{user}")).bind(&capability)
             .bind(if detected { 0 } else { 75 }).bind(if detected { "normal" } else { "hidden" }).bind(detected)
@@ -481,11 +482,12 @@ async fn intrusion_effect(
     pool: &sqlx::PgPool,
     user: i64,
     victim: i64,
+    victim_server: Option<i64>,
     grants_login: Option<&str>,
     resistance: i32,
     payload: &serde_json::Value,
 ) -> Result<Option<(&'static str, &'static str)>, sqlx::Error> {
-    let Some((ip, _)) = victim_ip(pool, victim, false).await? else {
+    let Some((ip, _)) = victim_ip(pool, victim, false, victim_server).await? else {
         return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
     };
     let (login, password) = match grants_login {
@@ -550,9 +552,10 @@ async fn infection_effect(
     pool: &sqlx::PgPool,
     user: i64,
     victim: i64,
+    victim_server: Option<i64>,
     soft: i64,
 ) -> Result<Option<(&'static str, &'static str)>, sqlx::Error> {
-    let Some((ip, _)) = victim_ip(pool, victim, false).await? else {
+    let Some((ip, _)) = victim_ip(pool, victim, false, victim_server).await? else {
         return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
     };
     let open: bool = sqlx::query_scalar(
@@ -624,13 +627,39 @@ async fn infection_effect(
     Ok(None)
 }
 
-/// Resolves the IP of a finished process's victim, plus the password a crack would reveal.
-/// Returns None when the victim disappeared while the process was running.
+/// La direccion y la llave de **la maquina que se ataco**, no las de su dueno.
+///
+/// Aqui vivia media promesa sin cumplir. Esta funcion preguntaba «¿NPC o jugador?» y devolvia
+/// lo del propietario: su `game_ip` y su `game_pass`. Mientras un jugador era una caja daba
+/// igual, pero desde que tiene varias maquinas con direccion y llave propias, **atacar la
+/// segunda y que el efecto aterrizara en la principal era sencillamente actuar sobre otra
+/// maquina**. Lo arrastraban los nueve efectos que resuelven una victima: el crackeo, el
+/// escaneo, el analisis, la edicion de bitacora, la intrusion, la infeccion, el exploit y las
+/// dos operaciones modulares.
+///
+/// El proceso ya sabe a que nodo iba —`victim_server`, que escribe quien lo encola— asi que la
+/// pregunta deja de ser de que tipo es el dueno y pasa a ser cual de sus equipos.
+///
+/// `is_npc` sigue en la firma para los procesos de antes de que existiera la columna, que no
+/// tienen nodo y solo se pueden resolver como se resolvian. Es el camino de atras, no el
+/// principal.
 async fn victim_ip(
     pool: &sqlx::PgPool,
     victim: i64,
     is_npc: bool,
+    victim_server: Option<i64>,
 ) -> Result<Option<(i64, String)>, sqlx::Error> {
+    if let Some(machine) = victim_server {
+        return Ok(sqlx::query(
+            "SELECT public_ip AS ip,machine_pass AS pass FROM hardware \
+             WHERE server_id=$1 AND public_ip IS NOT NULL",
+        )
+        .bind(machine)
+        .fetch_optional(pool)
+        .await?
+        .map(|r| (r.get("ip"), r.get("pass"))));
+    }
+
     let sql = if is_npc {
         "SELECT npc_ip AS ip,npc_pass AS pass FROM npc WHERE id=$1"
     } else {
@@ -670,20 +699,7 @@ async fn hack_effect(
     is_npc: bool,
     victim_server: Option<i64>,
 ) -> Result<(), sqlx::Error> {
-    let cracked = match victim_server {
-        Some(machine) => sqlx::query(
-            "SELECT public_ip AS ip,machine_pass AS pass FROM hardware WHERE server_id=$1 AND public_ip IS NOT NULL",
-        )
-        .bind(machine)
-        .fetch_optional(pool)
-        .await?
-        .map(|r| (r.get("ip"), r.get("pass"))),
-
-        // Un proceso de antes de que existiera la columna. Se resuelve como se resolvia.
-        None => victim_ip(pool, victim, is_npc).await?,
-    };
-
-    let Some((ip, pass)) = cracked else {
+    let Some((ip, pass)) = victim_ip(pool, victim, is_npc, victim_server).await? else {
         return Ok(());
     };
     // addToList($_SESSION['id'], $ip, 'root', $pass, '0', '0'). The legacy refused a repeat
@@ -819,8 +835,9 @@ async fn scan_effect(
     user: i64,
     victim: i64,
     is_npc: bool,
+    victim_server: Option<i64>,
 ) -> Result<(), sqlx::Error> {
-    let Some((ip, _)) = victim_ip(pool, victim, is_npc).await? else {
+    let Some((ip, _)) = victim_ip(pool, victim, is_npc, victim_server).await? else {
         return Ok(());
     };
     sqlx::query("INSERT INTO internet_scan(user_id,ip) VALUES($1,$2) ON CONFLICT(user_id,ip) DO UPDATE SET scanned_at=now()")
@@ -838,6 +855,7 @@ async fn transfer_effect(
     user: i64,
     victim: i64,
     victim_is_npc: bool,
+    victim_server: Option<i64>,
     soft: i64,
     action: i16,
 ) -> Result<(), sqlx::Error> {
@@ -888,6 +906,7 @@ async fn transfer_effect(
         user,
         victim,
         victim_is_npc,
+        victim_server,
         verb,
         &format!("{name}{version}"),
     )
@@ -901,6 +920,7 @@ async fn delete_effect(
     user: i64,
     victim: i64,
     victim_is_npc: bool,
+    victim_server: Option<i64>,
     soft: i64,
 ) -> Result<(), sqlx::Error> {
     let Some(f) = sqlx::query(
@@ -923,7 +943,7 @@ async fn delete_effect(
         .bind(soft)
         .execute(pool)
         .await?;
-    log_pair(pool, user, victim, victim_is_npc, "deleted", &label).await?;
+    log_pair(pool, user, victim, victim_is_npc, victim_server, "deleted", &label).await?;
     Ok(())
 }
 
@@ -934,6 +954,7 @@ async fn log_pair(
     user: i64,
     victim: i64,
     victim_is_npc: bool,
+    victim_server: Option<i64>,
     verb: &str,
     file: &str,
 ) -> Result<(), sqlx::Error> {
@@ -941,7 +962,7 @@ async fn log_pair(
         .bind(user)
         .fetch_one(pool)
         .await?;
-    let Some((victim_ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
+    let Some((victim_ip, _)) = victim_ip(pool, victim, victim_is_npc, victim_server).await? else {
         return Ok(());
     };
     if let Some(attacker_ip) = attacker_ip {
@@ -1244,6 +1265,7 @@ async fn analyze_effect(
     user: i64,
     victim: i64,
     victim_is_npc: bool,
+    victim_server: Option<i64>,
     soft: i64,
 ) -> Result<(), sqlx::Error> {
     let Some(version)=sqlx::query_scalar::<_,i32>("SELECT soft_version FROM software WHERE id=$1 AND user_id=$2 AND NOT is_npc AND soft_type=16").bind(soft).bind(user).fetch_optional(pool).await? else {
@@ -1256,7 +1278,7 @@ async fn analyze_effect(
     } else {
         0.5
     };
-    let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
+    let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc, victim_server).await? else {
         return Ok(());
     };
     let Some(hw)=sqlx::query("SELECT sum(cpu)::real AS cpu,sum(ram)::real AS ram FROM hardware WHERE user_id=$1 AND is_npc=$2").bind(victim).bind(victim_is_npc).fetch_optional(pool).await? else {
@@ -1305,8 +1327,9 @@ async fn exploit_effect(
     user: i64,
     victim: i64,
     victim_is_npc: bool,
+    victim_server: Option<i64>,
 ) -> Result<bool, sqlx::Error> {
-    let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc).await? else {
+    let Some((ip, _)) = victim_ip(pool, victim, victim_is_npc, victim_server).await? else {
         return Ok(false);
     };
     let firewall = best_running(pool, victim, victim_is_npc, 4).await?;
