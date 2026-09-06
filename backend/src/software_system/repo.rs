@@ -148,8 +148,7 @@ pub async fn origin_machine(
 ) -> Result<Option<OriginMachine>, sqlx::Error> {
     sqlx::query_as(
         r#"
-        SELECT h.server_id,
-
+        SELECT
                -- **Si el equipo esta en un grupo, cuenta el grupo entero.** Es lo unico que
                -- hace un cluster y por lo que va el ultimo de su rumbo: suma recursos, y para
                -- sumarlos habia que haberlos separado antes. Hacia fuera el grupo se comporta

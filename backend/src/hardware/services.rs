@@ -882,12 +882,6 @@ pub async fn links(
     Ok(found)
 }
 
-/// Tender un cable entre dos equipos del jugador.
-///
-/// Cuatro cosas tienen que cumplirse, y ninguna se puede dar por hecha desde el cliente:
-/// que los dos sean suyos, que no sean el mismo, que a los dos les quede boca libre, y que
-/// no estuvieran ya unidos. La ultima la impone ademas el indice unico de la tabla, que es
-/// quien gana si dos peticiones llegan a la vez.
 //
 // ==============================
 // CLUSTERS
@@ -982,6 +976,12 @@ pub async fn dissolve_cluster(
     Ok(())
 }
 
+/// Tender un cable entre dos equipos del jugador.
+///
+/// Cuatro cosas tienen que cumplirse, y ninguna se puede dar por hecha desde el cliente:
+/// que los dos sean suyos, que no sean el mismo, que a los dos les quede boca libre, y que
+/// no estuvieran ya unidos. La ultima la impone ademas el indice unico de la tabla, que es
+/// quien gana si dos peticiones llegan a la vez.
 pub async fn create_link(
     pool: &PgPool,
     user_id: i64,
