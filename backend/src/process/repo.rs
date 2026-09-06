@@ -147,7 +147,16 @@ pub async fn insert(
             time_ideal,
             -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
             -- reescribe de donde salio esto.
-            origin_server
+            origin_server,
+            -- Y a que maquina va. Esta ruta no nombra una: se pide contra un dueno, sin pasar
+            -- por una direccion. Entonces va a su puerta principal, que es exactamente lo que
+            -- pasaba antes sin escribirlo -- `victim_ip` resolvia la `game_ip`, que desde la
+            -- fase 3 de direcciones es la de esa maquina. Se deja anotado en vez de deducirlo
+            -- despues, porque para entonces el jugador puede haber cambiado cual manda.
+            --
+            -- El `info` es lo que distingue un NPC de un jugador en esta tabla desde el
+            -- legado, y es la misma regla que aplica el worker al leerlo.
+            victim_server
         )
         VALUES(
             $1,
@@ -158,7 +167,11 @@ pub async fn insert(
             $5,
             now() + ($6::integer * interval '1 second'),
             $6,
-            (SELECT server_id FROM software WHERE id = $4)
+            (SELECT server_id FROM software WHERE id = $4),
+            (SELECT server_id FROM hardware
+              WHERE user_id = $2
+                AND is_npc = ($5 = 'npc')
+                AND is_gateway)
         )
         RETURNING pid
         "#,
