@@ -114,8 +114,6 @@ fn check_named(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use crate::internet::document;
 
     fn check(html: &str) -> Result<(), String> {

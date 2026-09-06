@@ -87,7 +87,6 @@ pub struct BlueprintRow {
 /// con la que cuenta es la de ese equipo y no la de todos juntos.
 #[derive(Debug, Clone, FromRow)]
 pub struct OriginMachine {
-    pub server_id: i64,
     pub cpu: i32,
     pub ram: i32,
     pub net: i32,

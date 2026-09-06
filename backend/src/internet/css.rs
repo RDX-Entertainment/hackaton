@@ -75,13 +75,11 @@ fn walk<'i>(parser: &mut Parser<'i, '_>, where_at: &str) -> Result<(), ParseErro
             }
         }
 
-        if let Token::ParenthesisBlock = token {
-            if let Some(name) = named {
-                return Err(parser.new_custom_error(format!(
-                    "EXTERNAL_NOT_ALLOWED: {where_at} usa `{name} (...)`, y eso traeria un \
-                     recurso de fuera. El sitio tiene que bastarse solo"
-                )));
-            }
+        if let (Token::ParenthesisBlock, Some(name)) = (&token, named) {
+            return Err(parser.new_custom_error(format!(
+                "EXTERNAL_NOT_ALLOWED: {where_at} usa `{name} (...)`, y eso traeria un \
+                 recurso de fuera. El sitio tiene que bastarse solo"
+            )));
         }
 
         match token {
