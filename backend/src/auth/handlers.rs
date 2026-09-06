@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    dtos::{LoginRequest, RegisterRequest},
+    dtos::{LanguageRequest, LoginRequest, RegisterRequest},
     middleware::Ctx,
     ratelimit::ClientIp,
     services,
@@ -44,6 +44,10 @@ pub fn configure(
         .route(
             "/me",
             web::get().to(me),
+        )
+        .route(
+            "/me/language",
+            web::put().to(set_language),
         );
 }
 
@@ -86,6 +90,24 @@ pub async fn login(
             );
         }
     })?;
+
+    Ok(
+        HttpResponse::Ok()
+            .json(response),
+    )
+}
+
+pub async fn set_language(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<LanguageRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::set_language(
+        &state.pool,
+        ctx.id,
+        &input.into_inner().lang,
+    )
+    .await?;
 
     Ok(
         HttpResponse::Ok()

@@ -18,15 +18,17 @@ pub async fn find_credentials_by_identifier(
     sqlx::query_as::<_, CredentialsRow>(
         r#"
         SELECT
-            id,
-            login,
-            email,
-            game_ip,
-            premium,
-            password
-        FROM users
-        WHERE login = $1
-           OR email = $1
+            u.id,
+            u.login,
+            u.email,
+            u.game_ip,
+            u.premium,
+            COALESCE(l.lang, 'es') AS lang,
+            u.password
+        FROM users u
+        LEFT JOIN users_language l ON l.user_id = u.id
+        WHERE u.login = $1
+           OR u.email = $1
         "#,
     )
     .bind(identifier)
@@ -41,13 +43,15 @@ pub async fn find_user_by_id(
     sqlx::query_as::<_, UserRow>(
         r#"
         SELECT
-            id,
-            login,
-            email,
-            game_ip,
-            premium
-        FROM users
-        WHERE id = $1
+            u.id,
+            u.login,
+            u.email,
+            u.game_ip,
+            u.premium,
+            COALESCE(l.lang, 'es') AS lang
+        FROM users u
+        LEFT JOIN users_language l ON l.user_id = u.id
+        WHERE u.id = $1
         "#,
     )
     .bind(id)
@@ -184,6 +188,8 @@ const BOOTSTRAP: &[&str] = &[
     "INSERT INTO certifications(user_id) VALUES($1)",
     "INSERT INTO users_puzzle(user_id) VALUES($1)",
     "INSERT INTO users_learning(user_id) VALUES($1)",
+    // Sin decir cual: el DEFAULT de la columna es 'es' desde la 0054, y el sitio donde se
+    // decide en que lengua nace una cuenta es la base, no quince consultas repartidas.
     "INSERT INTO users_language(user_id) VALUES($1)",
     "INSERT INTO player_profiles(user_id) VALUES($1)",
     // La cuenta del banco, con la misma filosofia que el kit de arriba: si no hay ningun
@@ -219,6 +225,23 @@ pub async fn bootstrap_player(
     Ok(())
 }
 
+/// Cambia la lengua en la que lee el jugador.
+///
+/// `INSERT ... ON CONFLICT` y no `UPDATE` porque la fila la crea el alta, pero un jugador de
+/// antes de que existiera podria no tenerla: quien elige un idioma tiene que quedarse con el
+/// aunque nadie le hubiera creado la fila.
+pub async fn set_language(pool: &PgPool, id: i64, lang: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO users_language(user_id, lang) VALUES($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET lang = EXCLUDED.lang",
+    )
+    .bind(id)
+    .bind(lang)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn find_user_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     id: i64,
@@ -226,13 +249,15 @@ pub async fn find_user_in_tx(
     sqlx::query_as::<_, UserRow>(
         r#"
         SELECT
-            id,
-            login,
-            email,
-            game_ip,
-            premium
-        FROM users
-        WHERE id = $1
+            u.id,
+            u.login,
+            u.email,
+            u.game_ip,
+            u.premium,
+            COALESCE(l.lang, 'es') AS lang
+        FROM users u
+        LEFT JOIN users_language l ON l.user_id = u.id
+        WHERE u.id = $1
         "#,
     )
     .bind(id)
