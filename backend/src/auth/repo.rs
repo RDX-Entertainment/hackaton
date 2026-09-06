@@ -147,8 +147,16 @@ const BOOTSTRAP: &[&str] = &[
     // una: crear el equipo sin ella dejaba al jugador existiendo y sin responder. No pasa por
     // `assign_public_ip` porque no hay tarjeta que instalar todavia -- las componentes del kit
     // entran por SQL justo debajo -- asi que la lleva desde el primer momento.
-    "INSERT INTO hardware(user_id,name,public_ip,is_gateway)
-     VALUES($1,'Server #1',(SELECT game_ip FROM users WHERE id=$1),true)",
+    // Y nace tambien con su llave y con su direccion de red local. La 0051 bajo la
+    // contrasena del dueno a la maquina y relleno las que ya existian, pero el alta se quedo
+    // creandolas con el `md5` aleatorio del DEFAULT: el jugador tenia una contrasena en su
+    // ficha y su equipo otra distinta, desde el minuto uno. La `lan_ip` estaba igual —solo la
+    // calculaba `insert_machine`, por donde el alta no pasa— y sin ella no se puede pivotar
+    // hacia la maquina propia. Las dos son parte de nacer entera.
+    "INSERT INTO hardware(user_id,name,public_ip,is_gateway,machine_pass,lan_ip)
+     VALUES($1,'Server #1',(SELECT game_ip FROM users WHERE id=$1),true,
+            (SELECT game_pass FROM users WHERE id=$1),
+            (10::bigint << 24) | 1)",
     // El equipo de arranque sale del kit marcado por defecto, que un administrador puede
     // cambiar desde el panel. Sin componentes la maquina nace a cero y no podria ni cargar
     // software: la capacidad es la suma de lo instalado. Si no hay kit por defecto esto no
