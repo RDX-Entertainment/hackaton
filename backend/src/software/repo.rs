@@ -246,6 +246,7 @@ pub async fn create_transfer_process(
     pool: &PgPool,
     user_id: i64,
     victim_id: i64,
+    victim_server: Option<i64>,
     action: i16,
     software_id: i64,
     info: &str,
@@ -264,7 +265,9 @@ pub async fn create_transfer_process(
             time_ideal,
             -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
             -- reescribe de donde salio esto.
-            origin_server
+            origin_server,
+            -- A que maquina va. `victim_id` dice de quien es; esto, a cual de las suyas.
+            victim_server
         )
         VALUES(
             $1,
@@ -275,7 +278,8 @@ pub async fn create_transfer_process(
             $5,
             now() + ($6::integer * interval '1 second'),
             $6,
-            (SELECT server_id FROM software WHERE id = $4)
+            (SELECT server_id FROM software WHERE id = $4),
+            $7
         )
         RETURNING pid
         "#,
@@ -286,6 +290,7 @@ pub async fn create_transfer_process(
     .bind(software_id)
     .bind(info)
     .bind(seconds)
+    .bind(victim_server)
     .fetch_one(pool)
     .await
 }
@@ -294,6 +299,7 @@ pub async fn create_delete_process(
     pool: &PgPool,
     user_id: i64,
     victim_id: i64,
+    victim_server: Option<i64>,
     software_id: i64,
     info: &str,
     seconds: i32,
@@ -311,7 +317,9 @@ pub async fn create_delete_process(
             time_ideal,
             -- Nace donde vive su programa, y se escribe ahora: mover el software despues no
             -- reescribe de donde salio esto.
-            origin_server
+            origin_server,
+            -- A que maquina va. `victim_id` dice de quien es; esto, a cual de las suyas.
+            victim_server
         )
         VALUES(
             $1,
@@ -322,7 +330,8 @@ pub async fn create_delete_process(
             $4,
             now() + ($5::integer * interval '1 second'),
             $5,
-            (SELECT server_id FROM software WHERE id = $3)
+            (SELECT server_id FROM software WHERE id = $3),
+            $6
         )
         RETURNING pid
         "#,
@@ -332,6 +341,7 @@ pub async fn create_delete_process(
     .bind(software_id)
     .bind(info)
     .bind(seconds)
+    .bind(victim_server)
     .fetch_one(pool)
     .await
 }

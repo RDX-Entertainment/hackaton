@@ -181,6 +181,7 @@ pub async fn transfer_software(
     user_id: i64,
     target_id: i64,
     target_is_npc: bool,
+    target_server: Option<i64>,
     input: TransferRequest,
 ) -> Result<TransferStartedResponse, ApiError> {
     let action: i16 =
@@ -270,6 +271,7 @@ pub async fn transfer_software(
             pool,
             user_id,
             target_id,
+            target_server,
             action,
             input.software_id,
             info,
@@ -297,6 +299,7 @@ pub async fn delete_remote_software(
     user_id: i64,
     target_id: i64,
     target_is_npc: bool,
+    target_server: Option<i64>,
     software_id: i64,
 ) -> Result<DeleteSoftwareStartedResponse, ApiError> {
     let exists =
@@ -324,6 +327,7 @@ pub async fn delete_remote_software(
             pool,
             user_id,
             target_id,
+            target_server,
             software_id,
             info,
             seconds,
