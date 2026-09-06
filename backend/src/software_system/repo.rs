@@ -86,8 +86,30 @@ pub async fn owned_blueprint(
 pub async fn compilation_active(pool: &PgPool, user: i64) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=91 AND completed_at IS NULL)").bind(user).fetch_one(pool).await
 }
-pub async fn disk(pool: &PgPool, user: i64) -> Result<(i64, i64), sqlx::Error> {
-    sqlx::query_as("SELECT COALESCE((SELECT sum(hdd)::bigint FROM hardware WHERE user_id=$1 AND NOT is_npc),0),COALESCE((SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc),0)").bind(user).fetch_one(pool).await
+/// El hueco mas grande que tiene el jugador **en un solo disco**.
+///
+/// Antes esto sumaba todos sus equipos, que era la cuenta de antes de la 0047: entonces el
+/// software era del dueno y el disco tambien. Ahora un programa vive en una maquina, asi que
+/// preguntar por la suma respondia que si a compilaciones que luego no cabian en ningun sitio
+/// —y el jugador se enteraba cinco minutos despues, al terminar el proceso—. La pregunta que
+/// importa es en cual cabe, y esta es la respuesta a la misma que se hace el worker al
+/// aterrizar el fichero.
+pub async fn largest_free_disk(pool: &PgPool, user: i64) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(max(h.hdd::bigint - o.used), 0)
+          FROM hardware h
+          LEFT JOIN LATERAL (
+              SELECT COALESCE(sum(s.soft_size)::bigint, 0) AS used
+                FROM software s
+               WHERE s.server_id = h.server_id
+          ) o ON TRUE
+         WHERE h.user_id = $1 AND NOT h.is_npc
+        "#,
+    )
+    .bind(user)
+    .fetch_one(pool)
+    .await
 }
 /// La compilacion es el unico proceso que **no** nace en una maquina, y a proposito.
 ///

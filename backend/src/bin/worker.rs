@@ -5,6 +5,9 @@ use std::{env, time::Duration};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
+    // El worker no imprimia nada. Ahora que aguanta el fallo de un proceso en vez de morirse
+    // con el, poder leer cual fallo y por que deja de ser un lujo.
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let database_url = env::var("DATABASE_URL")?;
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -21,7 +24,15 @@ async fn main() -> anyhow::Result<()> {
         .filter(|value| *value > 0)
         .unwrap_or(5);
     loop {
-        tick(&pool).await?;
+        // Con `--once` se usa para probar y el fallo tiene que verse; en marcha, una vuelta
+        // que falla es una vuelta, no el final del worker. Una base que parpadea, un bloqueo
+        // o un dato inesperado no pueden dejar sin avanzar todo lo que tarda en el juego.
+        if let Err(fallo) = tick(&pool).await {
+            if once {
+                return Err(fallo.into());
+            }
+            tracing::error!(error = %fallo, "la vuelta del worker no se pudo terminar");
+        }
         if once {
             break;
         }
@@ -40,7 +51,9 @@ async fn tick(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
     // Port of cron/restoreSoftware.php: put back any original software an NPC has lost.
     // Without this a machine stripped by a DELETE stays stripped for good, and the world
     // wears down to nothing worth breaking into.
-    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc) SELECT o.npc_id,o.soft_name,o.soft_version,o.soft_size,o.soft_ram,o.soft_type,TRUE FROM software_original o WHERE NOT EXISTS(SELECT 1 FROM software s WHERE s.user_id=o.npc_id AND s.is_npc AND s.soft_name=o.soft_name AND s.soft_version=o.soft_version)")
+    // La copia vuelve a la maquina del NPC, que es donde estaba. El JOIN es tambien la
+    // condicion: un NPC sin equipo no tiene disco donde reponerle nada.
+    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc,server_id) SELECT o.npc_id,o.soft_name,o.soft_version,o.soft_size,o.soft_ram,o.soft_type,TRUE,h.server_id FROM software_original o JOIN hardware h ON h.user_id=o.npc_id AND h.is_npc AND h.is_gateway WHERE NOT EXISTS(SELECT 1 FROM software s WHERE s.user_id=o.npc_id AND s.is_npc AND s.soft_name=o.soft_name AND s.soft_version=o.soft_version)")
         .execute(pool).await?;
     // Port of cron/updatePremium.php.
     sqlx::query("UPDATE users SET premium=false WHERE id IN (SELECT user_id FROM users_premium WHERE premium_until < now())")
@@ -68,54 +81,75 @@ async fn resolve_completed(pool: &sqlx::PgPool) -> Result<(), sqlx::Error> {
         .fetch_all(pool).await?;
     for p in due {
         let pid: i64 = p.get("pid");
-        let user: i64 = p.get("creator_id");
-        let victim: i64 = p.get("victim_id");
-        let action: i16 = p.get("action");
-        let soft: i64 = p.get("soft_id");
-        // A que maquina iba. `victim_id` dice de quien es; esto, a cual de las suyas.
-        let victim_server: Option<i64> = p.get("victim_server");
-        // Internet::hack writes "npc" or "player" into info when it starts the process,
-        // which is what the legacy carried in its isNPC flag.
-        let is_npc = p.get::<String, _>("info") == "npc";
-        let exploit_succeeded = if action == 16 {
-            Some(exploit_effect(pool, user, victim, is_npc, victim_server).await?)
-        } else {
-            None
-        };
-        match action {
-            1 | 2 => transfer_effect(pool, user, victim, is_npc, victim_server, soft, action).await?,
-            3 => delete_effect(pool, user, victim, is_npc, victim_server, soft).await?,
-            4 => hide_effect(pool, user, victim, is_npc, soft).await?,
-            5 => seek_effect(pool, user, victim, is_npc, soft).await?,
-            13 => install_effect(pool, user, victim, is_npc, soft).await?,
-            14 => uninstall_effect(pool, user, victim, is_npc, soft).await?,
-            8 => edit_log_effect(pool, pid, victim, is_npc).await?,
-            11 => hack_effect(pool, user, victim, is_npc, victim_server).await?,
-            15 => scan_effect(pool, user, victim, is_npc, victim_server).await?,
-            16 => {}
-            17 => research_effect(pool, user, soft).await?,
-            18 => park_effect(pool, user, soft).await?,
-            19 => unpark_effect(pool, user, soft).await?,
-            20 => discard_effect(pool, user, soft).await?,
-            23 => analyze_effect(pool, user, victim, is_npc, victim_server, soft).await?,
-            25 => reset_ip_effect(pool, user).await?,
-            26 => reset_password_effect(pool, user).await?,
-            90 => modular_operation_effect(pool, pid, user, victim, victim_server, soft).await?,
-            91 => compilation_effect(pool, pid, user).await?,
-            92 | 93 | 94 | 95 => tactical_effect(pool, pid, user, victim, action).await?,
-            _ => {}
-        }
-        if exploit_succeeded == Some(false) {
-            sqlx::query("UPDATE processes SET status='failed',result_code='EXPLOIT_BLOCKED',result_message='El firewall rechazó tus exploits instalados' WHERE pid=$1")
+        // **Un proceso que revienta no se lleva por delante a los demas.** Antes el error
+        // subia hasta `main` y el worker terminaba; al arrancar de nuevo volvia a coger el
+        // mismo proceso y volvia a morir, y con la cola parada dejaba de funcionar todo lo
+        // que tarda en el juego. Ahora el que falla se marca fallado —con su codigo, para
+        // que se pueda mirar despues— y el siguiente sigue su camino.
+        if let Err(fallo) = resolve_one(pool, &p).await {
+            tracing::error!(pid, error = %fallo, "el proceso no se pudo resolver");
+            // Se cierra igualmente: un proceso que no se puede resolver y se queda abierto se
+            // reintenta en cada vuelta, y eso es el bucle de caida otra vez, en bonito.
+            sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status='failed',result_code='WORKER_ERROR',result_message=$2 WHERE pid=$1")
                 .bind(pid)
+                .bind(fallo.to_string())
                 .execute(pool)
                 .await?;
         }
-        sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (16,90,91,92,93,94,95) THEN status ELSE 'succeeded' END WHERE pid=$1")
+    }
+    Ok(())
+}
+
+/// Un solo proceso, de principio a fin. Separado del bucle para que su fallo sea suyo.
+async fn resolve_one(pool: &sqlx::PgPool, p: &sqlx::postgres::PgRow) -> Result<(), sqlx::Error> {
+    let pid: i64 = p.get("pid");
+    let user: i64 = p.get("creator_id");
+    let victim: i64 = p.get("victim_id");
+    let action: i16 = p.get("action");
+    let soft: i64 = p.get("soft_id");
+    // A que maquina iba. `victim_id` dice de quien es; esto, a cual de las suyas.
+    let victim_server: Option<i64> = p.get("victim_server");
+    // Internet::hack writes "npc" or "player" into info when it starts the process,
+    // which is what the legacy carried in its isNPC flag.
+    let is_npc = p.get::<String, _>("info") == "npc";
+    let exploit_succeeded = if action == 16 {
+        Some(exploit_effect(pool, user, victim, is_npc, victim_server).await?)
+    } else {
+        None
+    };
+    match action {
+        1 | 2 => transfer_effect(pool, user, victim, is_npc, victim_server, soft, action).await?,
+        3 => delete_effect(pool, user, victim, is_npc, victim_server, soft).await?,
+        4 => hide_effect(pool, user, victim, is_npc, soft).await?,
+        5 => seek_effect(pool, user, victim, is_npc, soft).await?,
+        13 => install_effect(pool, user, victim, is_npc, soft).await?,
+        14 => uninstall_effect(pool, user, victim, is_npc, soft).await?,
+        8 => edit_log_effect(pool, pid, victim, is_npc).await?,
+        11 => hack_effect(pool, user, victim, is_npc, victim_server).await?,
+        15 => scan_effect(pool, user, victim, is_npc, victim_server).await?,
+        16 => {}
+        17 => research_effect(pool, user, soft).await?,
+        18 => park_effect(pool, user, soft).await?,
+        19 => unpark_effect(pool, user, soft).await?,
+        20 => discard_effect(pool, user, soft).await?,
+        23 => analyze_effect(pool, user, victim, is_npc, victim_server, soft).await?,
+        25 => reset_ip_effect(pool, user).await?,
+        26 => reset_password_effect(pool, user).await?,
+        90 => modular_operation_effect(pool, pid, user, victim, victim_server, soft).await?,
+        91 => compilation_effect(pool, pid, user).await?,
+        92 | 93 | 94 | 95 => tactical_effect(pool, pid, user, victim, action).await?,
+        _ => {}
+    }
+    if exploit_succeeded == Some(false) {
+        sqlx::query("UPDATE processes SET status='failed',result_code='EXPLOIT_BLOCKED',result_message='El firewall rechazó tus exploits instalados' WHERE pid=$1")
             .bind(pid)
             .execute(pool)
             .await?;
     }
+    sqlx::query("UPDATE processes SET time_worked=time_ideal,completed_at=now(),status=CASE WHEN action IN (16,90,91,92,93,94,95) THEN status ELSE 'succeeded' END WHERE pid=$1")
+        .bind(pid)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -262,6 +296,69 @@ async fn tactical_effect(
     Ok(())
 }
 
+/// En que disco cae un fichero que llega, y si cabe en alguno.
+///
+/// Desde la 0047 el software vive en una maquina y no en un dueno. Eso cambio la pregunta:
+/// «cabe?» dejo de ser una cuenta sobre la suma de los equipos de alguien y paso a ser una
+/// sobre un disco concreto. Los sitios que copian ficheros —compilar, transferir, infectar,
+/// desaparcar— se quedaron preguntando a la vieja usanza y, peor, sin decir en que maquina
+/// caia lo que insertaban. Contra una columna `NOT NULL` eso no es un fallo de cuentas: es un
+/// insert que revienta, y el worker se moria con el.
+///
+/// La regla es el equipo con mas sitio libre, y a igualdad el principal. Es indulgente a
+/// proposito —quien tiene varias maquinas no se queda sin compilar porque la principal este
+/// llena— y determinista, que es lo que permite probarla.
+async fn landing_disk(
+    pool: &sqlx::PgPool,
+    owner: i64,
+    is_npc: bool,
+    size: i64,
+) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT h.server_id
+          FROM hardware h
+          LEFT JOIN LATERAL (
+              SELECT COALESCE(sum(s.soft_size)::bigint, 0) AS used
+                FROM software s
+               WHERE s.server_id = h.server_id
+          ) o ON TRUE
+         WHERE h.user_id = $1
+           AND h.is_npc = $2
+           AND h.hdd::bigint - o.used >= $3
+         ORDER BY h.hdd::bigint - o.used DESC, h.is_gateway DESC, h.server_id
+         LIMIT 1
+        "#,
+    )
+    .bind(owner)
+    .bind(is_npc)
+    .bind(size)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Lo mismo, pero cuando la maquina no se elige: ya la eligio el jugador al atacarla.
+///
+/// Un virus se planta en el equipo en el que entraste, no en el que mejor le venga al virus.
+/// Si ese esta lleno, la infeccion falla y lo dice; buscarle otro sitio seria plantarlo en una
+/// maquina que nadie ha abierto.
+async fn fits_on(pool: &sqlx::PgPool, server: i64, size: i64) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT h.hdd::bigint
+               - COALESCE((SELECT sum(s.soft_size)::bigint FROM software s WHERE s.server_id = h.server_id), 0)
+               >= $2
+          FROM hardware h
+         WHERE h.server_id = $1
+        "#,
+    )
+    .bind(server)
+    .bind(size)
+    .fetch_optional(pool)
+    .await
+    .map(|found| found.unwrap_or(false))
+}
+
 /// Materializa una compilacion que ya consumio su tiempo. El espacio se comprueba de nuevo:
 /// otra accion pudo haber terminado antes y ocupar el disco que estaba libre al encolarla.
 async fn compilation_effect(pool: &sqlx::PgPool, pid: i64, user: i64) -> Result<(), sqlx::Error> {
@@ -272,22 +369,12 @@ async fn compilation_effect(pool: &sqlx::PgPool, pid: i64, user: i64) -> Result<
     let payload: serde_json::Value = row.get("process_payload");
     let stats = &payload["stats"];
     let weight = stats["weight"].as_i64().unwrap_or(1).max(1);
-    let capacity: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(sum(hdd)::bigint,0) FROM hardware WHERE user_id=$1 AND NOT is_npc",
-    )
-    .bind(user)
-    .fetch_one(pool)
-    .await?;
-    let used: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(sum(soft_size)::bigint,0) FROM software WHERE user_id=$1 AND NOT is_npc",
-    )
-    .bind(user)
-    .fetch_one(pool)
-    .await?;
-    if capacity - used < weight {
+    // `enqueue_compilation` dejo escrito que en que equipo aterriza el resultado lo decide el
+    // worker al terminar. Se decide aqui, y hasta ahora no lo decidia nadie.
+    let Some(server) = landing_disk(pool, user, false, weight).await? else {
         sqlx::query("UPDATE processes SET status='failed',result_code='DISK_FULL',result_message='La compilacion termino sin espacio libre en disco' WHERE pid=$1").bind(pid).execute(pool).await?;
         return Ok(());
-    }
+    };
     let capability = payload["capability"].as_str().unwrap_or_default();
     let name = payload["name"].as_str().unwrap_or("Programa");
     let revision = payload["revision"].as_i64().unwrap_or(1) as i32;
@@ -300,8 +387,8 @@ async fn compilation_effect(pool: &sqlx::PgPool, pid: i64, user: i64) -> Result<
         _ => 4,
     };
     let mut tx = pool.begin().await?;
-    let software_id: i64 = sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type) VALUES($1,$2,$3,$4,$5,$6) RETURNING id")
-        .bind(user).bind(name).bind(revision).bind(weight as i32).bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(legacy_type).fetch_one(&mut *tx).await?;
+    let software_id: i64 = sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,server_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id")
+        .bind(user).bind(name).bind(revision).bind(weight as i32).bind(stats["ram"].as_i64().unwrap_or(1).max(1) as i32).bind(legacy_type).bind(server).fetch_one(&mut *tx).await?;
     sqlx::query("INSERT INTO software_profiles(software_id,blueprint_id,origin,capability_id,effectiveness,resistance,stealth,detection,removal,penetration,hardening,manipulation,integrity,anti_forensics,forensics,persistence,stability,cpu_need,ram_need,net_need,weight) SELECT $1,$2,'research',id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19 FROM software_capabilities WHERE code=$20")
         .bind(software_id).bind(blueprint_id)
         .bind(stats["effectiveness"].as_i64().unwrap_or(0) as i32).bind(stats["resistance"].as_i64().unwrap_or(0) as i32)
@@ -578,21 +665,25 @@ async fn infection_effect(
     let version: i32 = f.get("soft_version");
     let size: i32 = f.get("soft_size");
     let ram: i32 = f.get("soft_ram");
+    // El virus se planta en el equipo en el que entraste, no en el que mejor le venga: esa
+    // maquina la eligio el jugador al atacarla. Si el proceso no la dijo —lo de antes de que
+    // un proceso apuntara a un nodo— vale la principal, que es a la que apuntaba de hecho.
+    let server = match victim_server {
+        Some(machine) => Some(machine),
+        None => sqlx::query_scalar(
+            "SELECT server_id FROM hardware WHERE user_id=$1 AND NOT is_npc AND is_gateway LIMIT 1",
+        )
+        .bind(victim)
+        .fetch_optional(pool)
+        .await?,
+    };
+    let Some(server) = server else {
+        return Ok(Some(("TARGET_GONE", "the target machine no longer exists")));
+    };
     // The copy has to fit on the victim's disk and stay loaded in their RAM: the same two
     // checks a transfer and an install go through. A machine with no room is not infected,
     // and the operation says so instead of claiming a silent win.
-    let hdd: Option<f32> =
-        sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc")
-            .bind(victim)
-            .fetch_one(pool)
-            .await?;
-    let used_hdd: Option<i64> = sqlx::query_scalar(
-        "SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc",
-    )
-    .bind(victim)
-    .fetch_one(pool)
-    .await?;
-    if (hdd.unwrap_or(0.0) as i64) < used_hdd.unwrap_or(0) + size as i64 {
+    if !fits_on(pool, server, size as i64).await? {
         return Ok(Some((
             "NO_DISK",
             "the target machine had no room for the payload",
@@ -612,8 +703,8 @@ async fn infection_effect(
     }
     // Hidden, because a virus the owner can see on their own file list is not a virus. Their
     // seeker is what finds it, the same as any other hidden file.
-    let planted:i64=sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,soft_hidden,original_from,licensed_to) VALUES($1,$2,$3,$4,$5,$6,true,$7,$8) RETURNING id")
-        .bind(victim).bind(&name).bind(version).bind(size).bind(ram).bind(f.get::<i16,_>("soft_type")).bind(soft).bind(f.get::<i64,_>("licensed_to")).fetch_one(pool).await?;
+    let planted:i64=sqlx::query_scalar("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,soft_hidden,original_from,licensed_to,server_id) VALUES($1,$2,$3,$4,$5,$6,true,$7,$8,$9) RETURNING id")
+        .bind(victim).bind(&name).bind(version).bind(size).bind(ram).bind(f.get::<i16,_>("soft_type")).bind(soft).bind(f.get::<i64,_>("licensed_to")).bind(server).fetch_one(pool).await?;
     sqlx::query("INSERT INTO software_running(soft_id,user_id,is_npc) VALUES($1,$2,false) ON CONFLICT DO NOTHING")
         .bind(planted).bind(victim).execute(pool).await?;
     // virus_id is where the legacy remembered whose virus sits on a machine. It only means
@@ -880,26 +971,13 @@ async fn transfer_effect(
     if held {
         return Ok(());
     }
-    // calculateHDDUsage: total >= used + size, or the file does not land.
-    let total: Option<f32> =
-        sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND is_npc=$2")
-            .bind(to)
-            .bind(to_npc)
-            .fetch_one(pool)
-            .await?;
-    let used: Option<i64> = sqlx::query_scalar(
-        "SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND is_npc=$2",
-    )
-    .bind(to)
-    .bind(to_npc)
-    .fetch_one(pool)
-    .await?;
-    if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + size as i64 {
+    // calculateHDDUsage: el fichero cae en un disco concreto, o no cae.
+    let Some(server) = landing_disk(pool, to, to_npc, size as i64).await? else {
         return Ok(());
-    }
+    };
     // originalFrom keeps the trail back to the file this copy was taken from.
-    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc,original_from,licensed_to) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)")
-        .bind(to).bind(&name).bind(version).bind(size).bind(ram).bind(soft_type).bind(to_npc).bind(soft).bind(licensed).execute(pool).await?;
+    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,is_npc,original_from,licensed_to,server_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
+        .bind(to).bind(&name).bind(version).bind(size).bind(ram).bind(soft_type).bind(to_npc).bind(soft).bind(licensed).bind(server).execute(pool).await?;
     let verb = if download { "downloaded" } else { "uploaded" };
     log_pair(
         pool,
@@ -1448,23 +1526,12 @@ async fn unpark_effect(pool: &sqlx::PgPool, user: i64, soft: i64) -> Result<(), 
     if held {
         return Ok(());
     }
-    // BAD_HDD, the same disk check every copy onto a machine goes through.
-    let total: Option<f32> =
-        sqlx::query_scalar("SELECT sum(hdd)::real FROM hardware WHERE user_id=$1 AND NOT is_npc")
-            .bind(user)
-            .fetch_one(pool)
-            .await?;
-    let used: Option<i64> = sqlx::query_scalar(
-        "SELECT sum(soft_size)::bigint FROM software WHERE user_id=$1 AND NOT is_npc",
-    )
-    .bind(user)
-    .fetch_one(pool)
-    .await?;
-    if (total.unwrap_or(0.0) as i64) < used.unwrap_or(0) + size as i64 {
+    // BAD_HDD, la misma comprobacion de disco que pasa toda copia que aterriza en una maquina.
+    let Some(server) = landing_disk(pool, user, false, size as i64).await? else {
         return Ok(());
-    }
-    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to) VALUES($1,$2,$3,$4,$5,$6,$7)")
-        .bind(user).bind(&name).bind(version).bind(size).bind(f.get::<i32,_>("soft_ram")).bind(f.get::<i16,_>("soft_type")).bind(f.get::<i64,_>("licensed_to")).execute(pool).await?;
+    };
+    sqlx::query("INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,licensed_to,server_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)")
+        .bind(user).bind(&name).bind(version).bind(size).bind(f.get::<i32,_>("soft_ram")).bind(f.get::<i16,_>("soft_type")).bind(f.get::<i64,_>("licensed_to")).bind(server).execute(pool).await?;
     Ok(())
 }
 
