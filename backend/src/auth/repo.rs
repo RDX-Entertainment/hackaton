@@ -209,6 +209,59 @@ const BOOTSTRAP: &[&str] = &[
     "INSERT INTO user_research_modules(user_id,module_id)
      SELECT $1,id FROM research_modules
      ON CONFLICT DO NOTHING",
+    // El campo de tiro: dos maquinas de practica que son suyas y solo ve el.
+    //
+    // Van aqui y no en una migracion porque son parte de lo que trae una cuenta nueva, igual
+    // que el equipo o los modulos. La 0056 se las dio a quien ya estaba; esto se las da a
+    // quien llegue.
+    //
+    // **Una por sentencia, y no las dos con un `generate_series`.** `random_free_ip()` es
+    // volatil y se evalua por fila, pero mira una tabla que dentro de la misma sentencia
+    // todavia no tiene la fila de al lado: las dos podrian salir con la misma direccion y
+    // chocar contra el UNIQUE. En sentencias separadas la segunda ya ve a la primera.
+    //
+    // El `npc_purpose` va en la misma sentencia que crea el NPC, con un CTE, para que no
+    // exista ni un instante un NPC de practica sin dueño al que otra alta pudiera agarrarse.
+    "WITH nuevo AS (
+        INSERT INTO npc (npc_type, npc_ip, npc_pass)
+        VALUES (80, random_free_ip(), substr(md5(random()::text), 1, 8))
+        RETURNING id
+     )
+     INSERT INTO npc_purpose (npc_id, kind, owner_id) SELECT id, 'practice', $1 FROM nuevo",
+    "WITH nuevo AS (
+        INSERT INTO npc (npc_type, npc_ip, npc_pass)
+        VALUES (80, random_free_ip(), substr(md5(random()::text), 1, 8))
+        RETURNING id
+     )
+     INSERT INTO npc_purpose (npc_id, kind, owner_id) SELECT id, 'practice', $1 FROM nuevo",
+    // Y a partir de aqui todo cuelga de `npc_purpose`, que ya dice cuales son suyas.
+    "INSERT INTO npc_info (npc_id, name)
+     SELECT p.npc_id, 'Campo de tiro ' || row_number() OVER (ORDER BY p.npc_id)
+     FROM npc_purpose p
+     WHERE p.kind = 'practice' AND p.owner_id = $1
+       AND NOT EXISTS (SELECT 1 FROM npc_info i WHERE i.npc_id = p.npc_id)",
+    "INSERT INTO hardware (user_id, name, cpu, ram, hdd, net, is_npc, is_gateway, public_ip, machine_pass)
+     SELECT n.id, 'npc', 800, 256, 300, 10, TRUE, TRUE, n.npc_ip, n.npc_pass
+     FROM npc n
+     JOIN npc_purpose p ON p.npc_id = n.id AND p.kind = 'practice' AND p.owner_id = $1
+     WHERE NOT EXISTS (SELECT 1 FROM hardware h WHERE h.is_npc AND h.user_id = n.id)",
+    "INSERT INTO log (user_id, text, is_npc)
+     SELECT p.npc_id, '', TRUE
+     FROM npc_purpose p
+     WHERE p.kind = 'practice' AND p.owner_id = $1
+       AND NOT EXISTS (SELECT 1 FROM log l WHERE l.is_npc AND l.user_id = p.npc_id)",
+    // Un firewall en cada una, y de distinta version: dos objetivos iguales serian uno.
+    "INSERT INTO software_original (npc_id, soft_name, soft_version, soft_size, soft_ram, soft_type)
+     SELECT p.npc_id, 'Firewall', 10 * row_number() OVER (ORDER BY p.npc_id), 50, 150, 4
+     FROM npc_purpose p
+     WHERE p.kind = 'practice' AND p.owner_id = $1
+       AND NOT EXISTS (SELECT 1 FROM software_original o WHERE o.npc_id = p.npc_id)",
+    "INSERT INTO software (user_id, soft_name, soft_version, soft_size, soft_ram, soft_type, is_npc, server_id)
+     SELECT o.npc_id, o.soft_name, o.soft_version, o.soft_size, o.soft_ram, o.soft_type, TRUE, h.server_id
+     FROM software_original o
+     JOIN npc_purpose p ON p.npc_id = o.npc_id AND p.kind = 'practice' AND p.owner_id = $1
+     JOIN hardware h ON h.user_id = o.npc_id AND h.is_npc
+     WHERE NOT EXISTS (SELECT 1 FROM software s WHERE s.is_npc AND s.user_id = o.npc_id)",
 ];
 
 pub async fn bootstrap_player(

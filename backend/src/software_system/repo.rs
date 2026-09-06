@@ -230,12 +230,20 @@ pub async fn access(
 ) -> Result<Option<MachineAccessRow>, sqlx::Error> {
     sqlx::query_as("SELECT target_ip AS ip,identity_name AS identity,privilege,scope,permissions,status,persistence_installed,target_user_id,target_is_npc FROM machine_accesses WHERE attacker_id=$1 AND target_ip=$2 AND status='active'").bind(user).bind(ip).fetch_optional(pool).await
 }
+/// La pagina editable de una maquina, si tiene alguna escrita.
+///
+/// Devuelve `None` en vez de reventar cuando no hay ninguna. Esto no se notaba porque el
+/// endpoint que lo usa era **inalcanzable**: pedia un acceso de `machine_accesses`, que solo
+/// llenaba la operacion modular. En cuanto un crackeo normal empezo a conceder acceso, la
+/// primera maquina sin pagina escrita contesto un 500.
+///
+/// Una maquina sin nada escrito no es un error: es una maquina sin nada escrito.
 pub async fn web_content(
     pool: &PgPool,
     target: i64,
     npc: bool,
-) -> Result<WebContentRow, sqlx::Error> {
-    sqlx::query_as("SELECT path,content,COALESCE((SELECT max(id) FROM machine_web_revisions r WHERE r.target_user_id=$1 AND r.target_is_npc=$2 AND r.path=w.path),0) AS revision FROM machine_web_content w WHERE target_user_id=$1 AND target_is_npc=$2 AND path='/index.html'").bind(target).bind(npc).fetch_one(pool).await
+) -> Result<Option<WebContentRow>, sqlx::Error> {
+    sqlx::query_as("SELECT path,content,COALESCE((SELECT max(id) FROM machine_web_revisions r WHERE r.target_user_id=$1 AND r.target_is_npc=$2 AND r.path=w.path),0) AS revision FROM machine_web_content w WHERE target_user_id=$1 AND target_is_npc=$2 AND path='/index.html'").bind(target).bind(npc).fetch_optional(pool).await
 }
 pub async fn evidence(pool: &PgPool, user: i64) -> Result<Vec<EvidenceRow>, sqlx::Error> {
     sqlx::query_as("SELECT id,process_id,action_code AS action,state,(target_user_id=$1 OR real_identity=$2) AS visible,(real_identity=$2) AS can_tamper,apparent_origin_ip,attribution_confidence AS confidence FROM game_evidence WHERE real_identity=$2 OR (target_user_id=$1 AND visible_to_target) ORDER BY real_at DESC").bind(user).bind(format!("user:{user}")).fetch_all(pool).await

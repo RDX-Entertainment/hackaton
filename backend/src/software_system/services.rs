@@ -316,11 +316,20 @@ pub async fn web_content(pool: &PgPool, user: i64, ip: i64) -> Result<WebContent
     {
         return Err(ApiError::BadRequest("INSUFFICIENT_PERMISSION".into()));
     }
+    // Sin pagina escrita se devuelve la hoja en blanco, que es lo que hay: un editor que no
+    // se puede abrir hasta que otro haya editado antes no le sirve a nadie.
     let content = repo::web_content(pool, access.target_user_id, access.target_is_npc).await?;
-    Ok(WebContent {
-        path: content.path,
-        content: content.content,
-        revision: content.revision,
+    Ok(match content {
+        Some(content) => WebContent {
+            path: content.path,
+            content: content.content,
+            revision: content.revision,
+        },
+        None => WebContent {
+            path: "/index.html".into(),
+            content: String::new(),
+            revision: 0,
+        },
     })
 }
 pub async fn evidence(pool: &PgPool, user: i64) -> Result<Vec<EvidenceSummary>, ApiError> {

@@ -825,6 +825,32 @@ async fn hack_effect(
     // The crack is also what opens the machine, so the player need not log in again.
     sqlx::query("INSERT INTO internet_access(user_id,ip,via_exploit) VALUES($1,$2,false) ON CONFLICT(user_id,ip) DO UPDATE SET granted_at=now()")
         .bind(user).bind(ip).execute(pool).await?;
+    // **Y en la otra lista, que hasta ahora no se enteraba.**
+    //
+    // Habia dos formas de tener acceso a una maquina y no se hablaban: `internet_access`, que
+    // llena esto, y `machine_accesses`, que solo llenaba la operacion modular. La pantalla de
+    // Accesos lee la segunda, asi que un jugador podia crackear una maquina y encontrarse la
+    // pantalla vacia; y como es tambien la que autoriza tocar la web del sitio o borrar las
+    // huellas, todo eso quedaba inalcanzable por la via normal de entrar.
+    //
+    // Un acceso es un acceso, se haya conseguido como se haya conseguido. Lo que concede se
+    // lee del catalogo de la capacidad `cracker` —que es lo que acaba de usarse— en vez de
+    // escribirlo aqui: el dia que a un cracker se le den otros permisos, se le dan en un
+    // sitio y valen para las dos formas de llegar.
+    sqlx::query(
+        "INSERT INTO machine_accesses(attacker_id,target_user_id,target_is_npc,target_ip,identity_name,origin,privilege,scope,permissions)
+         SELECT $1,$2,$3,$4,'root','hack',c.max_access_scope,c.max_access_scope,c.granted_permissions
+           FROM software_capabilities c WHERE c.code='cracker'
+         ON CONFLICT(attacker_id,target_ip) DO UPDATE
+            SET identity_name=EXCLUDED.identity_name,privilege=EXCLUDED.privilege,scope=EXCLUDED.scope,
+                permissions=EXCLUDED.permissions,status='active',obtained_at=now()",
+    )
+    .bind(user)
+    .bind(victim)
+    .bind(is_npc)
+    .bind(ip)
+    .execute(pool)
+    .await?;
     // exp_add('HACK', hasher version + victim cracker version), as in the legacy.
     let exp:i64=sqlx::query_scalar("SELECT COALESCE(sum(soft_version),0)::bigint FROM software WHERE user_id=$1 AND soft_type IN (1,2) AND is_npc=$2")
         .bind(victim).bind(is_npc).fetch_one(pool).await?;

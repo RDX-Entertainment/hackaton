@@ -57,7 +57,7 @@ pub async fn resolve_ip(
     //
 
     if let Some(npc) =
-        repo::find_npc_by_ip(pool, ip).await?
+        repo::find_npc_by_ip(pool, ip, viewer).await?
     {
         return Ok(Remote {
             is_npc: true,
@@ -170,9 +170,10 @@ pub async fn require_access(
 
 pub async fn internet_targets(
     pool: &PgPool,
+    viewer: i64,
 ) -> Result<Vec<InternetTargetResponse>, ApiError> {
     Ok(
-        repo::targets(pool)
+        repo::targets(pool, viewer)
             .await?
             .into_iter()
             .map(InternetTargetResponse::from)

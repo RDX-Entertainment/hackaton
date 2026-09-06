@@ -23,8 +23,16 @@ use super::models::{
 // ==============================
 //
 
+/// El listin de quien pregunta.
+///
+/// Lleva un `viewer` desde que hay NPC que no son del mundo abierto: el campo de tiro de cada
+/// jugador son maquinas suyas, y meterlas en el listin comun lo llenaria de objetivos que a
+/// los demas no les sirven de nada. `npc_visible_to` guarda esa regla, y la guarda tambien
+/// para `find_npc_by_ip`: quien no ve una maquina en la lista tampoco la encuentra
+/// escribiendo su direccion.
 pub async fn targets(
     pool: &PgPool,
+    viewer: i64,
 ) -> Result<Vec<InternetTargetRow>, sqlx::Error> {
     sqlx::query_as::<_, InternetTargetRow>(
         r#"
@@ -44,12 +52,14 @@ pub async fn targets(
           -- aparece si tiene interfaz de red y su organizacion esta activa. Quien lo
           -- decide es la vista: la regla vive en un sitio, no repartida por consultas.
           AND e.reachable
+          AND npc_visible_to(n.id, $1)
         ORDER BY
             n.npc_type,
             n.npc_ip
         LIMIT 200
         "#,
     )
+    .bind(viewer)
     .fetch_all(pool)
     .await
 }
@@ -63,6 +73,7 @@ pub async fn targets(
 pub async fn find_npc_by_ip(
     pool: &PgPool,
     ip: i64,
+    viewer: i64,
 ) -> Result<Option<NpcRemoteRow>, sqlx::Error> {
     sqlx::query_as::<_, NpcRemoteRow>(
         r#"
@@ -90,9 +101,13 @@ pub async fn find_npc_by_ip(
           -- Quitarle la interfaz de red a un nodo lo apaga de Internet aqui mismo: su
           -- web deja de servirse porque su IP deja de resolver.
           AND e.reachable
+          -- El campo de tiro de otro no responde ni sabiendo su direccion. Es la misma regla
+          -- que el listin, y por eso es la misma funcion.
+          AND npc_visible_to(n.id, $2)
         "#,
     )
     .bind(ip)
+    .bind(viewer)
     .fetch_optional(pool)
     .await
 }

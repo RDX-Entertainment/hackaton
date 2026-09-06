@@ -111,11 +111,12 @@ pub fn configure(
 
 pub async fn internet_targets(
     state: web::Data<AppState>,
-    _: Ctx,
+    ctx: Ctx,
 ) -> Result<HttpResponse, ApiError> {
     let response =
         services::internet_targets(
             &state.pool,
+            ctx.id,
         )
         .await?;
 
