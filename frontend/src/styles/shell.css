@@ -325,3 +325,13 @@
     padding: 1.2rem;
   }
 }
+
+@media (max-width: 600px) {
+  .shell { --topbar-height: 96px; }
+  .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 44px 44px; gap: 0 0.5rem; }
+  .navmenu { justify-content: flex-end; }
+  .navmenu__item { position: static; }
+  .navmenu__panel { top: 44px; left: 0.7rem; right: 0.7rem; min-width: 0; }
+  .topbar__session { grid-column: 1 / -1; justify-self: end; gap: 0.5rem; min-width: 0; }
+  .topbar__user-name { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+}

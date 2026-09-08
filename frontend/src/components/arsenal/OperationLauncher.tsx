@@ -1,135 +1,75 @@
 import { useMemo, useState, type FormEvent } from 'react';
-
-import { arsenalApi, type Program, type RankedPlayer } from '../../utils/api';
+import { Link } from 'react-router-dom';
+import { arsenalApi, type Program, type RankedPlayer, type Machine } from '../../utils/api';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 import { EmptyNotice } from '../Notice';
 import { ProcessProgress } from '../ProcessProgress';
 import { StatusMessage } from '../StatusMessage';
+import { StatSheet } from './StatSheet';
 
-type OperationLauncherProps = {
-  /** Todo el arsenal; aquí se filtra lo que de verdad puede disparar. */
+type Props = {
   programas: Program[];
   jugadores: RankedPlayer[];
-  /** Id del jugador, para no ofrecerse a sí mismo como objetivo. */
+  maquinas: Machine[];
   yo: number | null;
   onLanzada: () => void;
 };
 
-/**
- * Lanzar una operación.
- *
- * El servidor exige tres cosas y las tres se comprueban aquí antes de dejar pulsar: un
- * programa atacante **cargado en memoria**, un objetivo que no seas tú, y hardware que
- * aguante el consumo. Lo tercero lo sigue decidiendo el servidor con la máquina delante.
- */
-export function OperationLauncher({ programas, jugadores, yo, onLanzada }: OperationLauncherProps) {
+export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzada }: Props) {
   const status = useStatusMessage();
-
-  const [capacidad, setCapacidad] = useState('');
-  const [objetivo, setObjetivo] = useState('');
+  const [selected, setSelected] = useState('');
+  const [target, setTarget] = useState('');
   const [processId, setProcessId] = useState<number>();
+  const [pending, setPending] = useState(false);
+  const weapons = useMemo(() => programas.filter((program) => program.running
+    && program.role === 'attacker' && program.capability
+    && ['intrude', 'infect'].includes(program.action_kind ?? '')), [programas]);
+  const rivals = jugadores.filter((player) => player.user_id !== yo);
+  const weapon = weapons.find((program) => String(program.software_id) === selected) ?? weapons[0];
+  const opponent = rivals.find((player) => String(player.user_id) === target) ?? rivals[0];
+  const machine = maquinas.find((item) => item.id === weapon?.server_id);
+  const resources = weapon?.resources;
+  const fits = !!weapon && !!resources && resources.cpu >= weapon.stats.cpu
+    && resources.ram >= weapon.stats.ram && resources.net >= weapon.stats.net;
 
-  // Una operación sale de un programa corriendo, y solo los atacantes salen a por alguien.
-  const armas = useMemo(
-    () => programas.filter((uno) => uno.running && uno.role === 'attacker' && uno.capability),
-    [programas],
-  );
-
-  // Dos copias de la misma capacidad no son dos entradas del selector: el servidor dispara
-  // una sola, la de mayor eficacia + penetración de las que corren. Se elige aquí con ese
-  // mismo criterio para que el nombre que se enseña sea el del programa que va a salir.
-  const disponibles = useMemo(() => {
-    const mejores = new Map<string, Program>();
-
-    for (const arma of armas) {
-      const code = arma.capability as string;
-      const anterior = mejores.get(code);
-
-      if (!anterior || fuerza(arma) > fuerza(anterior)) {
-        mejores.set(code, arma);
-      }
-    }
-
-    return [...mejores.values()];
-  }, [armas]);
-
-  const rivales = useMemo(
-    () => jugadores.filter((jugador) => jugador.user_id !== yo),
-    [jugadores, yo],
-  );
-
-  const elegida = capacidad || disponibles[0]?.capability || '';
-  const arma = disponibles.find((uno) => uno.capability === elegida);
-  const contra = objetivo || String(rivales[0]?.user_id ?? '');
-
-  const lanzar = async (event: FormEvent) => {
+  const launch = async (event: FormEvent) => {
     event.preventDefault();
-
+    if (pending || !weapon?.capability || !opponent || !fits) return;
+    setPending(true);
     try {
-      const empezada = await arsenalApi.startOperation(elegida, Number(contra));
-      setProcessId(empezada.process_id);
-      status.report(
-        `Encolada como tarea #${empezada.process_id}; termina en ${empezada.seconds} s. ` +
-          'El resultado sale en Procesos cuando el worker la resuelva.',
-      );
+      const started = await arsenalApi.startOperation(weapon.capability, opponent.user_id, weapon.software_id);
+      setProcessId(started.process_id);
+      status.report(`Operación #${started.process_id} en curso · ${started.seconds} s · probabilidad ${started.estimated_chance}.`);
       onLanzada();
     } catch (error) {
       status.reportError(error);
+    } finally {
+      setPending(false);
     }
   };
 
-  if (!disponibles.length) {
-    return (
-      <EmptyNotice>
-        No tienes ningún programa de ataque cargado en memoria. Compila un diseño aquí abajo y
-        luego instálalo desde Software: un fichero en el disco no dispara.
-      </EmptyNotice>
-    );
-  }
+  if (!weapons.length) return <EmptyNotice>Necesitas un programa de intrusión o infección en memoria. Compila un diseño e <Link to="/software">instálalo en Software</Link>.</EmptyNotice>;
+  if (!opponent) return <EmptyNotice>No hay otro jugador contra el que operar todavía.</EmptyNotice>;
 
-  if (!rivales.length) {
-    return <EmptyNotice>No hay otro jugador contra el que operar todavía.</EmptyNotice>;
-  }
-
-  return (
-    <form className="compose" onSubmit={lanzar}>
-      <label>
-        Capacidad
-        <select value={elegida} onChange={(event) => setCapacidad(event.target.value)}>
-          {disponibles.map((uno) => (
-            <option key={uno.software_id} value={uno.capability as string}>
-              {uno.capability_name} · {uno.name} v{uno.version}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Objetivo
-        <select value={contra} onChange={(event) => setObjetivo(event.target.value)}>
-          {rivales.map((jugador) => (
-            <option key={jugador.user_id} value={jugador.user_id}>
-              {jugador.login}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <button>Lanzar</button>
-      <StatusMessage text={status.message} />
-      {processId && <ProcessProgress processId={processId} onFinished={onLanzada} />}
-
-      {arma?.action_kind === 'infect' && (
-        <p className="muted">
-          Infectar exige haber entrado antes en esa máquina. Si no está abierta, la operación
-          se resolverá como fallida.
-        </p>
-      )}
-    </form>
-  );
-}
-
-/** El desempate del servidor entre dos copias de la misma capacidad. */
-function fuerza(programa: Program): number {
-  return programa.stats.effectiveness + programa.stats.penetration;
+  return <form className="compose arsenal__operation" onSubmit={launch}>
+    <label>Programa y origen
+      <select value={weapon.software_id} onChange={(event) => setSelected(event.target.value)}>
+        {weapons.map((program) => <option key={program.software_id} value={program.software_id}>
+          {program.name} · {program.capability_name} · {maquinas.find((item) => item.id === program.server_id)?.name ?? `Equipo #${program.server_id}`}
+        </option>)}
+      </select>
+    </label>
+    <label>Objetivo · máquina principal
+      <select value={opponent.user_id} onChange={(event) => setTarget(event.target.value)}>
+        {rivals.map((player) => <option key={player.user_id} value={player.user_id}>{player.login}</option>)}
+      </select>
+    </label>
+    <p className="muted">Sale de {machine?.name ?? `equipo #${weapon.server_id}`}. Los recursos incluyen su cluster, si pertenece a uno.</p>
+    <StatSheet stats={weapon.stats} capacidad={resources ?? undefined} />
+    {!fits && <p role="status">El equipo no dispone de recursos suficientes para ejecutar este programa.</p>}
+    {weapon.action_kind === 'infect' && <p className="muted">Requiere acceso previo a la máquina objetivo y espacio en su disco.</p>}
+    <button disabled={pending || !fits}>{pending ? 'Lanzando…' : 'Lanzar operación'}</button>
+    <StatusMessage text={status.message} />
+    {processId && <ProcessProgress processId={processId} onFinished={onLanzada} />}
+  </form>;
 }

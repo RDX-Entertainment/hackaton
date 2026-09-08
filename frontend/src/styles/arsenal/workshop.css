@@ -99,3 +99,44 @@
   padding: 0.35rem 0.6rem 0.35rem 0;
   border-bottom: var(--border-width) solid var(--color-border);
 }
+
+.arsenal__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-bg-panel, transparent);
+}
+
+.arsenal__summary b {
+  display: inline-block;
+  margin-right: 0.4rem;
+  color: var(--color-accent);
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.arsenal__summary a { margin-left: auto; }
+.arsenal__filter { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
+.arsenal__program { border-left: 2px solid var(--color-accent); }
+.arsenal__operation, .aforge__preview { min-width: 0; }
+.aforge__preview { padding: 1rem; border: var(--border-width) solid var(--color-border); }
+.aforge__preview h4 { margin: 0 0 1rem; }
+.arsenal__skills { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; padding: 0; }
+.arsenal__skills li { padding: 0.4rem 0.6rem; border: var(--border-width) solid var(--color-border); color: var(--color-text-muted); font-size: 0.75rem; }
+.arsenal__skills .is-ready { color: var(--color-accent); }
+
+@media (max-width: 600px) {
+  .arsenal__summary a { margin-left: 0; width: 100%; }
+  .arsenal__filter { align-items: stretch; flex-direction: column; gap: 0.4rem; }
+  .arsenal__operation select { width: 100%; min-width: 0; }
+  .aforge__preview { padding: 0.6rem; }
+  .arsenal__caps, .arsenal__caps tbody { display: block; }
+  .arsenal__caps thead { display: none; }
+  .arsenal__caps tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; padding: 0.75rem; margin-bottom: 0.5rem; border: var(--border-width) solid var(--color-border); }
+  .arsenal__caps td { border: 0; padding: 0; overflow-wrap: anywhere; }
+  .arsenal__caps td::before { content: attr(data-label); display: block; margin-bottom: 0.25rem; font-size: 0.6rem; color: var(--color-text-subtle); text-transform: uppercase; }
+}

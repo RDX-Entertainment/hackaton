@@ -41,6 +41,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route("/software-system/research/modules", web::get().to(modules))
         .route("/software-system/programs", web::get().to(programs))
         .route("/software-system/blueprints", web::get().to(blueprints))
+        .route("/software-system/blueprints/preview", web::post().to(preview_blueprint))
         .route(
             "/software-system/blueprints",
             web::post().to(create_blueprint),
@@ -145,6 +146,13 @@ async fn create_blueprint(
 ) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Created()
         .json(services::create_blueprint(&state.pool, ctx.id, input.into_inner()).await?))
+}
+async fn preview_blueprint(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<CreateBlueprintRequest>,
+) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(services::preview_blueprint(&state.pool, ctx.id, &input).await?))
 }
 async fn compile(
     state: web::Data<AppState>,

@@ -35,6 +35,10 @@ export function listBlueprints(): Promise<Blueprint[]> {
   return get<Blueprint[]>('/software-system/blueprints');
 }
 
+export function previewBlueprint(capability: string, moduleIds: number[]): Promise<ProgramStats> {
+  return post('/software-system/blueprints/preview', { name: 'Vista previa', capability, module_ids: moduleIds });
+}
+
 export function createBlueprint(
   name: string,
   capability: string,
@@ -70,9 +74,11 @@ export function forgeEvidence(ip: number, evidenceId: number, apparentOriginIp: 
 export function startOperation(
   capability: string,
   targetUserId: number,
+  softwareId?: number,
 ): Promise<OperationStarted> {
   return post<OperationStarted>('/software-system/operations', {
     capability,
     target_user_id: targetUserId,
+    software_id: softwareId,
   });
 }

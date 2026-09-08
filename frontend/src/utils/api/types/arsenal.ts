@@ -84,6 +84,8 @@ export type Skill = { action: string; attribute: string; threshold: number; unlo
  */
 export type Program = {
   software_id: number;
+  server_id: number;
+  resources: { cpu: number; ram: number; net: number } | null;
   name: string;
   version: number;
   capability: string | null;

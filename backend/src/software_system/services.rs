@@ -102,8 +102,10 @@ async fn selected_defender(
     pool: &PgPool,
     user: i64,
     capability: &str,
+    npc: bool,
+    server: i64,
 ) -> Result<Option<ProgramRow>, ApiError> {
-    let candidates = repo::defender_candidates(pool, user, capability).await?;
+    let candidates = repo::defender_candidates(pool, user, capability, npc, server).await?;
     // La defensa también se elige por la declaración de su propia capacidad. Por
     // ejemplo, un IDS prioriza detection/forensics y un monitor de integridad
     // integrity/forensics; no existe un orden universal heredado.
@@ -258,10 +260,9 @@ async fn projected(
 }
 
 pub async fn programs(pool: &PgPool, user: i64) -> Result<Vec<Program>, ApiError> {
-    Ok(repo::programs(pool, user)
-        .await?
-        .into_iter()
-        .map(|p| {
+    let mut programs = Vec::new();
+    for p in repo::programs(pool, user).await? {
+            let resources = repo::origin_machine(pool, p.software_id).await?;
             let program_stats = stats(&p);
             let skills = super::skills::unlocked(p.capability.as_deref(), &program_stats)
                 .into_iter()
@@ -274,8 +275,10 @@ pub async fn programs(pool: &PgPool, user: i64) -> Result<Vec<Program>, ApiError
                     },
                 )
                 .collect();
-            Program {
+            programs.push(Program {
                 software_id: p.software_id,
+                server_id: p.server_id,
+                resources,
                 name: p.name,
                 version: p.version,
                 capability: p.capability,
@@ -286,9 +289,9 @@ pub async fn programs(pool: &PgPool, user: i64) -> Result<Vec<Program>, ApiError
                 running: p.running,
                 stats: program_stats,
                 skills,
-            }
-        })
-        .collect())
+            });
+    }
+    Ok(programs)
 }
 
 pub async fn accesses(pool: &PgPool, user: i64) -> Result<Vec<MachineAccess>, ApiError> {
@@ -485,7 +488,9 @@ async fn start_tactical(
         return Err(ApiError::BadRequest("INSUFFICIENT_PERMISSION".into()));
     }
     let attacker = selected_attacker(pool, user, capability).await?;
-    let defender = selected_defender(pool, access.target_user_id, capability).await?;
+    let target_server = repo::addressed_server(pool, access.target_user_id, access.target_is_npc, ip).await?
+        .ok_or(ApiError::NotFound)?;
+    let defender = selected_defender(pool, access.target_user_id, capability, access.target_is_npc, target_server).await?;
     let attack = stats(&attacker);
     let skill = match action {
         92 => "modify_web",
@@ -609,33 +614,55 @@ pub async fn create_blueprint(
     user: i64,
     input: CreateBlueprintRequest,
 ) -> Result<Blueprint, ApiError> {
+    validate_blueprint(&input)?;
     let name = input.name.trim();
-    if name.is_empty() || name.len() > 25 || input.module_ids.len() > 3 {
-        return Err(ApiError::BadRequest("invalid blueprint".into()));
-    }
     let capability = repo::capability(pool, &input.capability)
         .await?
         .ok_or_else(|| ApiError::BadRequest("unknown capability".into()))?;
-    for module in &input.module_ids {
-        if !repo::module_available(pool, user, *module, capability.id).await? {
-            return Err(ApiError::BadRequest(
-                "module is unavailable for this capability".into(),
-            ));
-        }
-    }
-    let id = repo::insert_blueprint(pool, user, name, capability.id).await?;
-    for module in input.module_ids {
-        repo::add_blueprint_module(pool, id, module).await?;
-    }
-    let (modules, projected) = projected(pool, &capability.role, id).await?;
+    let projected = preview_blueprint(pool, user, &input).await?;
+    let id = repo::insert_blueprint(pool, user, name, capability.id, &input.module_ids).await?;
     Ok(Blueprint {
         id,
         name: name.to_owned(),
         revision: 1,
         capability: capability.code,
-        modules,
+        modules: input.module_ids,
         projected,
     })
+}
+
+fn validate_blueprint(input: &CreateBlueprintRequest) -> Result<(), ApiError> {
+    if input.name.trim().is_empty() || input.name.trim().chars().count() > 25
+        || input.module_ids.len() > 3
+        || input.module_ids.iter().collect::<std::collections::HashSet<_>>().len() != input.module_ids.len() {
+        return Err(ApiError::BadRequest("invalid blueprint".into()));
+    }
+    Ok(())
+}
+
+pub async fn preview_blueprint(
+    pool: &PgPool,
+    user: i64,
+    input: &CreateBlueprintRequest,
+) -> Result<Stats, ApiError> {
+    validate_blueprint(input)?;
+    let capability = repo::capability(pool, &input.capability)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("unknown capability".into()))?;
+    let available = repo::modules(pool, user).await?;
+    let mut selected = Vec::new();
+    for id in &input.module_ids {
+        let module = available.iter().find(|module| module.id == *id)
+            .filter(|module| module.capability.as_deref().is_none_or(|code| code == capability.code));
+        let Some(module) = module else {
+            return Err(ApiError::BadRequest(
+                "module is unavailable for this capability".into(),
+            ));
+        };
+        selected.push(module);
+    }
+    selected.sort_by_key(|module| module.id);
+    Ok(selected.into_iter().fold(base_stats(&capability.role), apply))
 }
 pub async fn compile(
     pool: &PgPool,
@@ -670,7 +697,7 @@ pub async fn compile(
         json!({"disk_needed":stats.weight,"disk_free":free}),
         payload,
     )
-    .await?;
+    .await?.ok_or_else(|| ApiError::BadRequest("COMPILATION_ACTIVE: ya hay una compilacion en curso".into()))?;
     Ok(CompilationQueued {
         process_id,
         blueprint_id: b.id,
@@ -691,12 +718,19 @@ pub async fn start_operation(
         ));
     }
     let capability = input.capability;
-    let attacker = selected_attacker(pool, user, &capability)
-        .await
-        .map_err(|_| {
-            ApiError::BadRequest("run a compiled program with that capability first".into())
-        })?;
-    let defender = selected_defender(pool, input.target_user_id, &capability).await?;
+    let attacker = match input.software_id {
+        Some(id) => repo::attacker_candidates(pool, user, &capability).await?
+            .into_iter().find(|program| program.software_id == id)
+            .ok_or_else(|| ApiError::BadRequest("REQUIRED_SOFTWARE_NOT_RUNNING".into()))?,
+        None => selected_attacker(pool, user, &capability).await?,
+    };
+    if attacker.role.as_deref() != Some("attacker")
+        || !matches!(attacker.action_kind.as_deref(), Some("intrude" | "infect")) {
+        return Err(ApiError::BadRequest("Esta capacidad se usa desde su accion especializada".into()));
+    }
+    let target_server = repo::gateway_server(pool, input.target_user_id).await?
+        .ok_or_else(|| ApiError::BadRequest("El objetivo no tiene una maquina publica disponible".into()))?;
+    let defender = selected_defender(pool, input.target_user_id, &capability, false, target_server).await?;
     let attacker_stats = stats(&attacker);
     let defender_stats = defender.as_ref().map(stats).unwrap_or_default();
     let capability_definition = repo::capability(pool, &capability)
@@ -741,7 +775,7 @@ pub async fn start_operation(
     let estimated_chance =
         chance_label((execution.probability + penetration.probability) / 2).to_owned();
     let payload = json!({"capability":capability,"target_user_id":input.target_user_id,"action_kind":attacker.action_kind,"grants_login":attacker.grants_login,"access_scope":capability_definition.max_access_scope,"granted_permissions":capability_definition.granted_permissions,"attack_effectiveness":attacker_stats.effectiveness,"attack_penetration":attacker_stats.penetration,"attack_stealth":attacker_stats.stealth,"defense_resistance":defender_stats.resistance,"defense_hardening":defender_stats.hardening,"defense_detection":defender_stats.detection,"phase_plan":{"execution":{"probability":execution.probability,"roll":execution.roll},"penetration":{"probability":penetration.probability,"roll":penetration.roll},"detection":{"probability":detection.probability,"roll":detection.roll}}});
-    let process_id=repo::enqueue_operation(pool,user,input.target_user_id,attacker.software_id,&capability,seconds,json!({"cpu":attacker_stats.cpu,"ram":attacker_stats.ram,"net":attacker_stats.net,"attacker":attacker_stats,"defender":defender_stats}),payload).await?;
+    let process_id=repo::enqueue_operation(pool,user,input.target_user_id,attacker.software_id,&capability,seconds,json!({"cpu":attacker_stats.cpu,"ram":attacker_stats.ram,"net":attacker_stats.net,"attacker":attacker_stats,"defender":defender_stats}),payload,target_server).await?;
     Ok(OperationStarted {
         process_id,
         seconds,
@@ -775,6 +809,22 @@ pub async fn discover_evidence(pool: &PgPool, user: i64) -> Result<TacticalActio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blueprint_rejects_duplicate_modules_and_accepts_unicode_names() {
+        let mut input = CreateBlueprintRequest { name: "á".repeat(25), capability: "cracker".into(), module_ids: vec![1, 2, 3] };
+        assert!(validate_blueprint(&input).is_ok());
+        input.module_ids = vec![1, 1];
+        assert!(validate_blueprint(&input).is_err());
+        input.module_ids.clear();
+        input.name.push('á');
+        assert!(validate_blueprint(&input).is_err());
+        input.name = "   ".into();
+        assert!(validate_blueprint(&input).is_err());
+        input.name = "Valido".into();
+        input.module_ids = vec![1, 2, 3, 4];
+        assert!(validate_blueprint(&input).is_err());
+    }
 
     struct Rolls(Vec<u8>);
     impl RollSource for Rolls {

@@ -1,6 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
-import { arsenalApi, type Capability, type ResearchModule } from '../../utils/api';
+import { arsenalApi, type Capability, type ResearchModule, type ProgramStats } from '../../utils/api';
+import { StatSheet } from './StatSheet';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 import { StatusMessage } from '../StatusMessage';
 
@@ -16,9 +17,7 @@ type BlueprintForgeProps = {
 /**
  * Diseñar un programa: una capacidad y hasta tres módulos.
  *
- * No se enseña una previsión de los atributos mientras se elige. La suma de los módulos la
- * hace el servidor al crear el diseño, y repetirla aquí sería tener la misma regla en dos
- * sitios para que un día dejen de coincidir. El diseño ya creado sí muestra la suya.
+ * La previsión viene del servidor: elegir módulos y compilar usa la misma regla.
  */
 export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForgeProps) {
   const status = useStatusMessage();
@@ -26,8 +25,22 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
   const [nombre, setNombre] = useState('');
   const [elegida, setElegida] = useState('');
   const [piezas, setPiezas] = useState<number[]>([]);
+  const [preview, setPreview] = useState<ProgramStats>();
+  const [previewError, setPreviewError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const capacidad = elegida || capacidades[0]?.code || '';
+  useEffect(() => {
+    let current = true;
+    setPreview(undefined);
+    setPreviewError('');
+    if (capacidad) {
+      arsenalApi.previewBlueprint(capacidad, piezas)
+        .then((stats) => { if (current) setPreview(stats); })
+        .catch(() => { if (current) setPreviewError('No se pudo calcular la vista previa.'); });
+    }
+    return () => { current = false; };
+  }, [capacidad, piezas]);
 
   // Los dominios, en el orden en que llegan, para agrupar el selector sin inventar un orden.
   const dominios = useMemo(
@@ -67,6 +80,8 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
 
   const crear = async (event: FormEvent) => {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true);
 
     try {
       const creado = await arsenalApi.createBlueprint(nombre.trim(), capacidad, piezas);
@@ -76,6 +91,8 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
       onCreado();
     } catch (error) {
       status.reportError(error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -134,7 +151,11 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
         )}
       </fieldset>
 
-      <button>Guardar el diseño</button>
+      <div className="aforge__preview" aria-live="polite">
+        <h4>Resultado del diseño</h4>
+        {preview ? <StatSheet stats={preview} /> : <p>{previewError || 'Calculando atributos…'}</p>}
+      </div>
+      <button disabled={saving || !nombre.trim() || !preview}>{saving ? 'Guardando…' : 'Guardar el diseño'}</button>
       <StatusMessage text={status.message} />
     </form>
   );
@@ -146,6 +167,13 @@ function resumir(pieza: ResearchModule): string {
 
   const partes = [
     ['efic', deltas.effectiveness],
+    ['resistencia', deltas.resistance],
+    ['blindaje', deltas.hardening],
+    ['manipulación', deltas.manipulation],
+    ['integridad', deltas.integrity],
+    ['anti-forense', deltas.anti_forensics],
+    ['forense', deltas.forensics],
+    ['persistencia', deltas.persistence],
     ['sigilo', deltas.stealth],
     ['detec', deltas.detection],
     ['limp', deltas.removal],
@@ -154,6 +182,7 @@ function resumir(pieza: ResearchModule): string {
     ['cpu', deltas.cpu],
     ['ram', deltas.ram],
     ['red', deltas.net],
+    ['disco', deltas.weight],
   ] as const;
 
   return partes

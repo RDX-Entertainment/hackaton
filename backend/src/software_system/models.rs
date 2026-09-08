@@ -3,6 +3,7 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, FromRow)]
 pub struct ProgramRow {
     pub software_id: i64,
+    pub server_id: i64,
     pub name: String,
     pub version: i32,
     pub capability: Option<String>,
@@ -85,7 +86,7 @@ pub struct BlueprintRow {
 /// Sustituye a `HardwareTotals`, que sumaba el procesador, la memoria y la salida de **toda**
 /// la flota. Un programa corre donde esta guardado —lo decidio la fase 1—, asi que la potencia
 /// con la que cuenta es la de ese equipo y no la de todos juntos.
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, FromRow, serde::Serialize)]
 pub struct OriginMachine {
     pub cpu: i32,
     pub ram: i32,

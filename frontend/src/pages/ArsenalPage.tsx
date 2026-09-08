@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useAppSelector } from '../app/hooks';
 import { BlueprintForge } from '../components/arsenal/BlueprintForge';
@@ -10,6 +11,7 @@ import { StatusMessage } from '../components/StatusMessage';
 import {
   arsenalApi,
   hardwareApi,
+  processesApi,
   rankingApi,
   type Blueprint,
   type Capability,
@@ -29,6 +31,15 @@ const CONSECUENCIA: Record<string, string> = {
   remove: 'echa lo que hay dentro',
 };
 
+const SKILL_LABELS: Record<string, string> = {
+  modify_web: 'Modificar página', hide_evidence: 'Ocultar evidencia',
+  forge_evidence: 'Falsificar evidencia', analyze_evidence: 'Analizar evidencia',
+  install_persistence: 'Instalar persistencia', remove_persistence: 'Eliminar persistencia',
+  escalate_privileges: 'Elevar privilegios',
+  manipulation: 'Manipulación', anti_forensics: 'Anti-forense', forensics: 'Forense',
+  persistence: 'Persistencia', removal: 'Limpieza', penetration: 'Penetración',
+};
+
 /**
  * El arsenal: el sistema modular de software, que el backend sirve bajo `/software-system/`.
  *
@@ -46,38 +57,31 @@ export function ArsenalPage() {
   const [disenos, setDisenos] = useState<Blueprint[]>([]);
   const [jugadores, setJugadores] = useState<RankedPlayer[]>([]);
   const [maquinas, setMaquinas] = useState<Machine[]>([]);
-  const [compilacionActiva, setCompilacionActiva] = useState<{ blueprintId: number; processId: number }>();
+  const [compilacionActiva, setCompilacionActiva] = useState<{ blueprintId?: number; processId: number }>();
+  const [compiling, setCompiling] = useState(false);
+  const [machineFilter, setMachineFilter] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const cargar = useCallback(() => {
     arsenalApi.listCapabilities().then(setCapacidades).catch(() => setCapacidades([]));
     arsenalApi.listModules().then(setModulos).catch(() => setModulos([]));
-    arsenalApi.listPrograms().then(setProgramas).catch(() => setProgramas([]));
+    arsenalApi.listPrograms().then((programs) => { setProgramas(programs); setLoadError(''); }).catch(() => setLoadError('No se pudo cargar el arsenal. Intenta actualizar.'));
     arsenalApi.listBlueprints().then(setDisenos).catch(() => setDisenos([]));
     rankingApi.listPlayers().then(setJugadores).catch(() => setJugadores([]));
     hardwareApi.listMachines().then(setMaquinas).catch(() => setMaquinas([]));
+    processesApi.listProcesses().then((rows) => {
+      const active = rows.find((row) => Number(row.action) === 91 && !row.completed);
+      if (active) setCompilacionActiva((current) => current?.processId === Number(active.id) ? current : { processId: Number(active.id) });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
     cargar();
+    const timer = window.setInterval(cargar, 5000);
+    return () => window.clearInterval(timer);
   }, [cargar]);
 
-  /**
-   * Lo que el servidor mira al arrancar una operación: la suma de la flota, no la máquina
-   * concreta que ejecuta. Se suma igual aquí para que lo que se enseña y lo que se comprueba
-   * sean lo mismo, aunque sumar la flota entera sea discutible.
-   */
-  const capacidad = useMemo(
-    () =>
-      maquinas.reduce(
-        (total, maquina) => ({
-          cpu: total.cpu + maquina.cpu,
-          ram: total.ram + maquina.ram,
-          net: total.net + maquina.net,
-        }),
-        { cpu: 0, ram: 0, net: 0 },
-      ),
-    [maquinas],
-  );
+  const visiblePrograms = programas.filter((program) => !machineFilter || String(program.server_id) === machineFilter);
 
   const nombreDeCapacidad = useMemo(
     () => new Map(capacidades.map((una) => [una.code, una.name])),
@@ -85,6 +89,8 @@ export function ArsenalPage() {
   );
 
   const compilar = async (diseno: Blueprint) => {
+    if (compiling || compilacionActiva) return;
+    setCompiling(true);
     try {
       const hecho = await arsenalApi.compile(diseno.id);
       setCompilacionActiva({ blueprintId: diseno.id, processId: hecho.process_id });
@@ -95,12 +101,21 @@ export function ArsenalPage() {
       cargar();
     } catch (error) {
       status.reportError(error);
+    } finally {
+      setCompiling(false);
     }
   };
 
   return (
     <>
       <h2>Arsenal</h2>
+      <div className="arsenal__summary">
+        <span><b>{programas.length}</b> programas</span>
+        <span><b>{programas.filter((program) => program.running).length}</b> en memoria</span>
+        <span><b>{disenos.length}</b> diseños</span>
+        <Link to="/software">Gestionar discos y memoria →</Link>
+      </div>
+      {loadError && <p role="alert">{loadError} <button onClick={cargar}>Actualizar</button></p>}
 
       <p className="muted">
         Un programa es una capacidad más los módulos que le hayas puesto. Se diseña, se
@@ -112,6 +127,7 @@ export function ArsenalPage() {
         <OperationLauncher
           programas={programas}
           jugadores={jugadores}
+          maquinas={maquinas}
           yo={yo}
           onLanzada={cargar}
         />
@@ -119,11 +135,17 @@ export function ArsenalPage() {
 
       <section className="arsenal__block">
         <h3>Lo compilado</h3>
+        <label className="arsenal__filter">Equipo
+          <select value={machineFilter} onChange={(event) => setMachineFilter(event.target.value)}>
+            <option value="">Todos los equipos</option>
+            {maquinas.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}
+          </select>
+        </label>
         <StatusMessage text={status.message} as="block" />
 
-        {programas.length ? (
-          programas.map((programa) => (
-            <article className="forum-post" key={programa.software_id}>
+        {visiblePrograms.length ? (
+          visiblePrograms.map((programa) => (
+            <article className="forum-post arsenal__program" key={programa.software_id}>
               <b>
                 {programa.name} v{programa.version}
               </b>
@@ -133,22 +155,31 @@ export function ArsenalPage() {
                 {programa.action_kind && ` · ${CONSECUENCIA[programa.action_kind] ?? programa.action_kind}`}
                 {' · '}
                 {programa.running ? 'en memoria' : 'solo en disco'}
+                {' · '}{maquinas.find((machine) => machine.id === programa.server_id)?.name ?? `Equipo #${programa.server_id}`}
               </small>
 
               {!programa.running && (
                 <p className="muted">Instálalo desde Software o no podrá usarse.</p>
               )}
 
-              <StatSheet stats={programa.stats} capacidad={capacidad} />
+              <StatSheet stats={programa.stats} capacidad={programa.resources ?? undefined} />
+              {!!programa.skills.length && <ul className="arsenal__skills">{programa.skills.map((skill) => <li key={skill.action} className={skill.unlocked ? 'is-ready' : ''}>
+                {skill.unlocked ? 'Disponible' : 'Bloqueada'} · {SKILL_LABELS[skill.action] ?? skill.action} · {SKILL_LABELS[skill.attribute] ?? skill.attribute} ≥ {skill.threshold}
+              </li>)}</ul>}
             </article>
           ))
         ) : (
-          <EmptyNotice>Todavía no has compilado nada.</EmptyNotice>
+          <EmptyNotice>No hay programas en esta selección.</EmptyNotice>
         )}
       </section>
 
       <section className="arsenal__block">
         <h3>Diseños</h3>
+        {compilacionActiva && <ProcessProgress processId={compilacionActiva.processId} onFinished={(process) => {
+          status.report(process.result_message || 'La compilación ha terminado.');
+          setCompilacionActiva(undefined);
+          cargar();
+        }} />}
 
         {disenos.map((diseno) => (
           <article className="forum-post" key={diseno.id}>
@@ -161,12 +192,9 @@ export function ArsenalPage() {
               {diseno.modules.length} módulo{diseno.modules.length === 1 ? '' : 's'}
             </small>
 
-            <StatSheet stats={diseno.projected} capacidad={capacidad} />
+            <StatSheet stats={diseno.projected} />
 
-            <button onClick={() => void compilar(diseno)}>Compilar</button>
-            {compilacionActiva?.blueprintId === diseno.id && (
-              <ProcessProgress processId={compilacionActiva.processId} onFinished={cargar} />
-            )}
+            <button disabled={compiling || !!compilacionActiva} onClick={() => void compilar(diseno)}>Compilar</button>
           </article>
         ))}
 
@@ -210,10 +238,10 @@ export function ArsenalPage() {
           <tbody>
             {capacidades.map((una) => (
               <tr key={una.code}>
-                <td>{una.domain}</td>
-                <td>{una.name}</td>
-                <td>{una.role === 'defender' ? 'defensa' : una.role === 'attacker' ? 'ataque' : 'apoyo'}</td>
-                <td>{CONSECUENCIA[una.action_kind] ?? una.action_kind}</td>
+                <td data-label="Dominio">{una.domain}</td>
+                <td data-label="Capacidad">{una.name}</td>
+                <td data-label="Lado">{una.role === 'defender' ? 'defensa' : una.role === 'attacker' ? 'ataque' : 'apoyo'}</td>
+                <td data-label="Si gana">{CONSECUENCIA[una.action_kind] ?? una.action_kind}</td>
               </tr>
             ))}
           </tbody>

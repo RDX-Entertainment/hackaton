@@ -8,11 +8,21 @@ use super::models::{
 };
 
 pub async fn programs(pool: &PgPool, user_id: i64) -> Result<Vec<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,EXISTS(SELECT 1 FROM software_running r WHERE r.soft_id=s.id) AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id LEFT JOIN software_capabilities c ON c.id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY s.id DESC").bind(user_id).fetch_all(pool).await
+    sqlx::query_as("SELECT p.software_id,s.server_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,EXISTS(SELECT 1 FROM software_running r WHERE r.soft_id=s.id) AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id LEFT JOIN software_capabilities c ON c.id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY s.id DESC").bind(user_id).fetch_all(pool).await
 }
 
 pub async fn capabilities(pool: &PgPool) -> Result<Vec<CapabilityRow>, sqlx::Error> {
     sqlx::query_as("SELECT c.id,c.code,c.name,d.code AS domain,c.role,c.action_kind,c.relevant_attributes,c.secondary_attributes,c.available_actions,c.max_access_scope,c.granted_permissions FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id ORDER BY d.id,c.id").fetch_all(pool).await
+}
+
+pub async fn gateway_server(pool: &PgPool, user: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT server_id FROM hardware WHERE user_id=$1 AND NOT is_npc AND is_gateway AND public_ip IS NOT NULL")
+        .bind(user).fetch_optional(pool).await
+}
+
+pub async fn addressed_server(pool: &PgPool, user: i64, npc: bool, ip: i64) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT server_id FROM hardware WHERE user_id=$1 AND is_npc=$2 AND (public_ip=$3 OR lan_ip=$3)")
+        .bind(user).bind(npc).bind(ip).fetch_optional(pool).await
 }
 
 pub async fn modules(pool: &PgPool, user_id: i64) -> Result<Vec<ModuleRow>, sqlx::Error> {
@@ -41,40 +51,28 @@ pub async fn blueprint_modules(
 pub async fn capability(pool: &PgPool, code: &str) -> Result<Option<CapabilityRow>, sqlx::Error> {
     sqlx::query_as("SELECT c.id,c.code,c.name,d.code AS domain,c.role,c.action_kind,c.relevant_attributes,c.secondary_attributes,c.available_actions,c.max_access_scope,c.granted_permissions FROM software_capabilities c JOIN software_domains d ON d.id=c.domain_id WHERE c.code=$1").bind(code).fetch_optional(pool).await
 }
-pub async fn module_available(
-    pool: &PgPool,
-    user: i64,
-    module: i64,
-    capability: i16,
-) -> Result<bool, sqlx::Error> {
-    sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM research_modules m JOIN user_research_modules u ON u.module_id=m.id WHERE m.id=$1 AND u.user_id=$2 AND (m.capability_id IS NULL OR m.capability_id=$3))").bind(module).bind(user).bind(capability).fetch_one(pool).await
-}
 pub async fn insert_blueprint(
     pool: &PgPool,
     user: i64,
     name: &str,
     capability: i16,
+    modules: &[i64],
 ) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar(
+    let mut tx = pool.begin().await?;
+    let id = sqlx::query_scalar(
         "INSERT INTO software_blueprints(user_id,name,capability_id) VALUES($1,$2,$3) RETURNING id",
     )
     .bind(user)
     .bind(name)
     .bind(capability)
-    .fetch_one(pool)
-    .await
-}
-pub async fn add_blueprint_module(
-    pool: &PgPool,
-    blueprint: i64,
-    module: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO blueprint_modules(blueprint_id,module_id) VALUES($1,$2)")
-        .bind(blueprint)
-        .bind(module)
-        .execute(pool)
-        .await?;
-    Ok(())
+    .fetch_one(&mut *tx)
+    .await?;
+    for module in modules {
+        sqlx::query("INSERT INTO blueprint_modules(blueprint_id,module_id) VALUES($1,$2)")
+            .bind(id).bind(module).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    Ok(id)
 }
 pub async fn owned_blueprint(
     pool: &PgPool,
@@ -123,36 +121,32 @@ pub async fn enqueue_compilation(
     seconds: i32,
     snapshot: Value,
     payload: Value,
-) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,0,91,0,'compile','compile',now()+($2::integer*interval '1 second'),$2,'running',now(),$3,$4) RETURNING pid").bind(user).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
-}
-pub async fn attacker(
-    pool: &PgPool,
-    user: i64,
-    capability: &str,
-) -> Result<Option<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,c.grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id AND c.code=$2 WHERE s.user_id=$1 AND NOT s.is_npc ORDER BY p.effectiveness+p.penetration DESC LIMIT 1").bind(user).bind(capability).fetch_optional(pool).await
+) -> Result<Option<i64>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    // Dos peticiones del mismo jugador se serializan antes de comprobar la cola.
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE").bind(user).fetch_one(&mut *tx).await?;
+    let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM processes WHERE creator_id=$1 AND action=91 AND completed_at IS NULL)")
+        .bind(user).fetch_one(&mut *tx).await?;
+    if active { return Ok(None); }
+    let id = sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload) VALUES($1,0,91,0,'compile','compile',now()+($2::integer*interval '1 second'),$2,'running',now(),$3,$4) RETURNING pid").bind(user).bind(seconds).bind(snapshot).bind(payload).fetch_one(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(Some(id))
 }
 pub async fn attacker_candidates(
     pool: &PgPool,
     user: i64,
     capability: &str,
 ) -> Result<Vec<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,c.grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id AND c.code=$2 WHERE s.user_id=$1 AND NOT s.is_npc").bind(user).bind(capability).fetch_all(pool).await
-}
-pub async fn defender(
-    pool: &PgPool,
-    user: i64,
-    capability: &str,
-) -> Result<Option<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2) ORDER BY p.resistance+p.hardening+p.detection DESC LIMIT 1").bind(user).bind(capability).fetch_optional(pool).await
+    sqlx::query_as("SELECT p.software_id,s.server_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,c.grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id AND c.code=$2 WHERE s.user_id=$1 AND NOT s.is_npc").bind(user).bind(capability).fetch_all(pool).await
 }
 pub async fn defender_candidates(
     pool: &PgPool,
     user: i64,
     capability: &str,
+    npc: bool,
+    server: i64,
 ) -> Result<Vec<ProgramRow>, sqlx::Error> {
-    sqlx::query_as("SELECT p.software_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND NOT s.is_npc AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2)").bind(user).bind(capability).fetch_all(pool).await
+    sqlx::query_as("SELECT p.software_id,s.server_id,s.soft_name AS name,s.soft_version AS version,c.code AS capability,c.name AS capability_name,c.role,c.action_kind,NULL::text AS grants_login,p.origin,true AS running,p.effectiveness,p.stealth,p.detection,p.removal,p.penetration,p.resistance,p.hardening,p.manipulation,p.integrity,p.anti_forensics,p.forensics,p.persistence,p.stability,p.cpu_need,p.ram_need,p.net_need,p.weight FROM software_profiles p JOIN software s ON s.id=p.software_id JOIN software_running r ON r.soft_id=s.id JOIN software_capabilities c ON c.id=p.capability_id JOIN capability_counters x ON x.defender_capability_id=p.capability_id WHERE s.user_id=$1 AND s.is_npc=$3 AND s.server_id IN (SELECT h.server_id FROM hardware h JOIN hardware target ON target.server_id=$4 WHERE h.server_id=target.server_id OR (target.cluster_id IS NOT NULL AND h.cluster_id=target.cluster_id)) AND x.attacker_capability_id=(SELECT id FROM software_capabilities WHERE code=$2)").bind(user).bind(capability).bind(npc).bind(server).fetch_all(pool).await
 }
 /// El equipo del que sale una operacion, con lo que ese equipo puede darle.
 ///
@@ -216,8 +210,9 @@ pub async fn enqueue_operation(
     seconds: i32,
     snapshot: Value,
     payload: Value,
+    target_server: i64,
 ) -> Result<i64, sqlx::Error> {
-    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server,victim_server) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$3),(SELECT server_id FROM hardware WHERE user_id=$2 AND NOT is_npc AND is_gateway)) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).fetch_one(pool).await
+    sqlx::query_scalar("INSERT INTO processes(creator_id,victim_id,action,soft_id,info,info_str,time_end,time_ideal,status,started_at,resource_snapshot,process_payload,origin_server,victim_server) VALUES($1,$2,90,$3,$4,$4,now()+($5::integer*interval '1 second'),$5,'running',now(),$6,$7,(SELECT server_id FROM software WHERE id=$3),$8) RETURNING pid").bind(user).bind(target).bind(software).bind(capability).bind(seconds).bind(snapshot).bind(payload).bind(target_server).fetch_one(pool).await
 }
 
 pub async fn accesses(pool: &PgPool, user: i64) -> Result<Vec<MachineAccessRow>, sqlx::Error> {

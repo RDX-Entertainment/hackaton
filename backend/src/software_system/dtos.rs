@@ -76,6 +76,8 @@ pub struct CompilationQueued {
 #[derive(Serialize)]
 pub struct Program {
     pub software_id: i64,
+    pub server_id: i64,
+    pub resources: Option<super::models::OriginMachine>,
     pub name: String,
     pub version: i32,
     pub capability: Option<String>,
@@ -98,6 +100,7 @@ pub struct Skill {
 pub struct StartOperationRequest {
     pub capability: String,
     pub target_user_id: i64,
+    pub software_id: Option<i64>,
 }
 
 #[derive(Deserialize)]

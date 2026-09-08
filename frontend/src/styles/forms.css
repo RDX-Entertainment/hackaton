@@ -53,12 +53,12 @@ input[type="checkbox"] {
 
 /* The status line under a form: an echoed reply, not a label. */
 .compose .muted,
-.compose span {
+.compose > span {
   color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
-.compose span:not(:empty)::before {
+.compose > span:not(:empty)::before {
   content: "\2192  ";
   color: var(--color-accent-dim);
 }
