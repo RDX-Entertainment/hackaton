@@ -47,4 +47,38 @@ export const pt: Record<string, string> = {
 
   'error.WORKER_ERROR': 'O processo não pôde ser terminado.',
   'error.UNKNOWN_LANGUAGE': 'Esse idioma não está entre os que o jogo fala.',
+
+  // O circuito: os cinco passos.
+  'onboarding.modules.step': 'Pesquisar',
+  'onboarding.modules.title': 'Consiga módulos para construir',
+  'onboarding.modules.hint': 'Um programa é uma capacidade mais os módulos que você colocar. Sem módulos só saem programas pelados.',
+  'onboarding.modules.action': 'Ir para Pesquisa',
+
+  'onboarding.blueprint.step': 'Projetar',
+  'onboarding.blueprint.title': 'Projete o seu primeiro programa',
+  'onboarding.blueprint.hint': 'Escolha o que ele deve fazer —entrar numa máquina, deixar algo dentro— e monte até três módulos. Você vê o resultado antes de gastar um segundo compilando.',
+  'onboarding.blueprint.action': 'Projetar no Arsenal',
+
+  'onboarding.compile.step': 'Compilar',
+  'onboarding.compile.title': 'Compile o projeto',
+  'onboarding.compile.hint': 'Compilar demora, e sem terminar não há arquivo. Só se pode ter uma compilação em andamento.',
+  'onboarding.compile.action': 'Compilar no Arsenal',
+  'onboarding.compile.waiting': 'Compilando. Ao terminar, o arquivo aparece no disco da máquina onde couber.',
+
+  'onboarding.install.step': 'Carregar',
+  'onboarding.install.title': 'Carregue na memória',
+  'onboarding.install.hint': 'O que está no disco não dispara. Um programa só funciona na máquina onde está carregado, e ocupa a RAM dela enquanto estiver.',
+  'onboarding.install.action': 'Carregar em Software',
+
+  'onboarding.intrusion.step': 'Entrar',
+  'onboarding.intrusion.title': 'Entre na sua primeira máquina',
+  'onboarding.intrusion.hint': 'Você já tem com quê. Estes dois endereços são seus e existem para isto: mais ninguém os vê, e não se ofendem.',
+  'onboarding.intrusion.action': 'Abrir Internet',
+
+  'onboarding.done.title': 'O circuito está fechado',
+  'onboarding.done.hint': 'Você projeta, compila, carrega e entra. Daqui em diante o jogo é seu: missões, bancos e o que inventar.',
+
+  'onboarding.practice.title': 'Seu campo de tiro',
+  'onboarding.practice.hint': 'Duas máquinas de prática que só você vê.',
+  'onboarding.rail.title': 'O circuito de um programa',
 };

@@ -9,6 +9,7 @@ mod finances;
 mod forum;
 mod missions;
 mod news;
+mod onboarding;
 mod organizations;
 mod process;
 mod social;
@@ -126,6 +127,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .configure(|cfg| auth::handlers::configure(cfg, &login_attempts))
                     .configure(user::handlers::configure)
+                    .configure(onboarding::handlers::configure)
                     .configure(wiki::handlers::configure)
                     .configure(software::handlers::configure)
                     .configure(software_system::handlers::configure)

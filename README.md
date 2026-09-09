@@ -43,6 +43,17 @@ La prueba crea dos jugadores y comprueba diseño, concurrencia, compilación, in
 propiedad y resolución. `HACKATON_TEST_SSH` añade la regresión de defensa por máquina y requiere
 el contenedor de pruebas `hackaton-software-test-postgres-1`; no debe apuntar a producción.
 
+## El primer paso
+
+`GET /api/onboarding` dice en qué punto del circuito está el jugador —módulos, diseño,
+compilación, carga en memoria, primera intrusión— **deducido del mundo**, sin ninguna columna
+de progreso: se mira si hay filas, y llegar por otro camino también cuenta. Devuelve códigos y
+no frases, como los errores, porque la lengua la pone el cliente. Incluye las direcciones del
+campo de tiro, que el alta crea desde la 0056 y hasta ahora no enseñaba ninguna pantalla.
+
+La portada, Arsenal, Software e Investigación lo consumen: la primera para decir qué toca, y
+las otras tres para pintar el mismo riel de cinco pasos.
+
 ## Worker de juego
 
 El reemplazo Rust de los cronjobs se ejecuta separado del API. Procesa expiración de premium, ranking y la instantánea de estadísticas; en producción se deja en ejecución, y `--once` permite ejecutarlo desde un scheduler externo.

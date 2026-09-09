@@ -47,4 +47,38 @@ export const en: Record<string, string> = {
 
   'error.WORKER_ERROR': 'The task could not be finished.',
   'error.UNKNOWN_LANGUAGE': 'That language is not one the game speaks.',
+
+  // The circuit: the five steps.
+  'onboarding.modules.step': 'Research',
+  'onboarding.modules.title': 'Get modules to build with',
+  'onboarding.modules.hint': 'A program is a capability plus the modules you fit to it. With no modules you only get bare programs.',
+  'onboarding.modules.action': 'Go to Research',
+
+  'onboarding.blueprint.step': 'Design',
+  'onboarding.blueprint.title': 'Design your first program',
+  'onboarding.blueprint.hint': 'Pick what it should do — break into a machine, leave something behind — and fit up to three modules. You see what comes out before spending a second compiling it.',
+  'onboarding.blueprint.action': 'Design in Arsenal',
+
+  'onboarding.compile.step': 'Compile',
+  'onboarding.compile.title': 'Compile the design',
+  'onboarding.compile.hint': 'Compiling takes time, and there is no file until it finishes. You can only have one build running.',
+  'onboarding.compile.action': 'Compile in Arsenal',
+  'onboarding.compile.waiting': 'Building. When it finishes, the file lands on the disk of whichever machine has room.',
+
+  'onboarding.install.step': 'Load',
+  'onboarding.install.title': 'Load it into memory',
+  'onboarding.install.hint': 'What sits on disk does not fire. A program only works on the machine it is loaded on, and holds that machine RAM while it is.',
+  'onboarding.install.action': 'Load from Software',
+
+  'onboarding.intrusion.step': 'Break in',
+  'onboarding.intrusion.title': 'Break into your first machine',
+  'onboarding.intrusion.hint': 'You have what it takes. These two addresses are yours and exist for this: nobody else sees them, and they do not mind.',
+  'onboarding.intrusion.action': 'Open Internet',
+
+  'onboarding.done.title': 'The circuit is closed',
+  'onboarding.done.hint': 'You design, compile, load and break in. From here the game is yours: missions, banks and whatever you come up with.',
+
+  'onboarding.practice.title': 'Your firing range',
+  'onboarding.practice.hint': 'Two practice machines only you can see.',
+  'onboarding.rail.title': 'The circuit of a program',
 };

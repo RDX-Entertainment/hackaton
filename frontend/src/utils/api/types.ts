@@ -8,4 +8,5 @@ export * from './types/hardware';
 export * from './types/internet';
 export * from './types/kits';
 export * from './types/knowledge';
+export * from './types/onboarding';
 export * from './types/social';

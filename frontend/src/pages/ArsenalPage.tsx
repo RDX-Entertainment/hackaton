@@ -6,6 +6,8 @@ import { BlueprintForge } from '../components/arsenal/BlueprintForge';
 import { OperationLauncher } from '../components/arsenal/OperationLauncher';
 import { StatSheet } from '../components/arsenal/StatSheet';
 import { EmptyNotice } from '../components/Notice';
+import { CircuitRail } from '../components/onboarding/CircuitRail';
+import { useOnboarding } from '../components/onboarding/useOnboarding';
 import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import {
@@ -43,12 +45,15 @@ const SKILL_LABELS: Record<string, string> = {
 /**
  * El arsenal: el sistema modular de software, que el backend sirve bajo `/software-system/`.
  *
- * La pantalla sigue el camino que sigue el jugador y en ese orden: se lanza con lo que ya se
- * tiene, se diseña, se compila, y al fondo queda la referencia de lo que existe. Software
- * —la otra pantalla— es la que instala: aquí se construye, allí se carga en memoria.
+ * La pantalla va en el orden del circuito —se diseña, se compila, y con lo compilado se
+ * lanza—, y al fondo queda la referencia de lo que existe. Abría por «Operación», que es el
+ * último paso: quien llegaba sin nada compilado se encontraba primero un lanzador vacío y
+ * tenía que bajar para descubrir por dónde se empieza. Software —la otra pantalla— es la que
+ * instala: aquí se construye, allí se carga en memoria.
  */
 export function ArsenalPage() {
   const status = useStatusMessage();
+  const { onboarding } = useOnboarding();
   const yo = useAppSelector((state) => state.auth.user?.id ?? null);
 
   const [capacidades, setCapacidades] = useState<Capability[]>([]);
@@ -115,6 +120,8 @@ export function ArsenalPage() {
         <span><b>{disenos.length}</b> diseños</span>
         <Link to="/software">Gestionar discos y memoria →</Link>
       </div>
+      <CircuitRail onboarding={onboarding} />
+
       {loadError && <p role="alert">{loadError} <button onClick={cargar}>Actualizar</button></p>}
 
       <p className="muted">
@@ -123,14 +130,33 @@ export function ArsenalPage() {
       </p>
 
       <section className="arsenal__block">
-        <h3>Operación</h3>
-        <OperationLauncher
-          programas={programas}
-          jugadores={jugadores}
-          maquinas={maquinas}
-          yo={yo}
-          onLanzada={cargar}
-        />
+        <h3>Diseños</h3>
+        {compilacionActiva && <ProcessProgress processId={compilacionActiva.processId} onFinished={(process) => {
+          status.report(process.result_message || 'La compilación ha terminado.');
+          setCompilacionActiva(undefined);
+          cargar();
+        }} />}
+
+        {disenos.map((diseno) => (
+          <article className="forum-post" key={diseno.id}>
+            <b>
+              {diseno.name} r{diseno.revision}
+            </b>
+            <small>
+              {' '}
+              · {nombreDeCapacidad.get(diseno.capability) ?? diseno.capability} ·{' '}
+              {diseno.modules.length} módulo{diseno.modules.length === 1 ? '' : 's'}
+            </small>
+
+            <StatSheet stats={diseno.projected} />
+
+            <button disabled={compiling || !!compilacionActiva} onClick={() => void compilar(diseno)}>Compilar</button>
+          </article>
+        ))}
+
+        {!disenos.length && <EmptyNotice>Ningún diseño guardado todavía.</EmptyNotice>}
+
+        <BlueprintForge capacidades={capacidades} modulos={modulos} onCreado={cargar} />
       </section>
 
       <section className="arsenal__block">
@@ -173,35 +199,18 @@ export function ArsenalPage() {
         )}
       </section>
 
+
       <section className="arsenal__block">
-        <h3>Diseños</h3>
-        {compilacionActiva && <ProcessProgress processId={compilacionActiva.processId} onFinished={(process) => {
-          status.report(process.result_message || 'La compilación ha terminado.');
-          setCompilacionActiva(undefined);
-          cargar();
-        }} />}
-
-        {disenos.map((diseno) => (
-          <article className="forum-post" key={diseno.id}>
-            <b>
-              {diseno.name} r{diseno.revision}
-            </b>
-            <small>
-              {' '}
-              · {nombreDeCapacidad.get(diseno.capability) ?? diseno.capability} ·{' '}
-              {diseno.modules.length} módulo{diseno.modules.length === 1 ? '' : 's'}
-            </small>
-
-            <StatSheet stats={diseno.projected} />
-
-            <button disabled={compiling || !!compilacionActiva} onClick={() => void compilar(diseno)}>Compilar</button>
-          </article>
-        ))}
-
-        {!disenos.length && <EmptyNotice>Ningún diseño guardado todavía.</EmptyNotice>}
-
-        <BlueprintForge capacidades={capacidades} modulos={modulos} onCreado={cargar} />
+        <h3>Operación</h3>
+        <OperationLauncher
+          programas={programas}
+          jugadores={jugadores}
+          maquinas={maquinas}
+          yo={yo}
+          onLanzada={cargar}
+        />
       </section>
+
 
       <section className="arsenal__block">
         <h3>Módulos investigados</h3>

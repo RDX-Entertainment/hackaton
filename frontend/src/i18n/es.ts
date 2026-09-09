@@ -59,4 +59,40 @@ export const es: Record<string, string> = {
   // Y el que sale cuando un proceso revienta por dentro.
   'error.WORKER_ERROR': 'El proceso no se pudo terminar.',
   'error.UNKNOWN_LANGUAGE': 'Ese idioma no está entre los que habla el juego.',
+
+  // El circuito: los cinco pasos que llevan de una cuenta recien hecha a estar dentro de una
+  // maquina ajena. La clave `.step` es el rotulo corto del riel; `.title` y `.hint` son lo
+  // que la portada dice cuando ese es el paso que toca.
+  'onboarding.modules.step': 'Investigar',
+  'onboarding.modules.title': 'Consigue módulos con los que construir',
+  'onboarding.modules.hint': 'Un programa es una capacidad más los módulos que le pongas. Sin módulos solo salen programas pelados.',
+  'onboarding.modules.action': 'Ir a Investigación',
+
+  'onboarding.blueprint.step': 'Diseñar',
+  'onboarding.blueprint.title': 'Diseña tu primer programa',
+  'onboarding.blueprint.hint': 'Elige qué quiere hacer —entrar en una máquina, dejar algo dentro— y móntale hasta tres módulos. Verás lo que va a salir antes de gastar un segundo en compilarlo.',
+  'onboarding.blueprint.action': 'Diseñar en Arsenal',
+
+  'onboarding.compile.step': 'Compilar',
+  'onboarding.compile.title': 'Compila el diseño',
+  'onboarding.compile.hint': 'Compilar tarda, y hasta que no termina no hay fichero. Solo puedes tener una compilación en marcha.',
+  'onboarding.compile.action': 'Compilar en Arsenal',
+  'onboarding.compile.waiting': 'Compilando. Cuando termine, el fichero aparece en el disco de la máquina donde quepa.',
+
+  'onboarding.install.step': 'Cargar',
+  'onboarding.install.title': 'Cárgalo en memoria',
+  'onboarding.install.hint': 'Lo que está en disco no dispara. Un programa solo funciona en la máquina donde está cargado, y ocupa su RAM mientras lo esté.',
+  'onboarding.install.action': 'Cargar desde Software',
+
+  'onboarding.intrusion.step': 'Entrar',
+  'onboarding.intrusion.title': 'Entra en tu primera máquina',
+  'onboarding.intrusion.hint': 'Ya tienes con qué. Estas dos direcciones son tuyas y están para esto: nadie más las ve, y no se enfadan.',
+  'onboarding.intrusion.action': 'Abrir Internet',
+
+  'onboarding.done.title': 'El circuito está cerrado',
+  'onboarding.done.hint': 'Diseñas, compilas, cargas y entras. A partir de aquí el juego es tuyo: misiones, bancos y lo que se te ocurra.',
+
+  'onboarding.practice.title': 'Tu campo de tiro',
+  'onboarding.practice.hint': 'Dos máquinas de práctica que solo ves tú.',
+  'onboarding.rail.title': 'El circuito de un programa',
 };

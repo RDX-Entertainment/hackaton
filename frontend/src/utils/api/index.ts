@@ -20,6 +20,7 @@ export * as internetApi from './internet';
 export * as listsApi from './lists';
 export * as mailApi from './mail';
 export * as missionsApi from './missions';
+export * as onboardingApi from './onboarding';
 export * as processesApi from './processes';
 export * as rankingApi from './ranking';
 export * as researchApi from './research';

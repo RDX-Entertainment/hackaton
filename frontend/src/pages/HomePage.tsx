@@ -1,14 +1,26 @@
 import { useEffect, useState } from 'react';
 
+import { CircuitRail } from '../components/onboarding/CircuitRail';
+import { NextStep } from '../components/onboarding/NextStep';
+import { useOnboarding } from '../components/onboarding/useOnboarding';
 import { EmptyNotice, ErrorNotice, Loading } from '../components/Notice';
 import { dashboardApi, type Dashboard, type News } from '../utils/api';
 import { messageFrom } from '../utils/errors';
 import { formatMoney } from '../utils/format';
 
+/**
+ * La portada.
+ *
+ * Antes abría con tres números y las noticias, y no había nada en toda la pantalla que
+ * dijera qué hacer: para quien acababa de registrarse, un panel de estado de un estado que
+ * todavía no tenía. Ahora abre por lo que toca —el paso deducido del mundo, no una marca
+ * guardada— y el estado baja al segundo lugar, que es donde estaba su sitio.
+ */
 export function HomePage() {
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [news, setNews] = useState<News[]>([]);
   const [error, setError] = useState('');
+  const { onboarding } = useOnboarding();
 
   useEffect(() => {
     dashboardApi.getDashboard().then(setDashboard).catch((cause) => setError(messageFrom(cause)));
@@ -25,34 +37,41 @@ export function HomePage() {
 
   return (
     <>
-      <h2>Home</h2>
+      <h2>Inicio</h2>
+
+      {onboarding && (
+        <>
+          <NextStep onboarding={onboarding} />
+          <CircuitRail onboarding={onboarding} />
+        </>
+      )}
 
       <section className="cards">
         <article>
           <b>{formatMoney(dashboard.money)}</b>
-          <small>Total money</small>
+          <small>Dinero</small>
         </article>
         <article>
           <b>{dashboard.processes}</b>
-          <small>Processes</small>
+          <small>Procesos</small>
         </article>
         <article>
           <b>{dashboard.unread_mail}</b>
-          <small>Unread mail</small>
+          <small>Correo sin leer</small>
         </article>
       </section>
 
-      <h3>News</h3>
+      <h3>Noticias</h3>
       {news.length ? (
         news.map((item) => (
           <article className="forum-post" key={item.id}>
             <b>{item.title}</b>
-            <small> by {item.author}</small>
+            <small> por {item.author}</small>
             <pre>{item.content}</pre>
           </article>
         ))
       ) : (
-        <EmptyNotice>No news yet.</EmptyNotice>
+        <EmptyNotice>Todavía no hay noticias.</EmptyNotice>
       )}
     </>
   );

@@ -6,6 +6,8 @@ import { Meter } from '../components/software/Meter';
 import { contextoDe, discoEnUso, ramEnUso } from '../components/software/rules';
 import { MachineSelector } from '../components/hardware/MachineSelector';
 import { EmptyNotice } from '../components/Notice';
+import { CircuitRail } from '../components/onboarding/CircuitRail';
+import { useOnboarding } from '../components/onboarding/useOnboarding';
 import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import {
@@ -55,6 +57,7 @@ function lecturaDeCompilacion(row: UnknownRow): Compilation | null {
  */
 export function SoftwarePage() {
   const status = useStatusMessage();
+  const { onboarding } = useOnboarding();
 
   const [ficheros, setFicheros] = useState<OwnedFile[]>([]);
   const [tipos, setTipos] = useState<SoftwareType[]>([]);
@@ -178,6 +181,8 @@ export function SoftwarePage() {
   return (
     <>
       <h2>Software</h2>
+
+      <CircuitRail onboarding={onboarding} />
 
       <p className="muted">
         Un fichero en el disco no hace nada: hay que cargarlo en memoria, y la memoria es lo

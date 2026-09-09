@@ -22,6 +22,7 @@ import './styles/arsenal.css';
 import './styles/software.css';
 import './styles/kits.css';
 import './styles/organizations.css';
+import './styles/onboarding.css';
 import './styles/forms.css';
 
 const container = document.getElementById('root');
