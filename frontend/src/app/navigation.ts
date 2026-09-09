@@ -1,109 +1,104 @@
 /**
- * The sidebar. Twenty-four flat links was a wall of text with nothing to tell
- * you where you were, so they are grouped by what you go there to do.
+ * Los cinco destinos del juego.
  *
- * `path` doubles as the key the screen registry looks up, so adding a page
- * means a line here and an entry in `pageRegistry`.
+ * Antes eran veintiocho enlaces repartidos en siete grupos que se abrían al
+ * pasar el ratón —lo que en un móvil no existe— y cinco de ellos no llevaban a
+ * ninguna parte. El menú estaba organizado como el PHP original: un enlace por
+ * fichero heredado.
+ *
+ * Ahora está organizado por lo que haces. **Equipo** es un ordenador: sus
+ * piezas, sus programas y lo que corre en él, que hasta hoy eran cinco
+ * pantallas distintas hablando del mismo objeto. **Red** es el mundo y lo que
+ * has conquistado en él. El resto cae por su propio peso.
+ *
+ * `path` sigue siendo la clave con la que el registro de pantallas encuentra la
+ * suya, así que añadir una pantalla sigue siendo una línea aquí y otra en
+ * `pageRegistry`.
  */
 export type NavItem = {
   path: string;
   label: string;
 };
 
-export type NavGroup = {
-  title: string;
-  /**
-   * Drawn in the top rail. Plain glyphs rather than an icon font or an SVG set:
-   * the whole interface is monospace, and a pictogram would be the only thing
-   * on screen that is not a character.
-   */
-  icon: string;
+export type Destino = {
+  /** La tecla con la que se salta. El carril se recorre con el teclado. */
+  tecla: string;
+  nombre: string;
   items: NavItem[];
-  /**
-   * Marks a group whose pages have no screen of their own yet and answer with
-   * a placeholder. Saying so beats letting someone click and wonder.
-   */
-  pending?: boolean;
 };
 
-export const NAV_GROUPS: NavGroup[] = [
+export const DESTINOS: Destino[] = [
   {
-    title: 'Operación',
-    icon: '⌁',
+    tecla: '1',
+    nombre: 'Equipo',
+    items: [
+      { path: 'hardware', label: 'Piezas' },
+      { path: 'software', label: 'Discos' },
+      { path: 'arsenal', label: 'Arsenal' },
+      { path: 'lab', label: 'Laboratorio' },
+      { path: 'processes', label: 'Tareas' },
+    ],
+  },
+  {
+    tecla: '2',
+    nombre: 'Red',
     items: [
       { path: 'internet', label: 'Internet' },
-      { path: 'software', label: 'Software' },
-      { path: 'arsenal', label: 'Arsenal' },
-      { path: 'lab', label: 'Lab' },
       { path: 'accesses', label: 'Accesos' },
-      { path: 'hardware', label: 'Hardware' },
-      { path: 'processes', label: 'Processes' },
     ],
   },
   {
-    title: 'Progreso',
-    icon: '◈',
+    tecla: '3',
+    nombre: 'Trabajo',
     items: [
-      { path: 'missions', label: 'Missions' },
-      { path: 'research', label: 'Research' },
-      { path: 'university', label: 'University' },
-      { path: 'certs', label: 'Certifications' },
-    ],
-  },
-  {
-    title: 'Dinero',
-    icon: '₿',
-    items: [
-      { path: 'finances', label: 'Finances' },
+      { path: 'missions', label: 'Encargos' },
+      { path: 'university', label: 'Academia' },
+      { path: 'research', label: 'Investigación' },
+      { path: 'finances', label: 'Banco' },
       { path: 'bitcoin', label: 'Bitcoin' },
     ],
   },
   {
-    title: 'Gente',
-    icon: '⚇',
+    tecla: '4',
+    nombre: 'Gente',
     items: [
+      { path: 'mail', label: 'Correo' },
       { path: 'clan', label: 'Clan' },
-      { path: 'mail', label: 'Mail' },
-      { path: 'forum', label: 'Forum' },
+      { path: 'forum', label: 'Foro' },
       { path: 'wiki', label: 'Wiki' },
-    ],
-  },
-  {
-    title: 'Registro',
-    icon: '▤',
-    items: [
-      { path: 'log', label: 'Log' },
-      { path: 'list', label: 'List' },
       { path: 'ranking', label: 'Ranking' },
-      { path: 'stats', label: 'Stats' },
     ],
   },
   {
-    title: 'Cuenta',
-    icon: '◎',
+    tecla: '5',
+    nombre: 'Cuenta',
     items: [
-      { path: 'profile', label: 'Profile' },
-      { path: 'settings', label: 'Settings' },
-    ],
-  },
-  {
-    title: 'Sin portar',
-    icon: '∅',
-    pending: true,
-    items: [
-      { path: 'fame', label: 'Fame' },
-      { path: 'doom', label: 'Doom' },
-      { path: 'riddle', label: 'Riddle' },
-      { path: 'war', label: 'War' },
-      { path: 'webserver', label: 'Webserver' },
+      { path: 'profile', label: 'Perfil' },
+      { path: 'settings', label: 'Ajustes' },
+      { path: 'log', label: 'Registro' },
+      { path: 'list', label: 'Listas' },
+      { path: 'stats', label: 'Números' },
     ],
   },
 ];
 
-/** Wiki and forum are in the sidebar but have hand-written routes of their own. */
-const HAND_WRITTEN = new Set(['wiki', 'forum']);
+/** Wiki y foro están en el menú pero tienen rutas escritas a mano. */
+const A_MANO = new Set(['wiki', 'forum']);
 
-/** The legacy pages, one generated route each. */
-export const LEGACY_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items).filter(
-  (item) => !HAND_WRITTEN.has(item.path),
+/** Las pantallas del legado, una ruta generada por cada una. */
+export const LEGACY_ITEMS: NavItem[] = DESTINOS.flatMap((destino) => destino.items).filter(
+  (item) => !A_MANO.has(item.path),
 );
+
+/** A qué destino pertenece una ruta, para encender su tecla. */
+export function destinoDe(pathname: string): Destino | undefined {
+  const primero = pathname.split('/').filter(Boolean)[0];
+
+  if (!primero) {
+    return undefined;
+  }
+
+  return DESTINOS.find((destino) =>
+    destino.items.some((item) => item.path === primero),
+  );
+}

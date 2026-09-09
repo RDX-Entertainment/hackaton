@@ -6,6 +6,7 @@ import { BlueprintForge } from '../components/arsenal/BlueprintForge';
 import { OperationLauncher } from '../components/arsenal/OperationLauncher';
 import { StatSheet } from '../components/arsenal/StatSheet';
 import { EmptyNotice } from '../components/Notice';
+import { Tag } from '../components/Tag';
 import { CircuitRail } from '../components/onboarding/CircuitRail';
 import { useOnboarding } from '../components/onboarding/useOnboarding';
 import { ProcessProgress } from '../components/ProcessProgress';
@@ -179,10 +180,12 @@ export function ArsenalPage() {
                 {' '}
                 · {programa.capability_name ?? 'sin capacidad'}
                 {programa.action_kind && ` · ${CONSECUENCIA[programa.action_kind] ?? programa.action_kind}`}
-                {' · '}
-                {programa.running ? 'en memoria' : 'solo en disco'}
                 {' · '}{maquinas.find((machine) => machine.id === programa.server_id)?.name ?? `Equipo #${programa.server_id}`}
               </small>
+
+              <div className="arsenal__estado">
+                <Tag estado={programa.running ? 'memoria' : 'disco'} />
+              </div>
 
               {!programa.running && (
                 <p className="muted">Instálalo desde Software o no podrá usarse.</p>

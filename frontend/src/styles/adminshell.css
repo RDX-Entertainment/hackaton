@@ -1,3 +1,93 @@
+/*
+ * La barra del panel de administración.
+ *
+ * Vivía en `shell.css` cuando el juego y el panel compartían cabecera; desde
+ * que el juego tiene HUD y carril, la única que queda con esta forma es esta,
+ * así que vive donde se usa. Se distingue por el lima: quien está en el panel
+ * tiene que saberlo de un vistazo.
+ */
+
+.topbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--e6);
+  height: var(--hud-alto);
+  padding: 0 var(--e4);
+  background: var(--color-surface-raised);
+  border-bottom: var(--border-width) solid var(--color-border-strong);
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  color: inherit;
+  text-decoration: none;
+  border: 0;
+}
+
+.topbar__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--color-bg);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.8rem;
+  background: var(--color-accent);
+}
+
+.topbar__name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-bloque);
+  letter-spacing: var(--track-bloque);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.topbar__session {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+}
+
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: 0.22rem var(--e2);
+  font-size: var(--texto-cuerpo);
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.topbar__user-label {
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.topbar__user-name {
+  padding-left: var(--e2);
+  color: var(--color-highlight);
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.topbar__logout {
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--texto-cuerpo);
+}
+
 .topbar--admin {
   background: var(--color-surface);
   border-bottom: 2px solid var(--color-highlight-dim);

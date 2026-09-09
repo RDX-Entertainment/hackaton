@@ -8,6 +8,7 @@ import { store } from './app/store';
 
 import './styles/tokens.css';
 import './styles/base.css';
+import './styles/sistema.css';
 import './styles/tables.css';
 import './styles/shell.css';
 import './styles/terminal.css';

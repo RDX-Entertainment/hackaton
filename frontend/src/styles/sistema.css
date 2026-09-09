@@ -1,0 +1,266 @@
+/*
+ * El vocabulario del sistema Fósforo: las piezas que antes no existían y que
+ * ahora comparten todas las pantallas.
+ *
+ * Aquí no hay estilos de una pantalla concreta. Si algo se usa en un solo
+ * sitio, su sitio es la hoja de esa pantalla; lo que vive aquí es lo que se
+ * repite, y por eso tiene que llamarse igual en todas partes.
+ */
+
+/* ---------- Las tres capas de tubo ---------- */
+
+/*
+ * Barrido, grano y viñeta van sobre todo, no capturan el ratón y son fijas:
+ * no son un efecto de una pantalla, son el material del que está hecha la
+ * pantalla. Se montan una sola vez, en el armazón.
+ */
+.capa {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.capa--barrido {
+  z-index: 90;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 2px,
+    rgba(0, 0, 0, 0.36) 2px 4px
+  );
+}
+
+.capa--grano {
+  z-index: 91;
+  opacity: 0.055;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+}
+
+.capa--vineta {
+  z-index: 89;
+  background: radial-gradient(
+    ellipse 78% 68% at 50% 46%,
+    transparent 44%,
+    rgba(0, 0, 0, 0.9) 100%
+  );
+}
+
+/* Quien pide menos movimiento se queda sin barrido: es lo único que parpadea. */
+@media (prefers-reduced-motion: reduce) {
+  .capa--barrido {
+    display: none;
+  }
+}
+
+/* ---------- Rótulos ---------- */
+
+.rotulo {
+  font-size: var(--texto-bloque);
+  letter-spacing: var(--track-bloque);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.micro {
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+/* Una cifra que se lee de un golpe: siempre en la voz de display. */
+.dato {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-dato);
+  color: var(--color-text);
+}
+
+.dato--vivo {
+  color: var(--color-accent);
+  text-shadow: var(--brillo);
+}
+
+.dato--tiempo {
+  color: var(--color-warn);
+}
+
+/* ---------- Etiquetas de estado ---------- */
+
+/*
+ * El vocabulario del circuito, y no cambia de nombre entre pantallas: mismo
+ * estado, misma palabra, mismo color, en Equipo, en Arsenal y en la portada.
+ *
+ * Cada una se distingue por **forma** además de por color —punteado, relleno,
+ * trama—, porque en una pantalla monocroma el color solo no llega, y hay gente
+ * que no lo ve.
+ */
+.tag {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  font-size: var(--texto-micro);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border: var(--border-width) solid;
+}
+
+.tag--memoria {
+  color: var(--color-accent);
+  border-color: var(--color-accent-dim);
+  background: rgba(0, 255, 65, 0.08);
+}
+
+.tag--disco {
+  color: var(--color-accent-bright);
+  border-color: var(--color-border-live);
+}
+
+/* Lo que todavía no existe como fichero lleva el filo punteado. */
+.tag--plano {
+  color: var(--color-text-muted);
+  border-color: var(--color-border-strong);
+  border-style: dashed;
+}
+
+.tag--obra {
+  color: var(--color-warn);
+  border-color: rgba(255, 176, 0, 0.5);
+}
+
+.tag--mal {
+  color: var(--color-danger);
+  border-color: rgba(255, 90, 77, 0.5);
+}
+
+.tag--off {
+  color: var(--color-text-subtle);
+  border-color: var(--color-border);
+}
+
+/* ---------- Medidores ---------- */
+
+/* Segmentado: para lo que se reparte en trozos —memoria, disco, ranuras—. */
+.segmentos {
+  display: flex;
+  gap: 2px;
+}
+
+.segmentos i {
+  flex: 1;
+  height: 8px;
+  background: var(--color-border);
+}
+
+.segmentos i.lleno {
+  background: var(--color-accent);
+  box-shadow: 0 0 9px rgba(0, 255, 65, 0.5);
+}
+
+/* El último tramo ocupado se marca en ámbar: es lo que acabas de meter. */
+.segmentos i.ultimo {
+  background: var(--color-warn);
+  box-shadow: 0 0 9px rgba(255, 176, 0, 0.5);
+}
+
+/* Barra: una tarea con final conocido. */
+.barra {
+  height: 6px;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.barra i {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  box-shadow: 0 0 12px rgba(0, 255, 65, 0.5);
+  transition: width var(--t-medio) var(--curva-corta);
+}
+
+.barra--tiempo i {
+  background: var(--color-warn);
+  box-shadow: 0 0 12px rgba(255, 176, 0, 0.5);
+}
+
+/* ---------- Avisos ---------- */
+
+/*
+ * Tres tonos y una sola forma. Dice qué ha pasado arriba y por dónde se sale
+ * abajo: un error que solo dice que no es la mitad de un error.
+ */
+.nota {
+  display: flex;
+  gap: var(--e3);
+  padding: var(--e3) var(--e4);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border-strong);
+  font-size: var(--texto-cuerpo);
+}
+
+.nota::before {
+  content: "";
+  width: 3px;
+  background: var(--color-text-muted);
+}
+
+.nota--ok::before {
+  background: var(--color-accent);
+  box-shadow: var(--brillo);
+}
+
+.nota--aviso::before {
+  background: var(--color-warn);
+}
+
+.nota--error::before {
+  background: var(--color-danger);
+}
+
+.nota b {
+  display: block;
+  color: var(--color-text);
+  font-weight: 400;
+}
+
+.nota span {
+  color: var(--color-text-muted);
+}
+
+/* ---------- Cuando no hay nada ---------- */
+
+/*
+ * El vacío nunca es una línea gris que diga «sin datos»: es la mejor ocasión
+ * de enseñar el juego, y lleva la acción que lo llena.
+ */
+.vacio {
+  padding: var(--e6);
+  text-align: center;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) dashed var(--color-border-strong);
+}
+
+.vacio__titulo {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-seccion);
+  color: var(--color-text-muted);
+}
+
+.vacio__texto {
+  margin: var(--e2) 0 var(--e4);
+  color: var(--color-text-subtle);
+  font-size: var(--texto-cuerpo);
+}
+
+/* ---------- Iconos ---------- */
+
+/*
+ * Trazo, nunca relleno, y siempre del color del texto que acompañan, para que
+ * un icono dentro de un rótulo apagado no grite más que su palabra.
+ */
+.icono {
+  display: inline-block;
+  vertical-align: -0.15em;
+  color: inherit;
+}

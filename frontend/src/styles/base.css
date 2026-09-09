@@ -71,7 +71,7 @@ body::after {
   z-index: 0;
   background: radial-gradient(
     ellipse 70% 55% at 50% 42%,
-    rgba(0, 230, 118, 0.055),
+    rgba(0, 255, 65, 0.05),
     transparent 70%
   );
 }
@@ -154,8 +154,11 @@ button {
   margin: 0 0.35rem 0.35rem 0;
   color: var(--color-accent);
   font: inherit;
-  font-size: 0.82rem;
-  letter-spacing: 0.06em;
+  /* Un boton es una orden, y las ordenes van en la voz de display. */
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
   background: transparent;
   border: var(--border-width) solid var(--color-border-strong);
   cursor: pointer;

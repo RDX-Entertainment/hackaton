@@ -1,50 +1,102 @@
 /*
- * The palette. Every other stylesheet reads from here, so retheming the whole
- * game is this one file.
+ * El sistema Fósforo: verde #00ff41 sobre negro absoluto.
  *
- * Built rather than borrowed: the backgrounds are not neutral greys but greens
- * bled almost to black, so the hue is the same from the floor to the accent and
- * the screen reads as one material instead of grey with a green sticker on it.
- * Hue sits at 155° throughout; only lightness and saturation move.
+ * Todo lo demás lee de aquí, así que retematizar el juego entero sigue siendo
+ * este fichero. Lo que cambió el 2026-09-09 no es la paleta, es que ahora hay
+ * un sistema detrás, y son tres reglas:
+ *
+ *   1. **El filo es duro.** Radio 0 en todas partes. La única curva del juego
+ *      es un anillo de progreso, y es un dato, no un adorno.
+ *   2. **El brillo es información.** Solo brilla lo vivo: el acento, lo que
+ *      acaba de pasar y lo que se puede pulsar. Un panel apagado no brilla.
+ *   3. **El verde tiene cuatro alturas**, no una: acento, texto, texto medio y
+ *      rótulo. Sin esa escala el monocromo se aplana y todo pesa igual.
+ *
+ * Los nombres de las variables son los de siempre a propósito: cada hoja de
+ * estilo del juego sigue leyendo `--color-accent` y no se entera de que ahora
+ * es otro verde.
  */
 :root {
-  /* Backgrounds: near-black, with green in them rather than next to them. */
-  --color-bg: #040907;
-  --color-surface: #071310;
-  --color-surface-sunken: #050e0b;
-  --color-surface-raised: #0a1a15;
-  --color-field: #030b08;
-  --color-hover: #0d2119;
+  /* Fondos. El negro es negro de verdad: es lo que hace que el fósforo brille. */
+  --color-bg: #000000;
+  --color-surface: #061006;
+  --color-surface-sunken: #030603;
+  --color-surface-raised: #0a1a0c;
+  --color-field: #020502;
+  --color-hover: #0d2a12;
 
-  /* Borders. Hard, thin, and green enough to belong. */
-  --color-border: #102b21;
-  --color-border-strong: #1a4234;
-  --color-border-field: #16382c;
+  /* Filos. Tres alturas de línea, de la separación al borde vivo. */
+  --color-border: #0d2a12;
+  --color-border-strong: #16491f;
+  --color-border-field: #16491f;
+  --color-border-live: #1f6b2c;
 
-  /* Text, cooled towards the same hue. */
-  --color-text: #cfe8dc;
-  --color-text-muted: #5f8375;
-  --color-text-subtle: #3c5b4f;
-  --color-text-nav: #8fb3a3;
+  /* Las cuatro alturas del verde en texto. */
+  --color-text: #c8ffd4;
+  --color-text-muted: #4f9c62;
+  --color-text-subtle: #2c6339;
+  --color-text-nav: #4f9c62;
 
-  /* The signal green. */
-  --color-accent: #00e676;
-  --color-accent-bright: #5cffab;
-  --color-accent-dim: #14875a;
-  --color-accent-glow: rgba(0, 230, 118, 0.16);
+  /* El acento. Nunca se usa para texto largo: filo, cifras vivas y lo pulsable. */
+  --color-accent: #00ff41;
+  --color-accent-bright: #7dff9d;
+  --color-accent-dim: #00c233;
+  --color-accent-deep: #00892a;
+  --color-accent-glow: rgba(0, 230, 65, 0.16);
 
-  /* The second voice: acid lime, for whatever commits or needs answering. */
-  --color-highlight: #c6ff3d;
-  --color-highlight-dim: #6f8f22;
+  /* La segunda voz: el verde claro, para direcciones y valores. */
+  --color-highlight: #7dff9d;
+  --color-highlight-dim: #00892a;
 
-  /* Errors and refusals. Desaturated so it does not fight the greens. */
-  --color-danger: #ff6b5b;
+  /*
+   * Los dos únicos colores que salen del verde, y con un significado fijo:
+   * ámbar es TIEMPO —algo está pasando, espera— y rojo es PÉRDIDA —algo no se
+   * ha hecho—. Si aparecen por decoración, dejan de significar.
+   */
+  --color-warn: #ffb000;
+  --color-danger: #ff5a4d;
 
-  /* Type. Monospace throughout — this is a game about a terminal. */
-  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", "Cascadia Code",
+  /* Tipografía: dos voces. Cifras y titulares en display; el resto, mono. */
+  --font-display: "Oxanium", "Chakra Petch", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", "Cascadia Code",
     "Fira Code", "SF Mono", Consolas, "Liberation Mono", monospace;
 
-  /* Layout. */
+  /* Escala de tamaño. Cinco alturas de texto y ninguna más. */
+  --texto-titulo: 2.75rem;
+  --texto-seccion: 1.15rem;
+  --texto-dato: 1rem;
+  --texto-cuerpo: 0.86rem;
+  --texto-bloque: 0.7rem;
+  --texto-micro: 0.6rem;
+
+  /* Espaciado. Seis pasos; nada se mide fuera de esta escala. */
+  --e1: 0.25rem;
+  --e2: 0.5rem;
+  --e3: 0.75rem;
+  --e4: 1rem;
+  --e6: 1.5rem;
+  --e8: 2rem;
+  --e12: 3rem;
+
+  /* Brillo. Un solo halo, tres intensidades. */
+  --brillo: 0 0 18px rgba(0, 255, 65, 0.45);
+  --brillo-fuerte: 0 0 26px rgba(0, 255, 65, 0.55);
+  --brillo-panel: 0 0 44px rgba(0, 255, 65, 0.07);
+
+  /* Rótulos: mayúsculas muy espaciadas, la firma del sistema. */
+  --track-rotulo: 0.24em;
+  --track-bloque: 0.26em;
+
+  /* Movimiento. Cuatro duraciones, y ninguna más. */
+  --t-corto: 120ms;
+  --t-medio: 240ms;
+  --t-largo: 620ms;
+  --curva-corta: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --curva-larga: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Disposición. */
+  --carril-ancho: 78px;
+  --hud-alto: 58px;
   --sidebar-width: 224px;
   --content-max-width: 680px;
   --border-width: 1px;

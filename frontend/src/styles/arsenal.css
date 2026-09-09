@@ -4,3 +4,8 @@
  */
 @import './arsenal/stat-sheet.css';
 @import './arsenal/workshop.css';
+
+/* La etiqueta de estado va en su propia línea: es un dato, no una coletilla. */
+.arsenal__estado {
+  margin-top: var(--e2);
+}

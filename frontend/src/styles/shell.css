@@ -1,23 +1,26 @@
 /*
- * The authenticated frame: top rail, left rail, and the page between them.
+ * El armazón con sesión: HUD arriba, carril de destinos a la izquierda, tira
+ * del destino sobre la página.
  *
- * The top rail carries everything: brand, categories and session. It is fixed
- * and only the page scrolls, so the navigation never drifts away from you on a
- * long table.
+ * Los dos primeros son fijos y solo se desplaza la página: en una tabla larga,
+ * la navegación y las lecturas del juego no se van de la pantalla.
  */
 
 .shell {
-  --topbar-height: 52px;
-
   position: relative;
   z-index: 1;
   min-height: 100vh;
-  padding-top: var(--topbar-height);
+  padding-top: var(--hud-alto);
 }
 
-/* ---------- Top rail ---------- */
+.shell__cuerpo {
+  display: grid;
+  grid-template-columns: var(--carril-ancho) minmax(0, 1fr);
+}
 
-.topbar {
+/* ---------- HUD ---------- */
+
+.hud {
   position: fixed;
   top: 0;
   right: 0;
@@ -25,262 +28,241 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 1.4rem;
-  height: var(--topbar-height);
-  padding: 0 1.2rem;
-  background: var(--color-surface-raised);
+  gap: var(--e6);
+  height: var(--hud-alto);
+  padding: 0 var(--e4);
+  background: var(--color-surface);
   border-bottom: var(--border-width) solid var(--color-border-strong);
 }
 
-.topbar__brand {
+.hud__marca {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--e2);
   color: inherit;
   text-decoration: none;
+  border: 0;
 }
 
-/* The wordmark, shrunk to a single glyph in a box. */
-.topbar__mark {
+.hud__cuadro {
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
   color: var(--color-bg);
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.8rem;
   background: var(--color-accent);
+  box-shadow: var(--brillo);
 }
 
-.topbar__name {
-  color: var(--color-text-muted);
-  font-size: 0.82rem;
-  letter-spacing: 0.14em;
+.hud__nombre {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-bloque);
+  letter-spacing: var(--track-bloque);
   text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
-.topbar__name b {
+.hud__nombre b {
   color: var(--color-accent);
   font-weight: 600;
 }
 
-.topbar__brand:hover .topbar__name {
-  color: var(--color-text);
+/* Las lecturas: lo que se mira sin ir a buscarlo. */
+.hud__lecturas {
+  display: flex;
+  align-items: center;
+  gap: var(--e6);
 }
 
-.topbar__session {
-  /* Pushed to the far end; the menu takes the middle. */
+.hud__lectura {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.hud__sesion {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: var(--e3);
 }
 
-.topbar__user {
+.hud__panel {
+  font-size: var(--texto-cuerpo);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border: var(--border-width) solid var(--color-border);
+  padding: 0.3rem 0.7rem;
+}
+
+.hud__panel:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent-dim);
+}
+
+.hud__usuario {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.22rem 0.6rem;
-  font-size: 0.74rem;
+  gap: var(--e2);
+  padding: 0.22rem var(--e2);
   background: var(--color-surface-sunken);
   border: var(--border-width) solid var(--color-border);
 }
 
-.topbar__user-label {
-  color: var(--color-text-subtle);
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.topbar__user-ip {
+.hud__ip {
   margin: 0;
   padding: 0;
   color: var(--color-highlight);
   font-family: inherit;
-  font-size: inherit;
-  letter-spacing: 0.02em;
+  font-size: var(--texto-cuerpo);
   background: none;
   border: 0;
   cursor: pointer;
 }
 
-.topbar__user-ip::before,
-.topbar__user-ip::after {
+.hud__ip::before,
+.hud__ip::after {
   content: none;
 }
 
-.topbar__user-ip:hover {
-  color: var(--color-accent-bright);
+.hud__ip:hover {
+  color: var(--color-accent);
 }
 
-.topbar__user-ip.is-shown {
-  color: var(--color-highlight);
-  text-decoration: underline;
-  text-decoration-style: dotted;
+.hud__ip.is-shown {
+  text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
 
-.topbar__user-name {
-  padding-left: 0.5rem;
+.hud__login {
+  padding-left: var(--e2);
   color: var(--color-accent);
-  font-weight: 600;
+  font-size: var(--texto-cuerpo);
   border-left: var(--border-width) solid var(--color-border);
 }
 
-.topbar__logout {
+.hud__salir {
   margin: 0;
-  padding: 0.34rem 0.75rem;
-  font-size: 0.74rem;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--texto-cuerpo);
 }
 
-/* ---------- Categories ---------- */
+/* ---------- Carril de destinos ---------- */
 
-.navmenu {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  height: 100%;
-}
-
-.navmenu__item {
-  position: relative;
-  height: 100%;
-}
-
-.navmenu__button {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  height: 100%;
-  margin: 0;
-  padding: 0 0.7rem;
-  color: var(--color-text-nav);
-  font-size: 0.76rem;
-  letter-spacing: 0.02em;
-  background: transparent;
-  border: 0;
-  /* The lit edge marks the section you are in. */
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-/* These are navigation, not commands: no bracket decoration. */
-.navmenu__button::before,
-.navmenu__button::after {
-  content: none;
-}
-
-.navmenu__icon {
-  color: var(--color-text-subtle);
-  font-size: 0.95rem;
-  line-height: 1;
-}
-
-.navmenu__button:hover,
-.navmenu__button[aria-expanded='true'] {
-  color: var(--color-accent);
-  background: var(--color-hover);
-}
-
-.navmenu__button:hover .navmenu__icon,
-.navmenu__button[aria-expanded='true'] .navmenu__icon {
-  color: var(--color-accent);
-}
-
-.navmenu__button.is-current {
-  color: var(--color-accent);
-  border-bottom-color: var(--color-accent);
-}
-
-.navmenu__button.is-current .navmenu__icon {
-  color: var(--color-accent);
-}
-
-.navmenu__button:focus-visible {
-  outline: none;
-  background: var(--color-hover);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-
-/* ---------- The dropdown ---------- */
-
-.navmenu__panel {
-  position: absolute;
-  top: 100%;
+.carril {
+  position: fixed;
+  top: var(--hud-alto);
+  bottom: 0;
   left: 0;
-  z-index: 30;
-  min-width: 12rem;
-  padding: 0.35rem 0;
-  background: var(--color-surface-raised);
-  border: var(--border-width) solid var(--color-border-strong);
-  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.85);
-  animation: navmenu-drop 120ms ease-out;
+  z-index: 15;
+  width: var(--carril-ancho);
+  background: var(--color-surface-sunken);
+  border-right: var(--border-width) solid var(--color-border-strong);
 }
 
-@keyframes navmenu-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .navmenu__panel {
-    animation: none;
-  }
-}
-
-.navmenu__panel ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.navmenu__link {
+.carril__tecla {
+  position: relative;
   display: block;
-  padding: 0.38rem 0.9rem;
-  color: var(--color-text-nav);
-  font-size: 0.78rem;
+  padding: var(--e3) 0;
+  text-align: center;
   text-decoration: none;
-  border-left: 2px solid transparent;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+  transition: background var(--t-corto) var(--curva-corta);
 }
 
-.navmenu__link:hover {
-  color: var(--color-accent);
-  background: var(--color-hover);
-  border-left-color: var(--color-accent-dim);
-}
-
-.navmenu__link.is-active {
-  color: var(--color-accent);
-  font-weight: 600;
-  background: var(--color-hover);
-  border-left-color: var(--color-accent);
-}
-
-.navmenu__note {
-  padding: 0 0.9rem 0.35rem;
-  margin: 0;
-  color: var(--color-text-subtle);
-  font-size: 0.64rem;
-}
-
-.navmenu__panel--pending .navmenu__link {
+.carril__numero {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
   color: var(--color-text-subtle);
 }
 
-.navmenu__panel--pending .navmenu__link:hover {
+.carril__nombre {
+  display: block;
+  margin-top: var(--e1);
+  font-size: var(--texto-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
 }
 
-/* ---------- The page ---------- */
-
-.game {
-  padding: 2rem 2.2rem 4rem;
+.carril__tecla:hover {
+  background: var(--color-hover);
 }
 
-/* Caps the line length: full-width tables at 1920px are unreadable. */
+/* Una sola tecla encendida, y con el filo vivo a la izquierda. */
+.carril__tecla.is-current {
+  background: var(--color-accent-glow);
+}
+
+.carril__tecla.is-current::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--color-accent);
+  box-shadow: var(--brillo);
+}
+
+.carril__tecla.is-current .carril__numero {
+  color: var(--color-accent);
+  text-shadow: var(--brillo);
+}
+
+.carril__tecla.is-current .carril__nombre {
+  color: var(--color-text);
+}
+
+/* ---------- Tira del destino ---------- */
+
+.tira {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--e6);
+  border-bottom: var(--border-width) solid var(--color-border-strong);
+}
+
+.tira__paso {
+  padding: var(--e2) var(--e4);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-bloque);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+  border-bottom: none;
+}
+
+.tira__paso:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.tira__paso.is-active {
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* ---------- La página ---------- */
+
+.game {
+  padding: var(--e6) var(--e8) var(--e12);
+}
+
+/* Corta el largo de línea: una tabla a 1920 px no se lee. */
 .game__inner {
   width: 100%;
   max-width: 1080px;
@@ -297,41 +279,93 @@
   border-bottom-color: var(--color-accent);
 }
 
+/* Titulares en la voz de display; el cuerpo sigue en mono. */
 .game h2 {
-  margin: 0 0 1.4rem;
-  font-size: 1.15rem;
+  margin: 0 0 var(--e6);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--texto-seccion);
+  letter-spacing: 0.02em;
 }
 
 .game h3 {
-  margin: 2rem 0 0.6rem;
-  font-size: 0.92rem;
+  margin: var(--e8) 0 var(--e2);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-bloque);
+  letter-spacing: var(--track-bloque);
+  text-transform: uppercase;
 }
 
-/* ---------- Narrow screens ---------- */
+/* ---------- Pantallas estrechas ---------- */
 
+/*
+ * A 390 px el sistema no se encoge: se recoloca. El carril deja de ser una
+ * columna y pasa a ser una fila que se desliza —lo que el desplegable anterior
+ * nunca pudo hacer, porque se abría al pasar el ratón—.
+ */
 @media (max-width: 900px) {
-  .topbar {
-    gap: 0.6rem;
-    padding: 0 0.7rem;
+  .shell__cuerpo {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  /* Below this only the icons fit; the words go. */
-  .navmenu__label,
-  .topbar__name {
+  .carril {
+    position: sticky;
+    top: var(--hud-alto);
+    bottom: auto;
+    width: auto;
+    display: flex;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: var(--border-width) solid var(--color-border-strong);
+  }
+
+  .carril__tecla {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: var(--e2);
+    padding: var(--e2) var(--e4);
+    border-bottom: 0;
+    border-right: var(--border-width) solid var(--color-border);
+    white-space: nowrap;
+  }
+
+  .carril__numero {
+    font-size: 0.85rem;
+  }
+
+  .carril__nombre {
+    margin-top: 0;
+  }
+
+  .carril__tecla.is-current::before {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 3px;
+  }
+
+  .hud {
+    gap: var(--e3);
+    padding: 0 var(--e2);
+  }
+
+  .hud__nombre,
+  .hud__login {
     display: none;
   }
 
-  .game {
-    padding: 1.2rem;
+  .hud__lecturas {
+    gap: var(--e3);
   }
-}
 
-@media (max-width: 600px) {
-  .shell { --topbar-height: 96px; }
-  .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 44px 44px; gap: 0 0.5rem; }
-  .navmenu { justify-content: flex-end; }
-  .navmenu__item { position: static; }
-  .navmenu__panel { top: 44px; left: 0.7rem; right: 0.7rem; min-width: 0; }
-  .topbar__session { grid-column: 1 / -1; justify-self: end; gap: 0.5rem; min-width: 0; }
-  .topbar__user-name { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+  .tira {
+    overflow-x: auto;
+  }
+
+  .game {
+    padding: var(--e4) var(--e3) var(--e8);
+  }
 }

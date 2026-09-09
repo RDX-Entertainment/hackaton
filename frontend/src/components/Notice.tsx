@@ -4,17 +4,26 @@ type NoticeProps = {
   children: ReactNode;
 };
 
-/** Waiting on a first load. */
-export function Loading({ children = 'Loading…' }: { children?: ReactNode }) {
-  return <p>{children}</p>;
+/** Esperando la primera carga. */
+export function Loading({ children = 'Cargando…' }: { children?: ReactNode }) {
+  return <p className="muted">{children}</p>;
 }
 
-/** A load that failed outright, as opposed to an action that was refused. */
+/**
+ * Una carga que falló del todo, no una acción que fue rechazada.
+ *
+ * Lleva la forma del sistema —franja roja a la izquierda— porque el rojo
+ * significa pérdida: algo no se ha hecho.
+ */
 export function ErrorNotice({ children }: NoticeProps) {
-  return <p className="error">{children}</p>;
+  return (
+    <p className="nota nota--error">
+      <span>{children}</span>
+    </p>
+  );
 }
 
-/** Nothing to show, but nothing went wrong either. */
+/** No hay nada que enseñar, pero tampoco ha ido nada mal. */
 export function EmptyNotice({ children }: NoticeProps) {
   return <p className="muted">{children}</p>;
 }
