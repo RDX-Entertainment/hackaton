@@ -1,186 +1,226 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
+import { Icono } from '../components/iconos/Icono';
 import { StatusMessage } from '../components/StatusMessage';
-import { ProcessProgress } from '../components/ProcessProgress';
+import { Tag } from '../components/Tag';
 import {
+  hardwareApi,
   processesApi,
-  type ProcessAction,
+  type Machine,
   type ProcessCommand,
   type UnknownRow,
 } from '../utils/api';
 import { formatCell } from '../utils/format';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
-const MAX_INFO_LENGTH = 30;
+/**
+ * Los nombres del legado, en castellano y dichos como lo que hacen.
+ *
+ * La API devuelve `E_LOG`, `D_LOG`, `XHD`: son las constantes del PHP original y
+ * no significan nada para quien juega. La que no conozcamos sale con su nombre
+ * crudo, que es como se descubre que el worker aprendió a hacer algo nuevo.
+ */
+const NOMBRES: Record<number, string> = {
+  1: 'Descargar un fichero',
+  2: 'Subir un fichero',
+  3: 'Borrar un fichero',
+  4: 'Ocultar un fichero',
+  5: 'Buscar lo oculto',
+  6: 'Recoger lo del virus',
+  7: 'Pasar el antivirus',
+  8: 'Falsear el registro',
+  9: 'Borrar el registro',
+  10: 'Formatear el disco',
+  11: 'Entrar en una máquina',
+  12: 'Entrar en un banco',
+  13: 'Cargar en memoria',
+  14: 'Sacar de memoria',
+  15: 'Mirar los puertos',
+  16: 'Entrar para aprender',
+  17: 'Investigar',
+  18: 'Subir al disco externo',
+  19: 'Bajar del disco externo',
+  20: 'Borrar del disco externo',
+  22: 'Rastrear la red',
+  23: 'Analizar',
+  24: 'Instalar el doom',
+  25: 'Cambiar de dirección',
+  26: 'Cambiar la contraseña',
+  27: 'Tumbar a base de peticiones',
+  28: 'Levantar el servidor web',
+  91: 'Compilar un programa',
+};
 
+/** Cada cuánto se vuelve a preguntar. El worker resuelve fuera de la pantalla. */
+const REFRESCO_MS = 2_000;
+
+function segundos(total: number) {
+  const minutos = Math.floor(total / 60);
+  const resto = Math.max(0, total % 60);
+  return `${String(minutos).padStart(2, '0')}:${String(resto).padStart(2, '0')}`;
+}
+
+/**
+ * Las tareas: la cola del worker, mirada desde fuera.
+ *
+ * Esta pantalla era **un formulario de base de datos**: un desplegable con
+ * «HACK (11)», una caja para escribir el id de la víctima y otra de texto libre.
+ * Eso no es una pantalla de juego, es el panel de quien escribió el worker: un
+ * jugador no tiene a mano el número de una acción ni el id de nadie.
+ *
+ * Las tareas se lanzan desde donde significan algo --cargar en memoria desde
+ * Discos, compilar desde Lab, entrar desde Red-- y aquí se **miran**: cuánto
+ * queda, en qué equipo, y cómo acabaron. La cuenta atrás va en ámbar, que en
+ * este sistema significa tiempo.
+ */
 export function ProcessesPage() {
   const status = useStatusMessage();
 
-  const [tasks, setTasks] = useState<UnknownRow[]>([]);
-  const [actions, setActions] = useState<ProcessAction[]>([]);
-  const [action, setAction] = useState('1');
-  const [victim, setVictim] = useState('');
-  const [info, setInfo] = useState('');
-  const [startedId, setStartedId] = useState<number>();
+  const [tareas, setTareas] = useState<UnknownRow[]>([]);
+  const [maquinas, setMaquinas] = useState<Machine[]>([]);
 
-  const load = useCallback(() => {
-    processesApi.listProcesses().then(setTasks).catch(() => setTasks([]));
+  const cargar = useCallback(() => {
+    processesApi.listProcesses().then(setTareas).catch(() => setTareas([]));
   }, []);
 
   useEffect(() => {
-    load();
-    processesApi.getProcessActions().then(setActions).catch(() => setActions([]));
-  }, [load]);
+    cargar();
+    hardwareApi.listMachines().then(setMaquinas).catch(() => setMaquinas([]));
 
-  // El worker actualiza la cola fuera de React; recargar evita una pantalla congelada entre
-  // que una tarea vence y el worker deja su resultado.
-  useEffect(() => {
-    const timer = window.setInterval(load, 5_000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+    const reloj = window.setInterval(cargar, REFRESCO_MS);
+    return () => window.clearInterval(reloj);
+  }, [cargar]);
 
-  const start = async (event: FormEvent) => {
-    event.preventDefault();
+  const ordenar = async (id: number, orden: ProcessCommand) => {
+    const dicho = { pause: 'Pausada.', resume: 'Reanudada.', delete: 'Cancelada.' };
 
     try {
-      const started = await processesApi.startProcess(
-        Number(action),
-        victim ? Number(victim) : undefined,
-        undefined,
-        info,
-      );
-      setStartedId(started.id);
-      setInfo('');
-      status.report('Task started. Run the worker to advance queued tasks.');
-      load();
+      await processesApi.commandProcess(id, orden);
+      status.report(dicho[orden]);
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
   };
 
-  const command = async (id: number, name: ProcessCommand) => {
-    try {
-      await processesApi.commandProcess(id, name);
-      status.report(`Task ${name}d.`);
-      load();
-    } catch (error) {
-      status.reportError(error);
-    }
+  const nombreDe = (fila: UnknownRow) =>
+    NOMBRES[Number(fila.action)] ?? formatCell(fila.details || fila.action);
+
+  const equipoDe = (fila: UnknownRow) => {
+    const id = Number(fila.origin_server ?? 0);
+    return maquinas.find((maquina) => maquina.id === id)?.name;
   };
+
+  const enMarcha = tareas.filter((tarea) => !tarea.completed);
+  const terminadas = tareas.filter((tarea) => tarea.completed);
 
   return (
     <>
-      <h2>Processes</h2>
+      <h2>Tareas</h2>
+      <StatusMessage text={status.message} as="block" />
 
-      <form className="compose" onSubmit={start}>
-        <label>
-          Action
-          <select value={action} onChange={(event) => setAction(event.target.value)}>
-            {actions.map((available) => (
-              <option key={available.id} value={available.id}>
-                {available.name} ({available.id})
-              </option>
-            ))}
-          </select>
-        </label>
+      {enMarcha.length ? (
+        <div className="tareas">
+          {enMarcha.map((tarea) => {
+            const id = Number(tarea.id);
+            const total = Number(tarea.ideal_seconds ?? 0);
+            const quedan = Math.max(0, Number(tarea.seconds_left ?? 0));
+            const hecho = Math.max(0, total - quedan);
+            const pausada = Boolean(tarea.paused);
+            const parte = total ? Math.min(100, (hecho / total) * 100) : 0;
+            const equipo = equipoDe(tarea);
 
-        <label>
-          Victim ID (optional)
-          <input
-            value={victim}
-            inputMode="numeric"
-            onChange={(event) => setVictim(event.target.value)}
-          />
-        </label>
+            return (
+              <article className={pausada ? 'tarea es-pausada' : 'tarea'} key={id}>
+                <div className="tarea__cabecera">
+                  <span className="tarea__nombre">{nombreDe(tarea)}</span>
+                  <span className="tarea__reloj">{pausada ? '—' : segundos(quedan)}</span>
+                </div>
 
-        <label>
-          Info
-          <input
-            value={info}
-            onChange={(event) => setInfo(event.target.value)}
-            maxLength={MAX_INFO_LENGTH}
-          />
-        </label>
+                <div className="tarea__meta">
+                  <span className="micro">#{id}</span>
+                  {equipo && (
+                    <span className="micro">
+                      <Icono nombre="equipo" tamano={11} /> {equipo}
+                    </span>
+                  )}
+                  <span className="micro">
+                    {hecho} de {total} s
+                  </span>
+                  {pausada ? <Tag estado="off">pausada</Tag> : <Tag estado="obra">en marcha</Tag>}
+                </div>
 
-        <button>Start task</button>
-        <StatusMessage text={status.message} />
-        {startedId && <ProcessProgress processId={startedId} onFinished={load} />}
-      </form>
+                <div className="barra barra--tiempo">
+                  <i style={{ width: `${parte}%` }} />
+                </div>
 
-      <section className="processes" aria-label="Procesos actuales">
-        <h3>En curso</h3>
-        {tasks.filter((task) => !task.completed).length === 0 && (
-          <p className="muted">No hay procesos activos.</p>
-        )}
-        {tasks.filter((task) => !task.completed).map((task) => {
-          const id = Number(task.id);
-          const actionId = Number(task.action);
-          const actionName = actionId === 91
-            ? 'Compilar software'
-            : actions.find((available) => available.id === actionId)?.name ?? formatCell(task.details || task.action);
-
-          return (
-            <article className="forum-post" key={id}>
-              <b>Tarea #{id} · {actionName}</b>
-              <ProcessProgress processId={id} onFinished={load} />
-              {task.paused ? (
-                <button onClick={() => void command(id, 'resume')}>Resume</button>
-              ) : (
-                <button onClick={() => void command(id, 'pause')}>Pause</button>
-              )}
-              <button onClick={() => void command(id, 'delete')}>Delete</button>
-            </article>
-          );
-        })}
-      </section>
-
-      <details className="processes__completed">
-        <summary>Procesos terminados ({tasks.filter((task) => task.completed).length})</summary>
-        <div className="processes__completed-list">
-          {tasks.filter((task) => task.completed).map((task) => {
-        const id = Number(task.id);
-        const actionId = Number(task.action);
-        const actionName = actionId === 91
-          ? 'Compilar software'
-          : actions.find((available) => available.id === actionId)?.name ?? formatCell(task.details || task.action);
-        const secondsLeft = Math.max(0, Number(task.seconds_left ?? 0));
-        const idealSeconds = Number(task.ideal_seconds ?? 0);
-        const workedSeconds = task.completed
-          ? Number(task.worked_seconds ?? idealSeconds)
-          : Math.max(0, idealSeconds - secondsLeft);
-
-        return (
-          <article className="forum-post" key={id}>
-            <b>
-              Tarea #{id} · {actionName}
-            </b>
-            <p>
-              {workedSeconds}/{idealSeconds} segundos
-              {!task.completed && !task.paused && ` · faltan ${secondsLeft} s`} ·{' '}
-              {/*
-                A finished task now says how it finished. `status` is only worth reading once
-                it is over: a legacy action is inserted as `queued` and never updated until
-                the worker resolves it, so before that the pause flag is the honest answer.
-              */}
-              {task.completed
-                ? formatCell(task.status) || 'completed'
-                : task.paused
-                  ? 'paused'
-                  : 'running'}
-            </p>
-
-            {/* Only a modular operation carries a reason; every other action leaves it empty. */}
-            {Boolean(task.result_message) && (
-              <p className={task.status === 'failed' ? 'error' : 'muted'}>
-                {formatCell(task.result_code)} — {formatCell(task.result_message)}
-              </p>
-            )}
-
-          </article>
-        );
+                <div className="tarea__acciones">
+                  {pausada ? (
+                    <button onClick={() => void ordenar(id, 'resume')}>Reanudar</button>
+                  ) : (
+                    <button onClick={() => void ordenar(id, 'pause')}>Pausar</button>
+                  )}
+                  <button onClick={() => void ordenar(id, 'delete')}>Cancelar</button>
+                </div>
+              </article>
+            );
           })}
         </div>
-      </details>
+      ) : (
+        <div className="vacio">
+          <div className="vacio__titulo">No hay nada en marcha</div>
+          <p className="vacio__texto">
+            Las tareas se lanzan desde donde significan algo: compilar en{' '}
+            <Link to="/lab">Lab</Link>, cargar en memoria en <Link to="/software">Discos</Link>,
+            entrar en una máquina en <Link to="/internet">Red</Link>. Aquí se ve cuánto les
+            queda y cómo acabaron.
+          </p>
+        </div>
+      )}
+
+      <h3>Lo que ya terminó</h3>
+
+      {terminadas.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tarea</th>
+                <th>Qué era</th>
+                <th>Tardó</th>
+                <th>Cómo acabó</th>
+              </tr>
+            </thead>
+            <tbody>
+              {terminadas.map((tarea) => {
+                const id = Number(tarea.id);
+                const fallo = tarea.status === 'failed';
+
+                return (
+                  <tr key={id} className={fallo ? 'off' : undefined}>
+                    <td>#{id}</td>
+                    <td>{nombreDe(tarea)}</td>
+                    <td>
+                      {Number(tarea.worked_seconds ?? tarea.ideal_seconds ?? 0)} s
+                    </td>
+                    <td>
+                      {fallo ? <Tag estado="mal">falló</Tag> : <Tag estado="memoria">hecha</Tag>}
+                      {Boolean(tarea.result_message) && (
+                        <div className="micro" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                          {formatCell(tarea.result_message)}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted">Todavía no ha terminado ninguna.</p>
+      )}
     </>
   );
 }

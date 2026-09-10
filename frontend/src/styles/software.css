@@ -221,3 +221,81 @@
     flex-wrap: wrap;
   }
 }
+
+/* ---------- La cola de tareas ---------- */
+
+/*
+ * Una tarea es un objeto con cuenta atrás, no una fila de tabla: lo que se mira
+ * aquí es cuánto queda, y eso se lee mucho antes en una barra que en un número
+ * dentro de una celda. Lo que ya terminó sí es una tabla -- es un registro.
+ */
+.tareas {
+  display: grid;
+  gap: var(--e2);
+  margin-bottom: var(--e6);
+}
+
+.tarea {
+  padding: var(--e3) var(--e4);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface-raised),
+    var(--color-surface-sunken)
+  );
+  border: var(--border-width) solid var(--color-border-strong);
+  border-left: 3px solid var(--color-warn);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.07);
+}
+
+/* Pausada no es lo mismo que apagada: sigue siendo tuya, solo que no corre. */
+.tarea.es-pausada {
+  border-left-color: var(--color-border-strong);
+}
+
+.tarea__cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+
+.tarea__nombre {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+/* El reloj es la cifra que importa, y va en ámbar porque ámbar es tiempo. */
+.tarea__reloj {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--color-warn);
+  text-shadow: 0 0 22px rgba(255, 176, 0, 0.3);
+}
+
+.tarea.es-pausada .tarea__reloj {
+  color: var(--color-text-subtle);
+  text-shadow: none;
+}
+
+.tarea__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  flex-wrap: wrap;
+  margin: var(--e2) 0;
+}
+
+.tarea__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e2);
+  margin-top: var(--e3);
+}
+
+.tarea__acciones button {
+  margin: 0;
+}
