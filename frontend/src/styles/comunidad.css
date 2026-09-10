@@ -334,3 +334,77 @@
 .idiomas button.is-primary::after {
   color: rgba(0, 0, 0, 0.5);
 }
+
+/* ---------- El clan, cuando todavía no tienes ---------- */
+
+.clan__fundar {
+  margin: 0 0 var(--e4);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.clan__campos {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--e3);
+}
+
+/* Las siglas se escriben en grande y centradas: son tres letras que van a ser
+ * la chapa del clan, y verlas asi mientras se eligen es medio diseño hecho. */
+.clan__campos input[maxlength="3"] {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.clan__siglas {
+  display: inline-block;
+  margin-right: var(--e1);
+  padding: 0.1rem 0.4rem;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--texto-cuerpo);
+  color: var(--color-bg);
+  background: var(--color-accent-dim);
+}
+
+/* La fila del tablón crece una columna cuando hay que pedir entrar. */
+.clan__pedir {
+  grid-row: 1 / 3;
+  grid-column: 3;
+  margin: 0;
+  align-self: center;
+}
+
+.clan__solicitud {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--e2);
+  margin-top: var(--e2);
+  padding-top: var(--e2);
+  border-top: var(--border-width) dashed var(--color-border);
+}
+
+.clan__solicitud input {
+  flex: 1;
+  margin: 0;
+}
+
+.clan__solicitud button {
+  margin: 0;
+}
+
+/* Con botón de pedir, la fila pasa a tres columnas. */
+.tablon__hilo:has(.clan__pedir),
+.tablon__hilo:has(.clan__solicitud) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+@media (max-width: 700px) {
+  .clan__campos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

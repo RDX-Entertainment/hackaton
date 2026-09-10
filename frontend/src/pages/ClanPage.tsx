@@ -145,9 +145,24 @@ type DirectoryProps = {
   onJoined: () => void;
 };
 
-/** What a clanless player sees: create one, or ask to join an existing one. */
+/**
+ * Lo que ve quien no tiene clan.
+ *
+ * Antes esto abria con el formulario de fundacion ocupando media pantalla y, a
+ * continuacion, **un campo suelto de «mensaje para pedir entrar» colgando fuera
+ * de cualquier formulario**: un campo para pedir entrar a clanes que a lo mejor
+ * no existen. Con el juego recien puesto no hay ninguno, asi que la pantalla era
+ * un formulario que nadie pidio y una lista vacia.
+ *
+ * Ahora manda el estado en el que estas. Sin clanes, lo unico que hay es la
+ * explicacion de que es un clan y el boton de fundar el primero. Con clanes, la
+ * lista; y el mensaje de la solicitud sale **junto al clan al que se la pides**,
+ * que es donde significa algo.
+ */
 function ClanDirectory({ status, onJoined }: DirectoryProps) {
   const [clans, setClans] = useState<ClanSummary[]>([]);
+  const [fundando, setFundando] = useState(false);
+  const [pidiendoA, setPidiendoA] = useState<number>();
   const [name, setName] = useState('');
   const [nick, setNick] = useState('');
   const [description, setDescription] = useState('');
@@ -172,89 +187,142 @@ function ClanDirectory({ status, onJoined }: DirectoryProps) {
   const join = async (id: number) => {
     try {
       await clansApi.requestToJoin(id, requestMessage);
-      status.report('Solicitud enviada.');
+      setPidiendoA(undefined);
+      setRequestMessage('');
+      status.report('Solicitud enviada. Te contestara quien mande alli.');
     } catch (error) {
       status.reportError(error);
     }
   };
 
-  return (
-    <>
-      <h2>Clan</h2>
+  const fundacion = (
+    <form className="clan__fundar" onSubmit={create}>
+      <div className="ajustes__cabecera">
+        <span className="ajustes__titulo">Fundar un clan</span>
+        <span className="micro">tres cosas y ya existe</span>
+      </div>
 
-      <form className="compose" onSubmit={create}>
-        <label>
-          Nombre
-          <input
-            value={name}
-            maxLength={MAX_NAME_LENGTH}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-        </label>
+      <div className="ajustes__cuerpo">
+        <div className="clan__campos">
+          <label>
+            Nombre
+            <input
+              value={name}
+              maxLength={MAX_NAME_LENGTH}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </label>
+
+          <label>
+            Siglas
+            <input
+              value={nick}
+              maxLength={TAG_LENGTH}
+              placeholder={'\u2014'.repeat(TAG_LENGTH)}
+              onChange={(event) => setNick(event.target.value)}
+              required
+            />
+          </label>
+        </div>
 
         <label>
-          Siglas ({TAG_LENGTH} caracteres)
-          <input
-            value={nick}
-            maxLength={TAG_LENGTH}
-            onChange={(event) => setNick(event.target.value)}
-            required
-          />
-        </label>
-
-        <label>
-          Descripción
+          De qué va
           <textarea
             value={description}
+            placeholder="Lo que verá quien se lo encuentre en la lista."
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
 
-        <button>Fundar el clan</button>
-      </form>
+        <p className="ajustes__nota">
+          Las siglas son las {TAG_LENGTH} letras con las que se os nombra. No se cambian
+          después.
+        </p>
 
-      <label>
-        Mensaje para pedir entrar
-        <input
-          value={requestMessage}
-          onChange={(event) => setRequestMessage(event.target.value)}
-        />
-      </label>
-      <StatusMessage text={status.message} />
-
-      <div className="tablon">
-        <div className="tablon__barra">
-          <span className="micro">
-            {clans.length} {clans.length === 1 ? 'clan' : 'clanes'}
-          </span>
+        <div className="correo__acciones">
+          <StatusMessage text={status.message} />
+          <button type="button" onClick={() => setFundando(false)}>
+            Dejarlo
+          </button>
+          <button>Fundar</button>
         </div>
-
-        {clans.map((summary) => (
-          <div className="tablon__hilo" key={summary.id}>
-            <span className="tablon__titulo">
-              [{summary.nick}] {summary.name}
-            </span>
-            <span className="tablon__quien">
-              {summary.description || 'sin descripción'}
-            </span>
-            <span className="tablon__cuenta">
-              <b>
-                {summary.members}/{summary.slots}
-              </b>
-              <span>plantilla</span>
-              <button style={{ marginTop: '0.5rem' }} onClick={() => void join(summary.id)}>
-                Pedir entrar
-              </button>
-            </span>
-          </div>
-        ))}
-
-        {!clans.length && (
-          <p className="correo__nada">No hay ningún clan todavía. Funda el primero.</p>
-        )}
       </div>
+    </form>
+  );
 
+  return (
+    <>
+      <h2>Clan</h2>
+
+      {fundando && fundacion}
+
+      {!fundando && !clans.length && (
+        <div className="vacio">
+          <div className="vacio__titulo">Todavía no hay ningún clan</div>
+          <p className="vacio__texto">
+            Un clan es un nombre, unas siglas con las que se os nombra y una caja común.
+            Nadie ha fundado ninguno en esta partida, así que de momento no hay a quién
+            pedirle entrar: el primero lo funda quien quiera.
+          </p>
+          <button onClick={() => setFundando(true)}>Fundar el primero</button>
+          <StatusMessage text={status.message} as="block" />
+        </div>
+      )}
+
+      {!fundando && clans.length > 0 && (
+        <div className="tablon">
+          <div className="tablon__barra">
+            <span className="micro">
+              {clans.length} {clans.length === 1 ? 'clan' : 'clanes'}
+            </span>
+            <button onClick={() => setFundando(true)}>Fundar el tuyo</button>
+          </div>
+
+          {clans.map((summary) => (
+            <div className="tablon__hilo" key={summary.id}>
+              <span className="tablon__titulo">
+                <span className="clan__siglas">{summary.nick}</span> {summary.name}
+              </span>
+              <span className="tablon__quien">
+                {summary.description || 'sin descripción'}
+              </span>
+              <span className="tablon__cuenta">
+                <b>
+                  {summary.members}/{summary.slots}
+                </b>
+                <span>plantilla</span>
+              </span>
+
+              {pidiendoA === summary.id ? (
+                <div className="clan__solicitud">
+                  <input
+                    value={requestMessage}
+                    placeholder="Por qué quieres entrar."
+                    onChange={(event) => setRequestMessage(event.target.value)}
+                  />
+                  <button type="button" onClick={() => setPidiendoA(undefined)}>
+                    Dejarlo
+                  </button>
+                  <button type="button" onClick={() => void join(summary.id)}>
+                    Enviar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="clan__pedir"
+                  type="button"
+                  onClick={() => setPidiendoA(summary.id)}
+                >
+                  Pedir entrar
+                </button>
+              )}
+            </div>
+          ))}
+
+          <StatusMessage text={status.message} as="block" />
+        </div>
+      )}
     </>
   );
 }
