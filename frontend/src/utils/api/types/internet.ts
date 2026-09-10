@@ -77,6 +77,9 @@ export type OwnedFile = RemoteFile & {
    * (`RemoteFile`) no lo llevan porque de la maquina ajena solo se ve lo que hay dentro.
    */
   server_id: number;
+
+  /** La carpeta que lo contiene, dentro de esa máquina. `null` es la raíz del equipo. */
+  parent_id: number | null;
 };
 
 export type Visited = {

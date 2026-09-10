@@ -43,6 +43,31 @@ pub struct SoftwareResponse {
     /// En que equipo vive. Sin esto la interfaz no puede agrupar por maquina, que es lo
     /// unico que hace legible una lista cuando el software deja de ser «del jugador».
     pub server_id: i64,
+
+    /// La carpeta que lo contiene, dentro de esa maquina. `null` es la raiz del equipo.
+    pub parent_id: Option<i64>,
+}
+
+/// Crear una carpeta. No ocupa disco: es un sitio, no un fichero.
+#[derive(Debug, Deserialize)]
+pub struct CreateFolderRequest {
+    pub name: String,
+    pub server_id: i64,
+    /// Donde nace. `None` es la raiz del equipo.
+    pub parent_id: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FolderCreatedResponse {
+    pub id: i64,
+}
+
+/// Mover algo a otra carpeta **de la misma maquina**. Cambiar de maquina es otra
+/// cosa y tiene su propia ruta, porque tiene otras reglas: ruta entre equipos y
+/// sitio en el disco de destino.
+#[derive(Debug, Deserialize)]
+pub struct MoveIntoRequest {
+    pub parent_id: Option<i64>,
 }
 
 impl From<SoftwareRow> for SoftwareResponse {
@@ -58,6 +83,7 @@ impl From<SoftwareRow> for SoftwareResponse {
             hidden_with: value.soft_hidden_with,
             running: value.running,
             folder: value.is_folder,
+            parent_id: value.parent_id,
             server_id: value.server_id,
         }
     }

@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react';
 
-import { ArsenalPage } from '../pages/ArsenalPage';
 import { AccessesPage } from '../pages/AccessesPage';
 import { BitcoinPage } from '../pages/BitcoinPage';
 import { ClanPage } from '../pages/ClanPage';
@@ -13,7 +12,6 @@ import { MailPage } from '../pages/MailPage';
 import { MissionsPage } from '../pages/MissionsPage';
 import { ProcessesPage } from '../pages/ProcessesPage';
 import { ProfilePage } from '../pages/ProfilePage';
-import { ResearchPage } from '../pages/ResearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { SoftwarePage } from '../pages/SoftwarePage';
 import { StatsPage } from '../pages/StatsPage';
@@ -26,7 +24,6 @@ import { UniversityPage } from '../pages/UniversityPage';
  */
 export const PAGE_REGISTRY: Record<string, ComponentType> = {
   accesses: AccessesPage,
-  arsenal: ArsenalPage,
   bitcoin: BitcoinPage,
   certs: UniversityPage,
   clan: ClanPage,
@@ -39,7 +36,6 @@ export const PAGE_REGISTRY: Record<string, ComponentType> = {
   missions: MissionsPage,
   processes: ProcessesPage,
   profile: ProfilePage,
-  research: ResearchPage,
   settings: SettingsPage,
   software: SoftwarePage,
   stats: StatsPage,

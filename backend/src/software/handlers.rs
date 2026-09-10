@@ -11,12 +11,13 @@ use crate::{
 
 use super::{
     dtos::{
+        CreateFolderRequest,
+        MoveIntoRequest,
         MoveSoftwareRequest,
         NewSoftwareRequest,
         AdminSoftwareRequest,
         AdminSoftwareRunningRequest,
         ResearchStartRequest,
-        TransferRequest,
     },
     services,
 };
@@ -69,6 +70,24 @@ pub fn configure(
         .route(
             "/software/{id}/machine",
             web::put().to(move_software),
+        )
+
+        //
+        // Carpetas. El sitio de un fichero son dos cosas: en que maquina esta
+        // --`/machine`-- y en que carpeta dentro de ella --`/folder`--, y cada
+        // una tiene sus reglas.
+        //
+        .route(
+            "/software/folders",
+            web::post().to(create_folder),
+        )
+        .route(
+            "/software/{id}/folder",
+            web::put().to(move_into_folder),
+        )
+        .route(
+            "/software/folders/{id}",
+            web::delete().to(delete_folder),
         );
 
     //
@@ -226,6 +245,59 @@ pub async fn move_software(
         ctx.id,
         id.into_inner(),
         input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+//
+// ==============================
+// CARPETAS
+// ==============================
+//
+
+pub async fn create_folder(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    input: web::Json<CreateFolderRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let response = services::create_folder(
+        &state.pool,
+        ctx.id,
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::Created().json(response))
+}
+
+pub async fn move_into_folder(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+    input: web::Json<MoveIntoRequest>,
+) -> Result<HttpResponse, ApiError> {
+    services::move_into_folder(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
+        input.into_inner(),
+    )
+    .await?;
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn delete_folder(
+    state: web::Data<AppState>,
+    ctx: Ctx,
+    id: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    services::delete_folder(
+        &state.pool,
+        ctx.id,
+        id.into_inner(),
     )
     .await?;
 

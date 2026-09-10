@@ -4,3 +4,220 @@
  */
 @import './software/budget.css';
 @import './software/files.css';
+
+/* ---------- El explorador ---------- */
+
+/*
+ * Discos es un gestor de archivos, no una lista de programas.
+ *
+ * La raíz **no es un disco**: es la lista de volúmenes. Hoy un volumen es una
+ * máquina tuya; el día que exista el espacio en la nube será otra entrada de esa
+ * misma lista, y nada de aquí tiene que enterarse. Por eso en la raíz no hay
+ * ficheros: igual que en un ordenador de verdad no hay nada flotando por encima
+ * de los discos.
+ */
+
+.explorador__migas {
+  display: flex;
+  align-items: center;
+  gap: var(--e1);
+  flex-wrap: wrap;
+  margin-bottom: var(--e4);
+  padding: var(--e2) var(--e3);
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border);
+  font-size: var(--texto-cuerpo);
+}
+
+.explorador__migas button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e1);
+  margin: 0;
+  padding: 0.1rem 0.3rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: var(--texto-cuerpo);
+  letter-spacing: 0;
+  border: 0;
+}
+
+.explorador__migas button::before,
+.explorador__migas button::after {
+  content: none;
+}
+
+.explorador__migas button:hover {
+  color: var(--color-accent);
+  background: transparent;
+}
+
+.explorador__migas i {
+  color: var(--color-text-subtle);
+  font-style: normal;
+}
+
+.explorador__migas b {
+  color: var(--color-text);
+  font-weight: 400;
+}
+
+/* Los volúmenes: cuadrados grandes, como los discos de un escritorio. */
+.explorador__volumenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--e3);
+}
+
+.explorador__volumen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--e1);
+  margin: 0;
+  padding: var(--e4);
+  text-align: left;
+  background: linear-gradient(
+    180deg,
+    var(--color-surface-raised),
+    var(--color-surface-sunken)
+  );
+  border: var(--border-width) solid var(--color-border-strong);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.07);
+  cursor: pointer;
+}
+
+.explorador__volumen::before,
+.explorador__volumen::after {
+  content: none;
+}
+
+.explorador__volumen:hover {
+  border-color: var(--color-accent-dim);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.12), var(--brillo-panel);
+}
+
+.explorador__icono {
+  color: var(--color-accent);
+}
+
+.explorador__nombre {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+}
+
+.explorador__nombre small {
+  color: var(--color-text-subtle);
+  font-weight: 400;
+}
+
+.explorador__disco {
+  width: 100%;
+  margin-top: var(--e2);
+}
+
+/* La nube todavía no existe, y se dice: un hueco apagado explica mejor que nada. */
+.explorador__volumen.es-futuro {
+  border-style: dashed;
+  cursor: default;
+  opacity: 0.55;
+}
+
+.explorador__volumen.es-futuro:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.07);
+}
+
+.explorador__barra {
+  display: flex;
+  gap: var(--e2);
+  margin: var(--e4) 0 var(--e2);
+}
+
+.explorador__barra input {
+  flex: 0 1 18rem;
+  margin: 0;
+}
+
+.explorador__barra button {
+  margin: 0;
+}
+
+.explorador__lista {
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.explorador__fila {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e2) var(--e3);
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.explorador__entrada:last-child .explorador__fila {
+  border-bottom: 0;
+}
+
+.explorador__fila:hover {
+  background: var(--color-hover);
+}
+
+/* Una carpeta se abre; un fichero se despliega. Los dos con el mismo gesto. */
+.explorador__abrir {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.explorador__abrir::before,
+.explorador__abrir::after {
+  content: none;
+}
+
+.explorador__abrir:hover {
+  background: transparent;
+  color: var(--color-accent);
+}
+
+.explorador__fila.es-carpeta .explorador__icono,
+.explorador__fila .icono {
+  color: var(--color-accent-dim);
+}
+
+.explorador__fila select {
+  margin: 0;
+  max-width: 11rem;
+}
+
+.explorador__fila button {
+  margin: 0;
+}
+
+.explorador__entrada .swfile {
+  margin: 0;
+  border-top: 0;
+}
+
+@media (max-width: 700px) {
+  .explorador__fila {
+    flex-wrap: wrap;
+  }
+}

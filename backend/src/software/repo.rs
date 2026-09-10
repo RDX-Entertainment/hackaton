@@ -29,6 +29,7 @@ pub async fn find_user_software(
             s.soft_hidden,
             s.soft_hidden_with,
             s.is_folder,
+            s.parent_id,
             (r.soft_id IS NOT NULL) AS running,
             s.server_id
         FROM software s
@@ -144,7 +145,8 @@ pub async fn find_remote_software(
             soft_size,
             soft_ram,
             soft_type,
-            is_folder
+            is_folder,
+            parent_id
         FROM software
         WHERE user_id = $1
           AND is_npc = $2
@@ -643,4 +645,128 @@ pub async fn set_software_machine(
         .await?;
 
     Ok(())
+}
+
+//
+// ==============================
+// CARPETAS
+// ==============================
+//
+
+/// Una carpeta no ocupa disco ni memoria: es un sitio, no un fichero.
+pub async fn insert_folder(
+    pool: &PgPool,
+    user_id: i64,
+    server_id: i64,
+    parent_id: Option<i64>,
+    name: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(
+        "INSERT INTO software
+            (user_id, soft_name, soft_version, soft_size, soft_ram, soft_type,
+             is_folder, is_npc, server_id, parent_id)
+         VALUES ($1, $2, 0, 0, 0, 0, TRUE, FALSE, $3, $4)
+         RETURNING id",
+    )
+    .bind(user_id)
+    .bind(name)
+    .bind(server_id)
+    .bind(parent_id)
+    .fetch_one(pool)
+    .await
+}
+
+/// Lo que hace falta saber de una entrada antes de moverla o borrarla.
+pub async fn find_entry(
+    pool: &PgPool,
+    id: i64,
+    user_id: i64,
+) -> Result<Option<(i64, bool, bool)>, sqlx::Error> {
+    sqlx::query_as::<_, (i64, bool, bool)>(
+        "SELECT s.server_id, s.is_folder, (r.soft_id IS NOT NULL)
+         FROM software s
+         LEFT JOIN software_running r ON r.soft_id = s.id
+         WHERE s.id = $1 AND s.user_id = $2 AND NOT s.is_npc",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Que la carpeta de destino exista, sea carpeta, sea suya y este en esa maquina.
+pub async fn folder_here(
+    pool: &PgPool,
+    id: i64,
+    user_id: i64,
+    server_id: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM software
+            WHERE id = $1 AND user_id = $2 AND server_id = $3
+              AND is_folder AND NOT is_npc)",
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(server_id)
+    .fetch_one(pool)
+    .await
+}
+
+/// Si `candidata` esta dentro de `raiz`, a cualquier profundidad.
+///
+/// Es lo que impide meter una carpeta dentro de si misma o de una hija suya, que
+/// dejaria un trozo del arbol colgando fuera de la raiz y sin forma de volver.
+pub async fn is_inside(
+    pool: &PgPool,
+    candidata: i64,
+    raiz: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "WITH RECURSIVE arriba AS (
+            SELECT id, parent_id FROM software WHERE id = $1
+            UNION ALL
+            SELECT s.id, s.parent_id FROM software s
+            JOIN arriba a ON s.id = a.parent_id
+         )
+         SELECT EXISTS(SELECT 1 FROM arriba WHERE id = $2)",
+    )
+    .bind(candidata)
+    .bind(raiz)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn folder_is_empty(pool: &PgPool, id: i64) -> Result<bool, sqlx::Error> {
+    let hay: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE parent_id = $1)")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(!hay)
+}
+
+pub async fn set_parent(
+    pool: &PgPool,
+    id: i64,
+    parent_id: Option<i64>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE software SET parent_id = $2 WHERE id = $1")
+        .bind(id)
+        .bind(parent_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn delete_entry(pool: &PgPool, id: i64, user_id: i64) -> Result<u64, sqlx::Error> {
+    let hecho = sqlx::query("DELETE FROM software WHERE id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    Ok(hecho.rows_affected())
 }

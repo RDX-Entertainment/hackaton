@@ -7,7 +7,10 @@ use crate::legacy::SOFTWARE_TYPES;
 
 use super::{
     dtos::{
+        CreateFolderRequest,
         DeleteSoftwareStartedResponse,
+        FolderCreatedResponse,
+        MoveIntoRequest,
         AdminSoftwareRequest,
         MoveSoftwareRequest,
         NewSoftwareRequest,
@@ -540,6 +543,120 @@ pub async fn move_software(
     }
 
     repo::set_software_machine(pool, software, destino).await?;
+
+    // Sale de su carpeta: la carpeta donde estaba vive en el equipo de origen, y
+    // dejarle el padre puesto lo colgaria de un sitio que ya no es el suyo.
+    repo::set_parent(pool, software, None).await?;
+
+    Ok(())
+}
+
+//
+// ==============================
+// CARPETAS
+// ==============================
+//
+
+/// Cuanto puede medir el nombre de una carpeta. La columna admite mas, pero un
+/// nombre que no cabe en su fila no se lee.
+const LARGO_NOMBRE: usize = 30;
+
+pub async fn create_folder(
+    pool: &PgPool,
+    user_id: i64,
+    input: CreateFolderRequest,
+) -> Result<FolderCreatedResponse, ApiError> {
+    let nombre = input.name.trim();
+
+    if nombre.is_empty() || nombre.chars().count() > LARGO_NOMBRE {
+        return Err(ApiError::BadRequest(format!(
+            "BAD_NAME: entre 1 y {LARGO_NOMBRE} caracteres"
+        )));
+    }
+
+    // La maquina tiene que ser suya. `machine_hdd` filtra por dueno, asi que un
+    // `None` es «no existe o no es tuya», y las dos merecen la misma respuesta.
+    if repo::machine_hdd(pool, input.server_id, user_id).await?.is_none() {
+        return Err(ApiError::BadRequest("unknown machine".into()));
+    }
+
+    if let Some(padre) = input.parent_id {
+        if !repo::folder_here(pool, padre, user_id, input.server_id).await? {
+            return Err(ApiError::BadRequest(
+                "BAD_FOLDER: esa carpeta no esta en ese equipo".into(),
+            ));
+        }
+    }
+
+    let id = repo::insert_folder(pool, user_id, input.server_id, input.parent_id, nombre).await?;
+
+    Ok(FolderCreatedResponse { id })
+}
+
+/// Mover algo a otra carpeta de la **misma** maquina.
+pub async fn move_into_folder(
+    pool: &PgPool,
+    user_id: i64,
+    software: i64,
+    input: MoveIntoRequest,
+) -> Result<(), ApiError> {
+    let Some((servidor, es_carpeta, _)) = repo::find_entry(pool, software, user_id).await? else {
+        return Err(ApiError::BadRequest("unknown software".into()));
+    };
+
+    if let Some(destino) = input.parent_id {
+        if destino == software {
+            return Err(ApiError::BadRequest(
+                "BAD_FOLDER: una carpeta no cabe dentro de si misma".into(),
+            ));
+        }
+
+        if !repo::folder_here(pool, destino, user_id, servidor).await? {
+            return Err(ApiError::BadRequest(
+                "BAD_FOLDER: esa carpeta no esta en este equipo".into(),
+            ));
+        }
+
+        // Meter una carpeta dentro de una hija suya dejaria ese trozo del arbol
+        // colgando fuera de la raiz, sin forma de volver a el.
+        if es_carpeta && repo::is_inside(pool, destino, software).await? {
+            return Err(ApiError::BadRequest(
+                "BAD_FOLDER: esa carpeta esta dentro de la que quieres mover".into(),
+            ));
+        }
+    }
+
+    repo::set_parent(pool, software, input.parent_id).await?;
+
+    Ok(())
+}
+
+/// Borrar una carpeta. **Solo vacia.**
+///
+/// Vaciarla por su cuenta obligaria a decidir si lo de dentro se borra o sube un
+/// nivel, y eso es una decision del jugador. Que la tome el.
+pub async fn delete_folder(
+    pool: &PgPool,
+    user_id: i64,
+    software: i64,
+) -> Result<(), ApiError> {
+    let Some((_, es_carpeta, _)) = repo::find_entry(pool, software, user_id).await? else {
+        return Err(ApiError::BadRequest("unknown software".into()));
+    };
+
+    if !es_carpeta {
+        return Err(ApiError::BadRequest(
+            "NOT_A_FOLDER: esto no es una carpeta".into(),
+        ));
+    }
+
+    if !repo::folder_is_empty(pool, software).await? {
+        return Err(ApiError::BadRequest(
+            "FOLDER_NOT_EMPTY: sacala o borra lo que tiene dentro".into(),
+        ));
+    }
+
+    repo::delete_entry(pool, software, user_id).await?;
 
     Ok(())
 }

@@ -5,9 +5,9 @@
  * una pantalla cambie de sitio no hay que desplegar la API para arreglarlo.
  */
 export const RUTA_DEL_PASO: Record<string, string> = {
-  modules: '/research',
-  blueprint: '/arsenal',
-  compile: '/arsenal',
+  modules: '/lab',
+  blueprint: '/lab',
+  compile: '/lab',
   install: '/software',
   intrusion: '/internet',
 };

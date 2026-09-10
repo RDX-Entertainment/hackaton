@@ -34,8 +34,7 @@ export const DESTINOS: Destino[] = [
     items: [
       { path: 'hardware', label: 'Piezas' },
       { path: 'software', label: 'Discos' },
-      { path: 'arsenal', label: 'Arsenal' },
-      { path: 'lab', label: 'Laboratorio' },
+      { path: 'lab', label: 'Lab' },
       { path: 'processes', label: 'Tareas' },
     ],
   },
@@ -53,7 +52,6 @@ export const DESTINOS: Destino[] = [
     items: [
       { path: 'missions', label: 'Encargos' },
       { path: 'university', label: 'Academia' },
-      { path: 'research', label: 'Investigación' },
       { path: 'finances', label: 'Banco' },
       { path: 'bitcoin', label: 'Bitcoin' },
     ],

@@ -12,6 +12,7 @@ pub struct SoftwareRow {
     pub soft_hidden: bool,
     pub soft_hidden_with: i32,
     pub is_folder: bool,
+    pub parent_id: Option<i64>,
     pub running: bool,
     /// En que equipo esta guardado.
     pub server_id: i64,
@@ -26,6 +27,7 @@ pub struct RemoteSoftwareRow {
     pub soft_ram: i32,
     pub soft_type: i16,
     pub is_folder: bool,
+    pub parent_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, FromRow)]
