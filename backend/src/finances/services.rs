@@ -327,6 +327,8 @@ pub async fn transfer(
     user_id: i64,
     input: BankTransferRequest,
 ) -> Result<BankTransferResponse, ApiError> {
+    crate::onboarding::services::guard(pool, user_id, "banco.transferir").await?;
+
     if input.amount <= 0
         || input.from_account == input.to_account
     {

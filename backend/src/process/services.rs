@@ -116,6 +116,13 @@ pub async fn start(
         ));
     }
 
+    // Las tareas se encolan por numero, asi que aqui es donde una accion del legado se
+    // convierte en el nombre que entiende el tutorial. Lo que el tutorial no gobierna
+    // --`None`-- pasa sin preguntar.
+    if let Some(accion) = crate::onboarding::vocabulario::action_of_process(input.action) {
+        crate::onboarding::services::guard(pool, user_id, accion).await?;
+    }
+
     let info = input
         .info
         .as_deref()

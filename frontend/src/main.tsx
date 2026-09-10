@@ -20,6 +20,7 @@ import './styles/hardware.css';
 import './styles/internet.css';
 import './styles/adminshell.css';
 import './styles/admin.css';
+import './styles/admin/tutorial.css';
 import './styles/arsenal.css';
 import './styles/software.css';
 import './styles/kits.css';

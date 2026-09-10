@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { DESTINOS, destinoDe } from '../../app/navigation';
+import { useTutorial } from '../../app/tutorial';
 
 /**
  * El carril de destinos: cinco teclas, y ninguna se abre al pasar el ratón.
@@ -13,11 +14,22 @@ import { DESTINOS, destinoDe } from '../../app/navigation';
  *
  * Debajo, la tira con las pantallas del destino en el que estás. Dos niveles y
  * ninguno escondido.
+ *
+ * Mientras dura el tutorial hay destinos cerrados, y **se ven cerrados**: apagados, con el
+ * motivo al pasar por encima. Esconderlos dejaría a quien empieza creyendo que el juego tiene
+ * dos pantallas.
  */
 export function Carril() {
   const location = useLocation();
   const navigate = useNavigate();
   const actual = destinoDe(location.pathname);
+  const tutorial = useTutorial();
+
+  // Un destino está abierto si lo está alguna de sus pantallas, y el enlace lleva a la
+  // primera que lo esté: mandar a Equipo cuando lo único abierto ahí es Lab y la primera de
+  // la lista es Piezas sería abrir una pantalla cerrada.
+  const primeraAbierta = (destino: (typeof DESTINOS)[number]) =>
+    destino.items.find((item) => tutorial.permiteVista(item.path));
 
   useEffect(() => {
     const alPulsar = (evento: KeyboardEvent) => {
@@ -34,33 +46,56 @@ export function Carril() {
       }
 
       const elegido = DESTINOS.find((destino) => destino.tecla === evento.key);
+      const abierta = elegido?.items.find((item) => tutorial.permiteVista(item.path));
 
-      if (elegido) {
-        navigate(`/${elegido.items[0].path}`);
+      // La tecla de un destino cerrado no hace nada. Llevar igualmente a la pantalla y
+      // enseñarla vacía sería contar la misma historia dos veces, y peor la segunda.
+      if (abierta) {
+        navigate(`/${abierta.path}`);
       }
     };
 
     window.addEventListener('keydown', alPulsar);
     return () => window.removeEventListener('keydown', alPulsar);
-  }, [navigate]);
+  }, [navigate, tutorial]);
 
   return (
     <nav className="carril" aria-label="Destinos del juego">
-      {DESTINOS.map((destino) => (
-        <NavLink
-          key={destino.nombre}
-          to={`/${destino.items[0].path}`}
-          className={
-            destino.nombre === actual?.nombre ? 'carril__tecla is-current' : 'carril__tecla'
-          }
-          aria-current={destino.nombre === actual?.nombre ? 'page' : undefined}
-        >
-          <span className="carril__numero" aria-hidden="true">
-            {destino.tecla}
-          </span>
-          <span className="carril__nombre">{destino.nombre}</span>
-        </NavLink>
-      ))}
+      {DESTINOS.map((destino) => {
+        const abierta = primeraAbierta(destino);
+
+        if (!abierta) {
+          return (
+            <span
+              key={destino.nombre}
+              className="carril__tecla is-locked"
+              aria-disabled="true"
+              title={tutorial.motivo}
+            >
+              <span className="carril__numero" aria-hidden="true">
+                {destino.tecla}
+              </span>
+              <span className="carril__nombre">{destino.nombre}</span>
+            </span>
+          );
+        }
+
+        return (
+          <NavLink
+            key={destino.nombre}
+            to={`/${abierta.path}`}
+            className={
+              destino.nombre === actual?.nombre ? 'carril__tecla is-current' : 'carril__tecla'
+            }
+            aria-current={destino.nombre === actual?.nombre ? 'page' : undefined}
+          >
+            <span className="carril__numero" aria-hidden="true">
+              {destino.tecla}
+            </span>
+            <span className="carril__nombre">{destino.nombre}</span>
+          </NavLink>
+        );
+      })}
     </nav>
   );
 }
@@ -69,6 +104,7 @@ export function Carril() {
 export function Tira() {
   const location = useLocation();
   const actual = destinoDe(location.pathname);
+  const tutorial = useTutorial();
 
   if (!actual) {
     return null;
@@ -76,15 +112,26 @@ export function Tira() {
 
   return (
     <nav className="tira" aria-label={`Pantallas de ${actual.nombre}`}>
-      {actual.items.map((item) => (
-        <NavLink
-          key={item.path}
-          to={`/${item.path}`}
-          className={({ isActive }) => (isActive ? 'tira__paso is-active' : 'tira__paso')}
-        >
-          {item.label}
-        </NavLink>
-      ))}
+      {actual.items.map((item) =>
+        tutorial.permiteVista(item.path) ? (
+          <NavLink
+            key={item.path}
+            to={`/${item.path}`}
+            className={({ isActive }) => (isActive ? 'tira__paso is-active' : 'tira__paso')}
+          >
+            {item.label}
+          </NavLink>
+        ) : (
+          <span
+            key={item.path}
+            className="tira__paso is-locked"
+            aria-disabled="true"
+            title={tutorial.motivo}
+          >
+            {item.label}
+          </span>
+        ),
+      )}
     </nav>
   );
 }

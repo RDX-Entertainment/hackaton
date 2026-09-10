@@ -12,6 +12,7 @@ import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import { Tag } from '../components/Tag';
 import { useAppSelector } from '../app/hooks';
+import { useAccion } from '../app/tutorial';
 import {
   arsenalApi,
   hardwareApi,
@@ -87,6 +88,11 @@ export function LabPage() {
   const yo = useAppSelector((state) => state.auth.user?.id ?? null);
 
   const [mesa, setMesa] = useState<Mesa>('crear');
+
+  // Lo que el tutorial deja hacer aqui. El servidor lo veta igualmente; esto es para que el
+  // boton lo diga antes de que el jugador lo pulse.
+  const compilar_ = useAccion('lab.compilar');
+  const investigar_ = useAccion('lab.investigar');
 
   const [capacidades, setCapacidades] = useState<Capability[]>([]);
   const [modulos, setModulos] = useState<ResearchModule[]>([]);
@@ -252,7 +258,13 @@ export function LabPage() {
                   ) : (
                     <Tag estado="plano" />
                   )}
-                  <button disabled={!!compilando} onClick={() => void compilar(diseno)}>
+                  <button
+                    data-foco="lab.compilar"
+                    className={compilar_.destacada ? 'es-foco' : undefined}
+                    disabled={!!compilando || !compilar_.permitida}
+                    title={compilar_.motivo ?? undefined}
+                    onClick={() => void compilar(diseno)}
+                  >
                     Compilar
                   </button>
                 </div>
@@ -295,7 +307,15 @@ export function LabPage() {
 
                   <div className="tarjeta__acciones">
                     {fichero.running ? <Tag estado="memoria" /> : <Tag estado="disco" />}
-                    <button onClick={() => void investigar(fichero.id)}>Investigar</button>
+                    <button
+                      data-foco="lab.investigar"
+                      className={investigar_.destacada ? 'es-foco' : undefined}
+                      disabled={!investigar_.permitida}
+                      title={investigar_.motivo ?? undefined}
+                      onClick={() => void investigar(fichero.id)}
+                    >
+                      Investigar
+                    </button>
                   </div>
                 </article>
               ))}

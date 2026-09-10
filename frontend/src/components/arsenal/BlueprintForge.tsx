@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
+import { useAccion } from '../../app/tutorial';
 import { arsenalApi, type Capability, type ResearchModule, type ProgramStats } from '../../utils/api';
 import { StatSheet } from './StatSheet';
 import { useStatusMessage } from '../../utils/useStatusMessage';
@@ -20,6 +21,9 @@ type BlueprintForgeProps = {
  * La previsión viene del servidor: elegir módulos y compilar usa la misma regla.
  */
 export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForgeProps) {
+  // El tutorial decide si este es el paso de disenar; el servidor lo comprueba igual.
+  const disenar = useAccion('lab.disenar');
+
   const status = useStatusMessage();
 
   const [nombre, setNombre] = useState('');
@@ -155,7 +159,14 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
         <h4>Resultado del diseño</h4>
         {preview ? <StatSheet stats={preview} /> : <p>{previewError || 'Calculando atributos…'}</p>}
       </div>
-      <button disabled={saving || !nombre.trim() || !preview}>{saving ? 'Guardando…' : 'Guardar el diseño'}</button>
+      <button
+        data-foco="lab.disenar"
+        className={disenar.destacada ? 'es-foco' : undefined}
+        disabled={saving || !nombre.trim() || !preview || !disenar.permitida}
+        title={disenar.motivo ?? undefined}
+      >
+        {saving ? 'Guardando…' : 'Guardar el diseño'}
+      </button>
       <StatusMessage text={status.message} />
     </form>
   );

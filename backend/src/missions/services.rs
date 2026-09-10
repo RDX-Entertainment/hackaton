@@ -44,6 +44,8 @@ pub async fn command(
 ) -> Result<MissionCommandResponse, ApiError> {
     let affected = match action.as_str() {
         "accept" => {
+            crate::onboarding::services::guard(pool, user_id, "encargo.aceptar").await?;
+
             accept(pool, user_id, mission_id)
                 .await?
         }

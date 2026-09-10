@@ -6,7 +6,7 @@ export const en: Record<string, string> = {
   'error.BAD_REQUEST': 'That request cannot be served.',
 
   'error.NO_CERTIFICATION': 'You are missing the certification. It is free at the Academy and takes a minute.',
-  'error.NO_SOFT': 'You have no program that can do this. Design one in Arsenal and compile it.',
+  'error.NO_SOFT': 'You have no program that can do this. Design one in the Lab and compile it.',
   'error.BAD_CRACKER': 'Your program is weaker than the defence in front of it. Raise its version or pick a softer target.',
   'error.SERVER_DOWN': 'That machine is down. Try again in a while.',
   'error.NOT_LOGGED_IN': 'You have not got into that machine yet. The ways in are under «force».',
@@ -57,12 +57,12 @@ export const en: Record<string, string> = {
   'onboarding.blueprint.step': 'Design',
   'onboarding.blueprint.title': 'Design your first program',
   'onboarding.blueprint.hint': 'Pick what it should do — break into a machine, leave something behind — and fit up to three modules. You see what comes out before spending a second compiling it.',
-  'onboarding.blueprint.action': 'Design in Arsenal',
+  'onboarding.blueprint.action': 'Design in the Lab',
 
   'onboarding.compile.step': 'Compile',
   'onboarding.compile.title': 'Compile the design',
   'onboarding.compile.hint': 'Compiling takes time, and there is no file until it finishes. You can only have one build running.',
-  'onboarding.compile.action': 'Compile in Arsenal',
+  'onboarding.compile.action': 'Compile in the Lab',
   'onboarding.compile.waiting': 'Building. When it finishes, the file lands on the disk of whichever machine has room.',
 
   'onboarding.install.step': 'Load',
@@ -81,4 +81,18 @@ export const en: Record<string, string> = {
   'onboarding.practice.title': 'Your firing range',
   'onboarding.practice.hint': 'Two practice machines only you can see.',
   'onboarding.rail.title': 'The circuit of a program',
+
+  //
+  // El tutorial: lo que dice cuando algo esta cerrado, y por que.
+  //
+  'error.TUTORIAL_LOCKED':
+    'Not that, not yet. Finish the tutorial step you are on and this opens on its own.',
+  'error.CERTIFICATION_BY_DOING':
+    'This certification is not studied: it is earned by playing. Do what the tutorial asks and it is yours.',
+  'tutorial.locked':
+    'Locked until you finish: {paso}',
+  'tutorial.go':
+    'Go to the step',
+  'tutorial.earned':
+    'Earned by doing',
 };

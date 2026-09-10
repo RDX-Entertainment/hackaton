@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 import type { Remote } from '../../utils/api';
+import { useAccion } from '../../app/tutorial';
 import { formatIp } from '../../utils/ip';
 import { RemoteLogEditor } from './RemoteLogEditor';
 
@@ -25,6 +26,8 @@ export function AccessTab({
   onRewriteLog,
   onWipeLog,
 }: AccessTabProps) {
+  const entrar = useAccion('red.entrar');
+
   const [user, setUser] = useState('root');
   const [password, setPassword] = useState('');
 
@@ -73,7 +76,14 @@ export function AccessTab({
             />
           </label>
 
-          <button className="is-primary">entrar</button>
+          <button
+            className={entrar.destacada ? 'is-primary es-foco' : 'is-primary'}
+            data-foco="red.entrar"
+            disabled={!entrar.permitida}
+            title={entrar.motivo ?? undefined}
+          >
+            entrar
+          </button>
 
           <p className="ssh__hint">
             ¿No la sabes? En <b>force</b> están las formas de conseguirla.

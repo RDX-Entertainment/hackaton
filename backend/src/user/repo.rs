@@ -246,6 +246,45 @@ pub async fn insert_account_settings_log(
 // ==============================
 //
 
+/// El nivel de certificacion **con lo que el jugador ya ha demostrado saber hacer**.
+///
+/// Los dos primeros niveles dejan de aprobarse con dos llamadas seguidas --empezar y
+/// terminar, sin nada en medio-- y pasan a aprobarse haciendo: el 1 al tener un programa
+/// compilado, el 2 al haber entrado en una maquina. Es lo mismo que hace A3 con el paso del
+/// tutorial y por el mismo motivo: **un hecho no se desincroniza**, y quien llegue por otro
+/// camino tambien lo ha demostrado.
+///
+/// Lo guardado sigue mandando hacia arriba --los niveles 3 y siguientes se compran, y un
+/// administrador puede subirlo a mano-- porque `GREATEST` se queda con el mayor de los dos.
+/// Y se queda con el que no es nulo, asi que una cuenta sin fila en `certifications` tampoco
+/// se queda en cero por un `NULL`.
+pub async fn effective_certification_level(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<i16, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT GREATEST(
+            (SELECT cert_level FROM certifications WHERE user_id = $1),
+            (CASE
+                WHEN EXISTS(SELECT 1 FROM machine_accesses WHERE attacker_id = $1)
+                  OR EXISTS(SELECT 1 FROM internet_access WHERE user_id = $1) THEN 2
+                WHEN EXISTS(SELECT 1 FROM software
+                             WHERE user_id = $1 AND NOT is_npc AND NOT is_folder) THEN 1
+                ELSE 0
+             END)::smallint
+        )
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+}
+
+/// El nivel **guardado**, sin mirar lo que el jugador ha hecho.
+///
+/// Queda para quien tiene que escribir en esa columna. Para decidir si alguien puede hacer
+/// algo se usa `effective_certification_level`.
 pub async fn certification_level(
     pool: &PgPool,
     user_id: i64,

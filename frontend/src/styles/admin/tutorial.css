@@ -1,0 +1,327 @@
+/*
+ * El editor del tutorial.
+ *
+ * La pantalla tiene dos mitades y cada una es una forma distinta porque son dos trabajos
+ * distintos: **la lista** se recorre —un paso detrás de otro, y de cada uno se lee lo que
+ * hace en una frase— y **el editor** se rellena, así que es un formulario y no una tarjeta.
+ */
+
+/* ---------- El interruptor ---------- */
+
+/*
+ * El estado del tutorial se ve antes que nada, y se distingue por forma además de por color:
+ * encendido lleva el filo de acento a la izquierda, apagado lo lleva punteado.
+ */
+.tutmando {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: var(--e4);
+  padding: var(--e3) var(--e4);
+  background: var(--color-surface-sunken);
+  border-left: 3px solid var(--color-accent);
+}
+
+.tutmando.is-off {
+  border-left-style: dotted;
+  border-left-color: var(--color-border-strong);
+}
+
+.tutmando__sw {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  margin: 0;
+  cursor: pointer;
+}
+
+.tutmando__sw b {
+  color: var(--color-accent);
+  font-size: var(--texto-cuerpo);
+}
+
+.tutmando.is-off .tutmando__sw b {
+  color: var(--color-text-muted);
+}
+
+.tutmando p {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+}
+
+/* ---------- La lista de pasos ---------- */
+
+.tutlista {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--color-border);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.tutpaso {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem var(--e4);
+  padding: var(--e3) var(--e4);
+  background: var(--color-surface);
+}
+
+.tutpaso.is-off {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-surface) 0 6px,
+    var(--color-surface-sunken) 6px 7px
+  );
+}
+
+.tutpaso__cab {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e2);
+}
+
+/* El número del paso es un dato tabular: en columna, todos ocupan lo mismo. */
+.tutpaso__num {
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.tutpaso__code {
+  color: var(--color-accent);
+  font-size: var(--texto-cuerpo);
+  letter-spacing: 0.04em;
+}
+
+.tutpaso__apagado {
+  padding: 0 0.35rem;
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  border: var(--border-width) dotted var(--color-border-strong);
+}
+
+/* La frase es lo que se lee de verdad, así que ocupa el ancho y no se aprieta. */
+.tutpaso__frase {
+  grid-column: 1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--texto-cuerpo);
+  line-height: 1.5;
+}
+
+.tutpaso__acciones {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.tutpaso__acciones button {
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  font-size: var(--texto-micro);
+}
+
+.tutlista__vacia {
+  margin: var(--e4) 0 0;
+  color: var(--color-text-subtle);
+}
+
+.tutlista__pie {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--e4);
+}
+
+/* ---------- El editor ---------- */
+
+.tutform {
+  display: grid;
+  gap: var(--e4);
+  padding: var(--e4);
+}
+
+.tutform__fila {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--e4);
+}
+
+.tutform label {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+}
+
+/*
+ * Los campos, con la ropa del juego.
+ *
+ * Sin esto salen con el blanco del navegador, que sobre negro absoluto es lo que más brilla
+ * de la pantalla —el mismo fallo que tenían las casillas— y encima aquí, donde lo que se
+ * escribe es un código de doce letras.
+ */
+.tutform input[type='text'],
+.tutform input:not([type]),
+.tutform select,
+.tutform textarea {
+  padding: 0.45rem 0.6rem;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--texto-cuerpo);
+  letter-spacing: 0;
+  text-transform: none;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+}
+
+.tutform input:focus,
+.tutform select:focus,
+.tutform textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.tutform small {
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.tutform code {
+  color: var(--color-accent-dim);
+}
+
+.tutform__grupo {
+  margin: 0;
+  padding: var(--e3) var(--e4);
+  border: var(--border-width) solid var(--color-border);
+}
+
+.tutform__grupo legend {
+  padding: 0 var(--e2);
+  color: var(--color-text-muted);
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+}
+
+/*
+ * «Todas» o «solo estas», antes de la lista.
+ *
+ * Es la pregunta que hay que hacer primero: una lista vacía puede querer decir las dos cosas
+ * —todo abierto o todo cerrado— y significan lo contrario.
+ */
+.tutform__modo {
+  display: flex;
+  gap: var(--e4);
+  margin-bottom: var(--e2);
+}
+
+.tutform__modo label,
+.tutform__vistas label,
+.tutform__acciones label,
+.tutform__activo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  color: var(--color-text);
+  font-size: var(--texto-cuerpo);
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.tutform__vistas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--e3);
+}
+
+.tutform__destino {
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+}
+
+.tutform__destino b {
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+}
+
+.tutform__acciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.2rem var(--e4);
+}
+
+ /*
+ * «Activo» es una casilla con su palabra al lado y la explicación debajo, no tres cosas
+ * apiladas: en una rejilla de dos columnas la casilla manda el ancho y el texto la sigue.
+ */
+.tutform__activo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.2rem var(--e2);
+}
+
+.tutform__activo small {
+  grid-column: 2;
+}
+
+.tutform__frase textarea {
+  width: 100%;
+  padding: var(--e2);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--texto-cuerpo);
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+  resize: vertical;
+}
+
+.tutform__pie {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--e2);
+}
+
+/* ---------- Pantallas estrechas ---------- */
+
+/*
+ * A 390 px la fila de un paso era una rejilla de dos columnas con los cuatro botones a la
+ * derecha, y la frase --que es lo único que de verdad hay que leer-- caía en una columna de
+ * una palabra por línea. Aquí los botones bajan a su propio renglón y la frase se queda con
+ * el ancho entero.
+ */
+@media (max-width: 700px) {
+  .tutpaso {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tutpaso__acciones {
+    grid-row: auto;
+    grid-column: 1;
+    justify-content: flex-end;
+    margin-top: var(--e2);
+  }
+
+  .tutform__acciones,
+  .tutform__vistas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

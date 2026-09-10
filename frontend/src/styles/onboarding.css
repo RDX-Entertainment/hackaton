@@ -160,3 +160,123 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/*
+ * ---------- El tutorial cuando manda ----------
+ *
+ * Dos formas y ninguna esconde nada: lo cerrado se apaga y lo que toca se enciende.
+ */
+
+/*
+ * Un destino o una pantalla que el paso todavía no abre.
+ *
+ * Apagado y **rayado**, no solo gris: el color por sí solo no llega en monocromo, y hay
+ * gente que no lo ve. La trama diagonal dice «esto está cerrado» sin leer nada.
+ */
+.carril__tecla.is-locked,
+.tira__paso.is-locked {
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    var(--color-hover) 5px 6px
+  );
+}
+
+.carril__tecla.is-locked .carril__numero {
+  color: var(--color-border-strong);
+}
+
+/*
+ * El sitio al que apunta el paso.
+ *
+ * Es lo único que parpadea en todo el juego, y esa es la razón de que funcione: si
+ * parpadearan tres cosas no señalaría ninguna. El aro va por fuera —`outline`, que no ocupa
+ * sitio— para que encenderlo no mueva la fila entera un píxel.
+ */
+.es-foco {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  animation: foco-latido 1.8s ease-in-out infinite;
+}
+
+@keyframes foco-latido {
+  0%,
+  100% {
+    outline-color: var(--color-accent);
+  }
+
+  50% {
+    outline-color: var(--color-accent-dim);
+  }
+}
+
+/* Quien pidió que las cosas no se muevan se queda con el aro, que es la mitad que informa. */
+@media (prefers-reduced-motion: reduce) {
+  .es-foco {
+    animation: none;
+  }
+}
+
+/*
+ * La pantalla cerrada.
+ *
+ * No es un error ni un cartel de prohibido: es una pantalla que existe y todavía no toca, con
+ * lo que hay que hacer para abrirla y el botón que lleva allí.
+ */
+.cerrada {
+  display: grid;
+  justify-items: center;
+  gap: var(--e2);
+  max-width: 34rem;
+  margin: var(--e12) auto;
+  padding: var(--e8) var(--e6);
+  text-align: center;
+  background: var(--color-surface);
+  border: var(--border-width) dashed var(--color-border-strong);
+}
+
+.cerrada__marca {
+  width: 3rem;
+  height: 3rem;
+  border: var(--border-width) solid var(--color-border-strong);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    var(--color-hover) 5px 6px
+  );
+}
+
+.cerrada h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--texto-bloque);
+  letter-spacing: var(--track-bloque);
+  text-transform: uppercase;
+}
+
+.cerrada__motivo {
+  margin: 0;
+  color: var(--color-highlight);
+}
+
+.cerrada__que {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.cerrada__ir {
+  margin-top: var(--e2);
+  padding: var(--e2) var(--e6);
+  color: var(--color-bg);
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--color-accent);
+  border: 0;
+}
+
+.cerrada__ir:hover {
+  background: var(--color-accent-bright);
+}

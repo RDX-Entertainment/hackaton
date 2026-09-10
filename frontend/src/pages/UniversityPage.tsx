@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { AccountSelect } from '../components/AccountSelect';
+import { t } from '../i18n';
 import { Icono } from '../components/iconos/Icono';
 import { Loading } from '../components/Notice';
 import { StatusMessage } from '../components/StatusMessage';
@@ -87,7 +88,12 @@ export function UniversityPage() {
         {certificaciones.items.map((item) => {
           const enMarcha = !item.completed && item.learning;
           const abierto = !item.completed && !item.learning && item.available;
-          const bloqueado = !item.completed && !item.learning && !item.available;
+
+          // Los dos primeros niveles ya no se matriculan: se aprueban jugando. No es que
+          // estén bloqueados —no hay nada que desbloquear— así que tampoco dicen «termina el
+          // anterior», que sería mandar a nadie a ninguna parte.
+          const seHace = !item.completed && Boolean(item.earned_by);
+          const bloqueado = !item.completed && !item.learning && !item.available && !seHace;
 
           const clase = item.completed
             ? 'tarjeta tarjeta--numerada tarjeta--hecha'
@@ -119,6 +125,7 @@ export function UniversityPage() {
                   {item.completed && <Tag estado="memoria">hecho</Tag>}
                   {enMarcha && <Tag estado="obra">en marcha</Tag>}
                   {abierto && <Tag estado="plano">te toca</Tag>}
+                  {seHace && <Tag estado="obra">{t('tutorial.earned') ?? 'se aprueba haciendo'}</Tag>}
                   {bloqueado && <Tag estado="off">bloqueado</Tag>}
 
                   {enMarcha && <button onClick={() => void actuar(item)}>Terminar</button>}
@@ -129,6 +136,9 @@ export function UniversityPage() {
                     >
                       Empezar
                     </button>
+                  )}
+                  {seHace && item.earned_by && (
+                    <span className="micro">{t(`onboarding.${item.earned_by}.title`)}</span>
                   )}
                   {bloqueado && <span className="micro">termina el anterior</span>}
                 </div>

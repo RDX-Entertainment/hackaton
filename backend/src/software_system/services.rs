@@ -4,6 +4,10 @@ use sqlx::PgPool;
 
 use crate::error::ApiError;
 
+// El tutorial veta desde el servidor: la interfaz apaga botones, pero el que llama con
+// `curl` no ve ninguna interfaz.
+use crate::onboarding;
+
 use super::{
     combat::{self, Resolution, RollSource},
     dtos::{
@@ -566,6 +570,8 @@ pub async fn tune_program(
     software: i64,
     stats: Stats,
 ) -> Result<(), ApiError> {
+    onboarding::services::guard(pool, user, "lab.mejorar").await?;
+
     let attrs = [
         stats.effectiveness,
         stats.resistance,
@@ -614,6 +620,7 @@ pub async fn create_blueprint(
     user: i64,
     input: CreateBlueprintRequest,
 ) -> Result<Blueprint, ApiError> {
+    onboarding::services::guard(pool, user, "lab.disenar").await?;
     validate_blueprint(&input)?;
     let name = input.name.trim();
     let capability = repo::capability(pool, &input.capability)
@@ -669,6 +676,7 @@ pub async fn compile(
     user: i64,
     blueprint: i64,
 ) -> Result<CompilationQueued, ApiError> {
+    onboarding::services::guard(pool, user, "lab.compilar").await?;
     let b = repo::owned_blueprint(pool, user, blueprint)
         .await?
         .ok_or(ApiError::NotFound)?;
@@ -712,6 +720,8 @@ pub async fn start_operation(
     user: i64,
     input: StartOperationRequest,
 ) -> Result<OperationStarted, ApiError> {
+    onboarding::services::guard(pool, user, "lab.lanzar").await?;
+
     if input.target_user_id == user {
         return Err(ApiError::BadRequest(
             "an operation needs another player as target".into(),

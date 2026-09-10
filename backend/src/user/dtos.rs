@@ -110,6 +110,11 @@ pub struct CertificationItemResponse {
     pub completed: bool,
     pub available: bool,
     pub learning: bool,
+
+    /// El paso del tutorial que la aprueba, cuando no se estudia sino que se hace. El
+    /// cliente lo usa para decir «esto se aprueba compilando» en vez de ofrecer un boton de
+    /// matricula que no lleva a ninguna parte.
+    pub earned_by: Option<&'static str>,
 }
 
 #[derive(Debug, Serialize)]

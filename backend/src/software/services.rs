@@ -2,6 +2,10 @@ use sqlx::PgPool;
 
 use crate::error::ApiError;
 
+// El tutorial veta desde el servidor: la interfaz apaga botones, pero el que llama con
+// `curl` no ve ninguna interfaz.
+use crate::onboarding;
+
 use crate::Generic::models::CatalogEntry;
 use crate::legacy::SOFTWARE_TYPES;
 
@@ -74,6 +78,8 @@ pub async fn create_software(
     user_id: i64,
     input: NewSoftwareRequest,
 ) -> Result<SoftwareCreatedResponse, ApiError> {
+    onboarding::services::guard(pool, user_id, "discos.crear").await?;
+
     let name = input.name.trim();
 
     if name.is_empty() || name.len() > 25 {
@@ -373,6 +379,8 @@ pub async fn start_research(
     user_id: i64,
     input: ResearchStartRequest,
 ) -> Result<ResearchStartedResponse, ApiError> {
+    onboarding::services::guard(pool, user_id, "lab.investigar").await?;
+
     let exists =
         repo::local_software_exists(
             pool,
@@ -492,6 +500,8 @@ pub async fn move_software(
     software: i64,
     input: MoveSoftwareRequest,
 ) -> Result<(), ApiError> {
+    onboarding::services::guard(pool, user_id, "discos.mover").await?;
+
     let Some((origen, size, running)) =
         repo::find_owned_software(pool, software, user_id).await?
     else {
@@ -600,6 +610,8 @@ pub async fn move_into_folder(
     software: i64,
     input: MoveIntoRequest,
 ) -> Result<(), ApiError> {
+    onboarding::services::guard(pool, user_id, "discos.mover").await?;
+
     let Some((servidor, es_carpeta, _)) = repo::find_entry(pool, software, user_id).await? else {
         return Err(ApiError::BadRequest("unknown software".into()));
     };

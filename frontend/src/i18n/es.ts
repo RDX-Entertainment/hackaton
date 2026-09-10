@@ -14,7 +14,7 @@ export const es: Record<string, string> = {
 
   // El primer bucle: fabricar, salir y entrar.
   'error.NO_CERTIFICATION': 'Te falta la certificación. La sacas gratis en Academia y tardas un minuto.',
-  'error.NO_SOFT': 'No tienes ningún programa capaz de hacer esto. Diseña uno en Arsenal y compílalo.',
+  'error.NO_SOFT': 'No tienes ningún programa capaz de hacer esto. Diseña uno en Lab y compílalo.',
   'error.BAD_CRACKER': 'Tu programa es más flojo que la defensa que tiene delante. Súbele la versión o busca un objetivo más blando.',
   'error.SERVER_DOWN': 'Esa máquina está caída. Prueba dentro de un rato.',
   'error.NOT_LOGGED_IN': 'Todavía no has entrado en esa máquina. En «force» están las formas de conseguirlo.',
@@ -66,23 +66,23 @@ export const es: Record<string, string> = {
   'onboarding.modules.step': 'Investigar',
   'onboarding.modules.title': 'Consigue módulos con los que construir',
   'onboarding.modules.hint': 'Un programa es una capacidad más los módulos que le pongas. Sin módulos solo salen programas pelados.',
-  'onboarding.modules.action': 'Ir a Investigación',
+  'onboarding.modules.action': 'Investigar en Lab',
 
   'onboarding.blueprint.step': 'Diseñar',
   'onboarding.blueprint.title': 'Diseña tu primer programa',
   'onboarding.blueprint.hint': 'Elige qué quiere hacer —entrar en una máquina, dejar algo dentro— y móntale hasta tres módulos. Verás lo que va a salir antes de gastar un segundo en compilarlo.',
-  'onboarding.blueprint.action': 'Diseñar en Arsenal',
+  'onboarding.blueprint.action': 'Diseñar en Lab',
 
   'onboarding.compile.step': 'Compilar',
   'onboarding.compile.title': 'Compila el diseño',
   'onboarding.compile.hint': 'Compilar tarda, y hasta que no termina no hay fichero. Solo puedes tener una compilación en marcha.',
-  'onboarding.compile.action': 'Compilar en Arsenal',
+  'onboarding.compile.action': 'Compilar en Lab',
   'onboarding.compile.waiting': 'Compilando. Cuando termine, el fichero aparece en el disco de la máquina donde quepa.',
 
   'onboarding.install.step': 'Cargar',
   'onboarding.install.title': 'Cárgalo en memoria',
   'onboarding.install.hint': 'Lo que está en disco no dispara. Un programa solo funciona en la máquina donde está cargado, y ocupa su RAM mientras lo esté.',
-  'onboarding.install.action': 'Cargar desde Software',
+  'onboarding.install.action': 'Cargar desde Discos',
 
   'onboarding.intrusion.step': 'Entrar',
   'onboarding.intrusion.title': 'Entra en tu primera máquina',
@@ -95,4 +95,18 @@ export const es: Record<string, string> = {
   'onboarding.practice.title': 'Tu campo de tiro',
   'onboarding.practice.hint': 'Dos máquinas de práctica que solo ves tú.',
   'onboarding.rail.title': 'El circuito de un programa',
+
+  //
+  // El tutorial: lo que dice cuando algo esta cerrado, y por que.
+  //
+  'error.TUTORIAL_LOCKED':
+    'Ahora no toca eso. Termina el paso del tutorial que tienes en marcha y se abre solo.',
+  'error.CERTIFICATION_BY_DOING':
+    'Esta certificación no se estudia: se aprueba jugando. Haz lo que pide el tutorial y la tienes.',
+  'tutorial.locked':
+    'Cerrado hasta que termines: {paso}',
+  'tutorial.go':
+    'Ir al paso',
+  'tutorial.earned':
+    'Se aprueba haciendo',
 };

@@ -1,3 +1,4 @@
+import { useTutorial } from '../../app/tutorial';
 import type { OwnedFile } from '../../utils/api';
 import {
   noSePuedeDescargar,
@@ -15,6 +16,20 @@ export const ACCION = {
   descargar: 14,
   aparcar: 18,
 } as const;
+
+/**
+ * El nombre que entiende el tutorial para cada verbo del legado.
+ *
+ * Lo que no está aquí no lo gobierna el tutorial —aparcar en el disco externo, por ejemplo—,
+ * igual que en el servidor: negar por omisión convertiría cada verbo nuevo en un botón
+ * apagado sin que nadie lo hubiera decidido.
+ */
+const CODIGO_DEL_VERBO: Record<number, string> = {
+  [ACCION.ocultar]: 'discos.ocultar',
+  [ACCION.revelar]: 'discos.ocultar',
+  [ACCION.instalar]: 'discos.cargar',
+  [ACCION.descargar]: 'discos.descargar',
+};
 
 type Verbo = {
   label: string;
@@ -69,8 +84,23 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
     },
   ];
 
-  const pegas = verbos.filter((verbo) => verbo.motivo);
-  const avisos = verbos.filter((verbo) => !verbo.motivo && verbo.nota);
+  // El tutorial es una pega más, y entra por la misma puerta que las otras: se apaga el
+  // verbo y su motivo sale en la lista de abajo, donde el jugador ya sabe mirar.
+  const tutorial = useTutorial();
+
+  const conPermiso = verbos.map((verbo) => {
+    const codigo = CODIGO_DEL_VERBO[verbo.accion];
+
+    return {
+      ...verbo,
+      codigo,
+      motivo:
+        !codigo || tutorial.permiteAccion(codigo) ? verbo.motivo : (verbo.motivo ?? tutorial.motivo),
+    };
+  });
+
+  const pegas = conPermiso.filter((verbo) => verbo.motivo);
+  const avisos = conPermiso.filter((verbo) => !verbo.motivo && verbo.nota);
 
   return (
     <article className={`swfile${fichero.running ? ' is-running' : ''}`}>
@@ -97,9 +127,11 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
       </div>
 
       <div className="swfile__actions">
-        {verbos.map((verbo) => (
+        {conPermiso.map((verbo) => (
           <button
             key={verbo.label}
+            data-foco={verbo.codigo}
+            className={verbo.codigo && tutorial.foco === verbo.codigo ? 'es-foco' : undefined}
             disabled={Boolean(verbo.motivo)}
             title={verbo.motivo ?? verbo.nota ?? ''}
             onClick={() => onTarea(verbo.accion, verbo.label)}

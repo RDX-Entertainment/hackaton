@@ -68,6 +68,21 @@ pub struct CertificationDefinition {
 }
 
 impl CertificationDefinition {
+    /// El hecho que la aprueba, cuando se aprueba haciendo.
+    ///
+    /// Los dos primeros niveles **son el tutorial**: el 1 es compilar el primer programa y el
+    /// 2 es entrar en la primera maquina. Los demas se estudian y se pagan, que es lo que
+    /// hacian los cinco.
+    pub const fn earned_by(level: i16) -> Option<&'static str> {
+        match level {
+            1 => Some("compile"),
+            2 => Some("intrusion"),
+            _ => None,
+        }
+    }
+}
+
+impl CertificationDefinition {
     pub fn by_level(level: i16) -> Option<Self> {
         match level {
             1 => Some(Self {

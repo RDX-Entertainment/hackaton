@@ -35,6 +35,15 @@ export type Certification = {
   completed: boolean;
   available: boolean;
   learning: boolean;
+
+  /**
+   * El paso del tutorial que la aprueba, cuando no se estudia sino que se hace.
+   *
+   * Los dos primeros niveles **son** el tutorial: el 1 al compilar el primer programa y el 2
+   * al entrar en la primera máquina. Con esto la pantalla dice qué hay que hacer en vez de
+   * ofrecer una matrícula que el servidor va a rechazar.
+   */
+  earned_by: string | null;
 };
 
 export type Certifications = {

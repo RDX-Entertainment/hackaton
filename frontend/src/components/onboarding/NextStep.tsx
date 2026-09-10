@@ -34,12 +34,24 @@ export function NextStep({ onboarding }: { onboarding: Onboarding }) {
 
   return (
     <section className="nextstep">
-      <h3>{t(`onboarding.${paso}.title`)}</h3>
-      <p>{esperando ? t('onboarding.compile.waiting') : t(`onboarding.${paso}.hint`)}</p>
+      {/*
+        El título y la explicación salen del catálogo de idiomas por el código del paso. Un
+        paso escrito en el panel no está en ningún catálogo: entonces habla con lo que lleve
+        escrito, que es lo que trae `hint`.
+      */}
+      <h3>{t(`onboarding.${paso}.title`) ?? paso}</h3>
+      <p>
+        {esperando
+          ? t('onboarding.compile.waiting')
+          : (t(`onboarding.${paso}.hint`) ?? onboarding.rules?.hint)}
+      </p>
 
       {!esperando && (
-        <Link className="nextstep__go" to={RUTA_DEL_PASO[paso] ?? '/'}>
-          {t(`onboarding.${paso}.action`)}
+        <Link
+          className="nextstep__go"
+          to={`/${onboarding.rules?.focus_view ?? RUTA_DEL_PASO[paso]?.slice(1) ?? ''}`}
+        >
+          {t(`onboarding.${paso}.action`) ?? t('tutorial.go')}
         </Link>
       )}
 

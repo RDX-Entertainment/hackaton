@@ -227,7 +227,8 @@ pub async fn certifications(
     pool: &PgPool,
     user_id: i64,
 ) -> Result<CertificationsResponse, ApiError> {
-    let level = repo::certification_level(
+    // El nivel efectivo, no el guardado: los dos primeros los aprueba el mundo.
+    let level = repo::effective_certification_level(
         pool,
         user_id,
     )
@@ -256,10 +257,15 @@ pub async fn certifications(
                 completed:
                     level >= certification.level,
 
-                available:
-                    learning
-                        && level
-                            == certification.level - 1,
+                // Las que se aprueban haciendo no se matriculan: no hay boton que ofrecer,
+                // hay algo que hacer.
+                available: CertificationDefinition::earned_by(
+                    certification.level,
+                )
+                .is_none()
+                    && learning
+                    && level
+                        == certification.level - 1,
 
                 learning:
                     !learning
@@ -267,6 +273,10 @@ pub async fn certifications(
                             == Some(
                                 certification.level as i64,
                             ),
+
+                earned_by: CertificationDefinition::earned_by(
+                    certification.level,
+                ),
             }
         })
         .collect();
@@ -290,6 +300,17 @@ pub async fn start_certification(
                     "invalid certification".into(),
                 )
             })?;
+
+    // Los dos primeros niveles ya no se matriculan. Se cierra aqui y no solo en la pantalla
+    // porque una matricula que no lleva a ninguna parte deja al jugador «estudiando» un nivel
+    // que iba a conseguir jugando, y esa es la trampa que este cambio venia a quitar.
+    if let Some(paso) =
+        CertificationDefinition::earned_by(level)
+    {
+        return Err(ApiError::BadRequest(format!(
+            "CERTIFICATION_BY_DOING: {paso}"
+        )));
+    }
 
     let mut tx = pool.begin().await?;
 
@@ -388,6 +409,14 @@ pub async fn complete_certification(
                 "invalid certification".into(),
             )
         })?;
+
+    if let Some(paso) =
+        CertificationDefinition::earned_by(level)
+    {
+        return Err(ApiError::BadRequest(format!(
+            "CERTIFICATION_BY_DOING: {paso}"
+        )));
+    }
 
     let mut tx = pool.begin().await?;
 

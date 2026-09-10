@@ -88,3 +88,48 @@ export type SiteGrant = {
   npc_id: number | null;
   target_name: string | null;
 };
+
+//
+// ==============================
+// EL TUTORIAL
+// ==============================
+//
+
+/**
+ * Un paso del tutorial, como se edita en el panel.
+ *
+ * `views` y `actions` a `null` significan «todas»; una lista, «solo estas»; y la lista vacía,
+ * «ninguna». Las tres son escribibles, y por eso el editor pregunta primero «¿todas o solo
+ * estas?» en vez de dejar una lista vacía que podría querer decir cualquiera de las dos.
+ */
+export type TutorialStep = {
+  id: number;
+  position: number;
+  code: string;
+  fact: string;
+  views: string[] | null;
+  actions: string[] | null;
+  focus_view: string | null;
+  focus_anchor: string | null;
+  hint: string | null;
+  active: boolean;
+};
+
+export type TutorialStepInput = Omit<TutorialStep, 'id'>;
+
+export type Tutorial = {
+  /** Si el tutorial bloquea. Apagado sigue diciendo el paso y deja de bloquear. */
+  enforced: boolean;
+  steps: TutorialStep[];
+};
+
+/** Un código que el servidor sabe comprobar, con la frase que lee quien edita. */
+export type TutorialVocabularyEntry = {
+  code: string;
+  label: string;
+};
+
+export type TutorialVocabulary = {
+  facts: TutorialVocabularyEntry[];
+  actions: TutorialVocabularyEntry[];
+};

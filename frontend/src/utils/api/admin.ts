@@ -23,6 +23,9 @@ import type {
   PartInput,
   Site,
   OwnedFile,
+  Tutorial,
+  TutorialStepInput,
+  TutorialVocabulary,
 } from './types';
 
 export function listParts(): Promise<Part[]> {
@@ -159,3 +162,40 @@ export function getOrganizationComputer(organization: number, network: number, n
 export function createOrganizationLink(organization: number, input: { from_npc_id: number; to_npc_id: number }): Promise<CreatedRecord> { return post<CreatedRecord>(`/admin/organizations/${organization}/links`, input); }
 export function removeOrganizationLink(organization: number, link: number): Promise<void> { return del<void>(`/admin/organizations/${organization}/links/${link}`); }
 export function createOrganizationServer(organization: number, network: number, input: CreateOrganizationServerInput): Promise<OrganizationServerCreated> { return post<OrganizationServerCreated>(`/admin/organizations/${organization}/networks/${network}/servers`, input); }
+
+//
+// ==============================
+// EL TUTORIAL
+// ==============================
+//
+
+export function getTutorial(): Promise<Tutorial> {
+  return get<Tutorial>('/admin/tutorial');
+}
+
+/**
+ * Lo que se puede elegir, preguntado al servidor.
+ *
+ * Podría estar escrito aquí, y sería una lista que se queda vieja: lo que el panel ofrece
+ * tiene que ser exactamente lo que la API sabe vetar, y la única forma de que no se separen
+ * es que lo diga uno solo.
+ */
+export function getTutorialVocabulary(): Promise<TutorialVocabulary> {
+  return get<TutorialVocabulary>('/admin/tutorial/vocabulario');
+}
+
+export function setTutorialEnforced(enforced: boolean): Promise<void> {
+  return put<void>('/admin/tutorial/config', { enforced });
+}
+
+export function createTutorialStep(input: TutorialStepInput): Promise<CreatedRecord> {
+  return post<CreatedRecord>('/admin/tutorial/steps', input);
+}
+
+export function editTutorialStep(id: number, input: TutorialStepInput): Promise<void> {
+  return put<void>(`/admin/tutorial/steps/${id}`, input);
+}
+
+export function removeTutorialStep(id: number): Promise<void> {
+  return del<void>(`/admin/tutorial/steps/${id}`);
+}

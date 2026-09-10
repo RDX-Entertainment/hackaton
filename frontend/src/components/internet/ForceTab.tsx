@@ -1,3 +1,4 @@
+import { useAccion } from '../../app/tutorial';
 import type { HackKind, Remote } from '../../utils/api';
 
 type Attack = {
@@ -26,6 +27,8 @@ type ForceTabProps = {
  * finge un resultado que todavía no existe.
  */
 export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceTabProps) {
+  const hackear = useAccion('red.hackear');
+
   const down = remote.down ? 'La máquina no responde.' : undefined;
   const inside = remote.access ? 'Ya tienes sesión abierta aquí.' : undefined;
 
@@ -91,7 +94,14 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
               {attack.blocked ? (
                 <span className="attack__blocked">{attack.blocked}</span>
               ) : (
-                <button type="button" disabled={busy} onClick={attack.run}>
+                <button
+                  type="button"
+                  data-foco="red.hackear"
+                  className={hackear.destacada ? 'es-foco' : undefined}
+                  disabled={busy || !hackear.permitida}
+                  title={hackear.motivo ?? undefined}
+                  onClick={attack.run}
+                >
                   lanzar
                 </button>
               )}

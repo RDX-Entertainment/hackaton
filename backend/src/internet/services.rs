@@ -299,6 +299,8 @@ pub async fn internet_login(
     user_id: i64,
     input: InternetLoginRequest,
 ) -> Result<InternetLoginResponse, ApiError> {
+    crate::onboarding::services::guard(pool, user_id, "red.entrar").await?;
+
     if input.user.trim() != "root" {
         return Err(
             ApiError::BadRequest(
@@ -362,6 +364,8 @@ pub async fn internet_hack(
     user_id: i64,
     input: InternetHackRequest,
 ) -> Result<InternetHackResponse, ApiError> {
+    crate::onboarding::services::guard(pool, user_id, "red.hackear").await?;
+
     let (
         attacker_type,
         defender_type,
@@ -381,13 +385,14 @@ pub async fn internet_hack(
             }
         };
 
+    // El nivel con lo que ya ha demostrado: el 2 lo da haber entrado en una maquina, no
+    // haber pulsado dos veces en Academia.
     let certification =
-        repo::certification_level(
+        crate::user::repo::effective_certification_level(
             pool,
             user_id,
         )
-        .await?
-        .unwrap_or(0);
+        .await?;
 
     if certification < certification_needed {
         return Err(
@@ -584,6 +589,8 @@ pub async fn internet_analyze(
     user_id: i64,
     input: IpRequest,
 ) -> Result<AnalyzeStartedResponse, ApiError> {
+    crate::onboarding::services::guard(pool, user_id, "red.analizar").await?;
+
     let target =
         resolve_ip(pool, input.ip, user_id).await?;
 
