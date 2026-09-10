@@ -30,7 +30,7 @@ export function ForumThreadPage() {
     try {
       await forumApi.replyToTopic(Number(id), content);
       setContent('');
-      status.report('Reply posted.');
+      status.report('Respuesta publicada.');
       load();
     } catch (error) {
       status.reportError(error);
@@ -44,30 +44,37 @@ export function ForumThreadPage() {
   return (
     <>
       <p>
-        <Link to="/forum">← Forum</Link>
+        <Link to="/forum">← Volver al foro</Link>
       </p>
 
       <h2>{topic.title}</h2>
 
-      {topic.posts.map((post) => (
-        <article className="forum-post" key={post.id}>
-          <b>{post.author}</b>
-          <pre>{post.content}</pre>
+      {topic.posts.map((post, indice) => (
+        <article className="hilo__mensaje" key={post.id}>
+          <div className="hilo__firma">
+            <span className="hilo__autor">{post.author}</span>
+            <span className="micro">{indice === 0 ? 'abrió el hilo' : `#${indice + 1}`}</span>
+          </div>
+          <pre className="hilo__texto">{post.content}</pre>
         </article>
       ))}
 
-      <form className="compose" onSubmit={reply}>
-        <label>
-          Reply
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            required
-          />
-        </label>
-
-        <button>Reply</button>
-        <StatusMessage text={status.message} />
+      <form className="hilo__mensaje" onSubmit={reply}>
+        <div className="hilo__firma">
+          <span className="hilo__autor">tú</span>
+          <span className="micro">responder</span>
+        </div>
+        <textarea
+          className="correo__cuerpo-editable"
+          value={content}
+          placeholder="Lo que quieras decir."
+          onChange={(event) => setContent(event.target.value)}
+          required
+        />
+        <div className="correo__acciones">
+          <StatusMessage text={status.message} />
+          <button>Publicar</button>
+        </div>
       </form>
     </>
   );

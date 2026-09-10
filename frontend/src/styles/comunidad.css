@@ -1,0 +1,336 @@
+/*
+ * El foro y el clan: dos sitios donde hay gente, y cada uno con la forma que le
+ * corresponde. Un tablón se recorre de arriba abajo; una ficha de clan se lee
+ * de un vistazo y luego se mira la plantilla.
+ */
+
+/* ---------- El tablón ---------- */
+
+.tablon {
+  border: var(--border-width) solid var(--color-border-strong);
+  background: var(--color-surface-sunken);
+}
+
+.tablon__barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.tablon__barra button {
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--texto-micro);
+}
+
+/*
+ * Cada hilo es una fila, no una tarjeta: lo que se compara en un tablón es
+ * cuál está más vivo, y eso se ve en columna —título a la izquierda, cuenta de
+ * mensajes a la derecha— mucho antes que en una rejilla.
+ */
+.tablon__hilo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 var(--e4);
+  padding: var(--e3);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.tablon__hilo:last-child {
+  border-bottom: 0;
+}
+
+.tablon__hilo:hover {
+  background: var(--color-hover);
+}
+
+.tablon__titulo {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text);
+  text-decoration: none;
+  border: 0;
+}
+
+.tablon__titulo:hover {
+  color: var(--color-accent);
+}
+
+.tablon__quien {
+  grid-column: 1;
+  margin-top: 0.15rem;
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+/* La cuenta de mensajes, en la voz de las cifras y con su unidad debajo. */
+.tablon__cuenta {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  text-align: right;
+}
+
+.tablon__cuenta b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--color-accent);
+}
+
+.tablon__cuenta span {
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+/* ---------- Un hilo por dentro ---------- */
+
+.hilo__mensaje {
+  border: var(--border-width) solid var(--color-border);
+  border-left: 2px solid var(--color-accent-deep);
+  background: var(--color-surface);
+  margin-bottom: var(--e3);
+}
+
+/* El primero es el que abrió el hilo, y se nota. */
+.hilo__mensaje:first-of-type {
+  border-left-color: var(--color-accent);
+}
+
+.hilo__firma {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: var(--color-surface-sunken);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.hilo__autor {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-cuerpo);
+  color: var(--color-accent-bright);
+}
+
+.hilo__texto {
+  margin: 0;
+  padding: var(--e3);
+  color: var(--color-text-muted);
+  font-size: var(--texto-cuerpo);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* ---------- La ficha del clan ---------- */
+
+.clan__ficha {
+  display: flex;
+  align-items: center;
+  gap: var(--e4);
+  padding: var(--e4);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface-raised),
+    var(--color-surface-sunken)
+  );
+  border: var(--border-width) solid var(--color-border-strong);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.07);
+}
+
+/* La chapa: las siglas del clan, que es como se llaman entre ellos. */
+.clan__chapa {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+  color: var(--color-bg);
+  background: var(--color-accent);
+  box-shadow: var(--brillo-fuerte);
+}
+
+.clan__nombre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.3rem;
+  color: var(--color-text);
+}
+
+.clan__nombre::before {
+  content: none;
+}
+
+.clan__lema {
+  margin: var(--e1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--texto-cuerpo);
+}
+
+.clan__cifras {
+  display: flex;
+  gap: var(--e6);
+  margin-left: auto;
+  text-align: right;
+}
+
+.clan__cifras b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--color-text);
+}
+
+.clan__cifras span {
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+/* La plantilla: una fila por miembro, con quien manda arriba del todo. */
+.clan__plantilla {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.clan__miembro {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e2) var(--e3);
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.clan__miembro:last-child {
+  border-bottom: 0;
+}
+
+.clan__miembro .nombre {
+  flex: 1;
+  color: var(--color-text);
+  font-size: var(--texto-cuerpo);
+}
+
+.clan__miembro .puesto {
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.clan__miembro.es-mando {
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.clan__miembro.es-mando .puesto {
+  color: var(--color-accent);
+}
+
+/* ---------- Ajustes ---------- */
+
+/*
+ * Tres grupos, tres cajas, y cada una guarda lo suyo. Eran dos formularios
+ * seguidos donde el idioma y la contraseña se guardaban con el mismo botón,
+ * que es como se cambia algo sin querer.
+ */
+.ajustes {
+  display: grid;
+  gap: var(--e3);
+  max-width: 44rem;
+}
+
+.ajustes__grupo {
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+.ajustes__cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.ajustes__titulo {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--texto-bloque);
+  letter-spacing: var(--track-bloque);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.ajustes__cuerpo {
+  padding: var(--e3);
+}
+
+.ajustes__cuerpo .compose {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.ajustes__nota {
+  margin: var(--e2) 0 0;
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+@media (max-width: 700px) {
+  .clan__ficha {
+    flex-wrap: wrap;
+  }
+
+  .clan__cifras {
+    margin-left: 0;
+    text-align: left;
+  }
+}
+
+/* Los tres idiomas, como botones: se elige uno y se ve cuál está puesto. */
+.idiomas {
+  display: flex;
+  gap: var(--e1);
+  flex-wrap: wrap;
+}
+
+.idiomas button {
+  margin: 0;
+}
+
+.idiomas button.is-primary {
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.idiomas button.is-primary::before,
+.idiomas button.is-primary::after {
+  color: rgba(0, 0, 0, 0.5);
+}
