@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Hacker Experience">
+    <title>Hacker Experience</title>
+
+    <!--
+      La marca del juego, que es la misma que lleva el HUD: cuadro de acento con la letra en
+      negro. Se dibuja con rectángulos y no con texto porque un favicon no carga la tipografía
+      del juego: pediría Oxanium, no la encontraría, y cada navegador pondría la suya.
+
+      Del sistema Fósforo, tres reglas y las tres se ven aquí: **filo duro** —radio 0, ni una
+      curva—, **el acento es el verde** #00ff41 sobre negro absoluto, y a 16 px lo único que
+      queda es la forma, así que la letra es una H de tres barras y ningún adorno.
+    -->
+
+    <rect width="32" height="32" fill="#00ff41"/>
+
+    <!--
+      Sin marco y con la letra gorda. Con un marco negro por dentro, a 16 px —que es el tamano
+      al que vive un favicon de verdad— el borde se comia la H y quedaba un cuadrado con una
+      mancha. Las barras miden 5 de 32: a 16 px siguen siendo dos pixeles y medio.
+    -->
+    <g fill="#000000">
+        <rect x="7" y="7" width="5" height="18"/>
+        <rect x="20" y="7" width="5" height="18"/>
+        <rect x="12" y="13" width="8" height="5"/>
+    </g>
+</svg>
