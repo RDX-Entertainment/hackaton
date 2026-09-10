@@ -79,8 +79,20 @@
   margin: 0 0 1.5rem;
 }
 
+/*
+ * El titular del siguiente paso es lo mas importante de la portada, asi que se
+ * escribe como un titular y no como el rotulo de un bloque. Se lo comia la
+ * regla global de `h3` hasta que se acoto.
+ */
 .nextstep h3 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--e2);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--color-text);
 }
 
 .nextstep p {

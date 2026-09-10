@@ -89,7 +89,15 @@ h3 {
   font-weight: 400;
 }
 
-.game h3::before {
+/*
+ * **Solo los titulos de pagina**, que son hijos directos del contenedor.
+ *
+ * Era `.game h3`, y eso alcanzaba a cualquier `h3` de cualquier componente: el
+ * nombre de un clan salia como «## LOS DEL SOTANO» en letra de rotulo, y el
+ * titular de la portada igual. Un descendiente suelto en una hoja global se
+ * come el estilo de todo lo que se escriba despues.
+ */
+.game__inner > h3::before {
   content: "## ";
   color: var(--color-text-subtle);
   font-weight: 400;

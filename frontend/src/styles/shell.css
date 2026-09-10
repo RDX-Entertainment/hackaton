@@ -155,6 +155,7 @@
 
 .hud__salir {
   margin: 0;
+  white-space: nowrap;
   padding: 0.3rem 0.7rem;
   font-size: var(--texto-cuerpo);
 }
@@ -296,7 +297,8 @@
   letter-spacing: 0.02em;
 }
 
-.game h3 {
+/* Igual que el «## »: solo los titulos de pagina, no los de dentro de una pieza. */
+.game__inner > h3 {
   margin: var(--e8) 0 var(--e2);
   font-family: var(--font-display);
   font-weight: 600;
