@@ -21,24 +21,86 @@
 }
 
 /*
- * El barrido: una línea de cada tres, y al 15 %.
+ * El barrido: una línea de cada tres.
  *
  * Empezó al 36 % con una línea de cada dos, que era la mitad de la pantalla en
  * negro: sobre un texto de 13 px se comía los trazos finos y cansaba a los diez
- * minutos. Ahora se nota como material y no como filtro.
+ * minutos. Al 18 % se nota como material y no como filtro.
+ *
+ * La opacidad la lleva la capa y no el color del degradado, y por eso puede
+ * **respirar**: un tubo de verdad no da una luz fija. El parpadeo es lento y
+ * corto —cuatro décimas cada siete segundos— para que se perciba sin que nadie
+ * pueda señalar cuándo pasó.
  */
 .capa--barrido {
   z-index: 90;
+  opacity: 0.18;
   background: repeating-linear-gradient(
     180deg,
     transparent 0 2px,
-    rgba(0, 0, 0, 0.15) 2px 3px
+    #000 2px 3px
   );
+  animation: respira-tubo 7s ease-in-out infinite;
 }
 
+@keyframes respira-tubo {
+  0%,
+  88%,
+  100% {
+    opacity: 0.18;
+  }
+  92% {
+    opacity: 0.26;
+  }
+  96% {
+    opacity: 0.14;
+  }
+}
+
+/*
+ * Y el rodillo: la banda que baja despacio, como un vertical mal ajustado.
+ * Verde muy tenue, doce segundos de recorrido y nada de bucle visible: si se
+ * nota que se repite, deja de ser un defecto del tubo y pasa a ser un adorno.
+ */
+.capa--barrido::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 26vh;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(0, 255, 65, 0.05),
+    transparent
+  );
+  animation: rueda-tubo 12s linear infinite;
+}
+
+@keyframes rueda-tubo {
+  0% {
+    top: -30vh;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+/*
+ * La estática, y ahora se mueve.
+ *
+ * Es la misma trama de ruido, pero saltando cinco posiciones por segundo con
+ * `steps`, que es como hierve el grano de una película: sin `steps` seria un
+ * deslizamiento suave, que no es estática sino una textura que resbala.
+ *
+ * La capa se sale del marco un 8 % por cada lado para que el salto no descubra
+ * los bordes.
+ */
 .capa--grano {
   z-index: 91;
-  opacity: 0.028;
+  inset: -8%;
+  opacity: 0.035;
+  animation: estatica 640ms steps(5) infinite;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
 }
 
@@ -53,9 +115,36 @@
   );
 }
 
-/* Quien pide menos movimiento se queda sin barrido: es lo único que parpadea. */
+@keyframes estatica {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-3%, 2%, 0);
+  }
+  40% {
+    transform: translate3d(2%, -3%, 0);
+  }
+  60% {
+    transform: translate3d(-2%, -2%, 0);
+  }
+  80% {
+    transform: translate3d(3%, 1%, 0);
+  }
+}
+
+/*
+ * Quien pide menos movimiento se queda con el tubo quieto: el barrido y el
+ * grano siguen ahí —son el material de la pantalla— pero ni respiran, ni
+ * hierven, ni rueda la banda.
+ */
 @media (prefers-reduced-motion: reduce) {
-  .capa--barrido {
+  .capa--barrido,
+  .capa--grano {
+    animation: none;
+  }
+
+  .capa--barrido::after {
     display: none;
   }
 }
