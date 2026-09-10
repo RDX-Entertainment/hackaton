@@ -13,9 +13,17 @@
   padding-top: var(--hud-alto);
 }
 
+/*
+ * El carril es `fixed`, así que no ocupa sitio: la página se aparta con un
+ * relleno del ancho exacto del carril.
+ *
+ * Antes esto era una rejilla de dos columnas, y era un fallo: al estar el
+ * carril fuera del flujo, el único hijo que quedaba —la página— caía en la
+ * **primera** columna, la de 78 px, y el juego entero se leía por una rendija
+ * detrás del carril.
+ */
 .shell__cuerpo {
-  display: grid;
-  grid-template-columns: var(--carril-ancho) minmax(0, 1fr);
+  padding-left: var(--carril-ancho);
 }
 
 /* ---------- HUD ---------- */
@@ -306,7 +314,7 @@
  */
 @media (max-width: 900px) {
   .shell__cuerpo {
-    grid-template-columns: minmax(0, 1fr);
+    padding-left: 0;
   }
 
   .carril {

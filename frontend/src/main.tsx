@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './app/App';
 import { store } from './app/store';
 
+import './styles/fuentes.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/sistema.css';
