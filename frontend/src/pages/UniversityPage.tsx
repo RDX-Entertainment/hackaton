@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { AccountSelect } from '../components/AccountSelect';
+import { Icono } from '../components/iconos/Icono';
 import { Loading } from '../components/Notice';
 import { StatusMessage } from '../components/StatusMessage';
+import { Tag } from '../components/Tag';
 import {
   certificationsApi,
   financesApi,
@@ -10,87 +12,131 @@ import {
   type Certifications,
   type UnknownRow,
 } from '../utils/api';
+import { formatMoney } from '../utils/format';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
+/**
+ * La Academia.
+ *
+ * Los seis niveles eran seis párrafos iguales, y para saber por cuál ibas había
+ * que leerlos todos. Ahora el número manda a la izquierda, el estado se dice
+ * con el vocabulario del sistema, y lo bloqueado lleva trama —no solo menos
+ * brillo—, porque en monocromo bajar la opacidad se confunde con estar apagado.
+ *
+ * El nivel 1 es gratis y es el tutorial: por eso la tarjeta del siguiente que
+ * puedes hacer es la única viva de la pantalla.
+ */
 export function UniversityPage() {
   const status = useStatusMessage();
 
-  const [certifications, setCertifications] = useState<Certifications>();
-  const [accounts, setAccounts] = useState<UnknownRow[]>([]);
-  const [account, setAccount] = useState('');
+  const [certificaciones, setCertificaciones] = useState<Certifications>();
+  const [cuentas, setCuentas] = useState<UnknownRow[]>([]);
+  const [cuenta, setCuenta] = useState('');
 
-  const load = useCallback(() => {
-    certificationsApi.getCertifications().then(setCertifications);
+  const cargar = useCallback(() => {
+    certificationsApi.getCertifications().then(setCertificaciones);
   }, []);
 
   useEffect(() => {
-    load();
-    financesApi.listAccounts().then(setAccounts).catch(() => setAccounts([]));
-  }, [load]);
+    cargar();
+    financesApi.listAccounts().then(setCuentas).catch(() => setCuentas([]));
+  }, [cargar]);
 
-  const act = async (certification: Certification) => {
+  const actuar = async (certificacion: Certification) => {
     try {
-      if (certification.learning) {
-        await certificationsApi.completeCertification(certification.level);
+      if (certificacion.learning) {
+        await certificationsApi.completeCertification(certificacion.level);
       } else {
         await certificationsApi.startCertification(
-          certification.level,
-          // A free certification is charged to nobody.
-          certification.price ? Number(account) : undefined,
+          certificacion.level,
+          // Lo gratis no se le cobra a nadie.
+          certificacion.price ? Number(cuenta) : undefined,
         );
       }
 
-      status.report('Certification updated.');
-      load();
+      status.report('Academia al día.');
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
   };
 
-  if (!certifications) {
+  if (!certificaciones) {
     return <Loading />;
   }
 
-  const needsAccount = certifications.items.some((item) => item.price > 0 && !item.completed);
+  const hacenFaltaCuentas = certificaciones.items.some(
+    (item) => item.price > 0 && !item.completed,
+  );
 
   return (
     <>
-      <h2>University</h2>
+      <h2>Academia</h2>
       <StatusMessage text={status.message} as="block" />
 
-      {needsAccount && (
+      {hacenFaltaCuentas && (
         <AccountSelect
-          accounts={accounts}
-          value={account}
-          onChange={setAccount}
-          label="Payment account"
+          accounts={cuentas}
+          value={cuenta}
+          onChange={setCuenta}
+          label="Cuenta con la que pagas"
         />
       )}
 
-      {certifications.items.map((item) => (
-        <article className="forum-post" key={item.level}>
-          <b>
-            {item.level}. {item.name}
-          </b>
-          <p>
-            {item.description} · ${item.price}
-          </p>
+      <div className="rejilla-tarjetas">
+        {certificaciones.items.map((item) => {
+          const enMarcha = !item.completed && item.learning;
+          const abierto = !item.completed && !item.learning && item.available;
+          const bloqueado = !item.completed && !item.learning && !item.available;
 
-          {item.completed && <small>Completed</small>}
+          const clase = item.completed
+            ? 'tarjeta tarjeta--numerada tarjeta--hecha'
+            : enMarcha || abierto
+              ? 'tarjeta tarjeta--numerada tarjeta--viva'
+              : 'tarjeta tarjeta--numerada tarjeta--bloqueada';
 
-          {!item.completed && item.learning && (
-            <button onClick={() => void act(item)}>Complete</button>
-          )}
+          return (
+            <article className={clase} key={item.level}>
+              <span className="tarjeta__nivel">{item.level}</span>
 
-          {!item.completed && !item.learning && item.available && (
-            <button disabled={item.price > 0 && !account} onClick={() => void act(item)}>
-              Start
-            </button>
-          )}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="tarjeta__cabecera">
+                  <span className="tarjeta__titulo">{item.name}</span>
+                  <span className="micro">
+                    {item.price ? (
+                      <>
+                        <Icono nombre="dinero" tamano={11} /> {formatMoney(item.price)}
+                      </>
+                    ) : (
+                      'gratis'
+                    )}
+                  </span>
+                </div>
 
-          {!item.completed && !item.learning && !item.available && <small>Locked</small>}
-        </article>
-      ))}
+                <p className="tarjeta__texto">{item.description}</p>
+
+                <div className="tarjeta__acciones">
+                  {item.completed && <Tag estado="memoria">hecho</Tag>}
+                  {enMarcha && <Tag estado="obra">en marcha</Tag>}
+                  {abierto && <Tag estado="plano">te toca</Tag>}
+                  {bloqueado && <Tag estado="off">bloqueado</Tag>}
+
+                  {enMarcha && <button onClick={() => void actuar(item)}>Terminar</button>}
+                  {abierto && (
+                    <button
+                      disabled={item.price > 0 && !cuenta}
+                      onClick={() => void actuar(item)}
+                    >
+                      Empezar
+                    </button>
+                  )}
+                  {bloqueado && <span className="micro">termina el anterior</span>}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </>
   );
 }

@@ -1,40 +1,51 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { Icono } from '../components/iconos/Icono';
 import { StatusMessage } from '../components/StatusMessage';
 import { bitcoinApi, type Wallet } from '../utils/api';
 import { formatBitcoin, parseBitcoin } from '../utils/format';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
+/**
+ * Los monederos.
+ *
+ * El saldo vivía en una tabla de dos columnas, que es la forma de enseñar algo
+ * de lo que hay cien; aquí hay dos o tres, y cada uno es un objeto con un
+ * número que importa. La dirección va de rótulo y el saldo de cifra.
+ *
+ * Y la pantalla estaba a medias en inglés, que era justo lo que la decisión de
+ * idioma quería evitar.
+ */
 export function BitcoinPage() {
   const status = useStatusMessage();
 
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [amount, setAmount] = useState('');
+  const [monederos, setMonederos] = useState<Wallet[]>([]);
+  const [desde, setDesde] = useState('');
+  const [hacia, setHacia] = useState('');
+  const [cantidad, setCantidad] = useState('');
 
-  const load = useCallback(() => {
-    bitcoinApi.listWallets().then(setWallets).catch(() => setWallets([]));
+  const cargar = useCallback(() => {
+    bitcoinApi.listWallets().then(setMonederos).catch(() => setMonederos([]));
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    cargar();
+  }, [cargar]);
 
-  const create = async () => {
+  const crear = async () => {
     try {
       await bitcoinApi.createWallet();
-      status.report('Wallet created.');
-      load();
+      status.report('Monedero creado.');
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
   };
 
-  const transfer = async (event: FormEvent) => {
+  const transferir = async (event: FormEvent) => {
     event.preventDefault();
 
-    const satoshis = parseBitcoin(amount);
+    const satoshis = parseBitcoin(cantidad);
 
     if (satoshis === null || satoshis <= 0) {
       status.report('Cantidad no válida. Hasta siete decimales, por ejemplo 1,0000001.');
@@ -42,10 +53,10 @@ export function BitcoinPage() {
     }
 
     try {
-      await bitcoinApi.transferBitcoin(from, to, satoshis);
-      setAmount('');
+      await bitcoinApi.transferBitcoin(desde, hacia, satoshis);
+      setCantidad('');
       status.report('Transferencia completada.');
-      load();
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
@@ -55,64 +66,70 @@ export function BitcoinPage() {
     <>
       <h2>Bitcoin</h2>
 
-      <button onClick={() => void create()}>Create wallet</button>
+      {monederos.length ? (
+        <div className="rejilla-tarjetas">
+          {monederos.map((monedero) => (
+            <article className="tarjeta" key={monedero.address}>
+              <span className="tarjeta__rotulo">
+                <Icono nombre="llave" tamano={12} /> monedero
+              </span>
+              <p className="tarjeta__texto" style={{ marginTop: '0.25rem' }}>
+                {monedero.address}
+              </p>
 
-      <form className="compose" onSubmit={transfer}>
+              <b className="tarjeta__cifra">{formatBitcoin(monedero.amount)}</b>
+              <div className="tarjeta__regla" />
+              <p className="tarjeta__pie">BTC disponibles</p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="vacio">
+          <div className="vacio__titulo">Todavía no tienes monederos</div>
+          <p className="vacio__texto">
+            Un monedero no es una cuenta de banco: nadie sabe de quién es. Por eso lo que se
+            roba acaba pasando por aquí.
+          </p>
+          <button onClick={() => void crear()}>Crear el primero</button>
+        </div>
+      )}
+
+      {monederos.length > 0 && <button onClick={() => void crear()}>Crear otro monedero</button>}
+
+      <h3>Transferir</h3>
+
+      <form className="compose" onSubmit={transferir}>
         <label>
-          From wallet
-          <select value={from} onChange={(event) => setFrom(event.target.value)} required>
-            <option value="">Select wallet</option>
-            {wallets.map((wallet) => (
-              <option key={wallet.address} value={wallet.address}>
-                {wallet.address}
+          Desde
+          <select value={desde} onChange={(event) => setDesde(event.target.value)} required>
+            <option value="">Elige un monedero</option>
+            {monederos.map((monedero) => (
+              <option key={monedero.address} value={monedero.address}>
+                {monedero.address}
               </option>
             ))}
           </select>
         </label>
 
         <label>
-          To wallet
-          <input value={to} onChange={(event) => setTo(event.target.value)} required />
+          Hacia
+          <input value={hacia} onChange={(event) => setHacia(event.target.value)} required />
         </label>
 
         <label>
-          Amount
+          Cantidad
           <input
-            value={amount}
+            value={cantidad}
             inputMode="decimal"
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => setCantidad(event.target.value)}
             required
           />
         </label>
 
-        <button>Transfer</button>
+        <button>Transferir</button>
       </form>
 
       <StatusMessage text={status.message} as="block" />
-
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Monedero</th>
-              <th>Saldo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {wallets.map((wallet) => (
-              <tr key={wallet.address}>
-                <td>{wallet.address}</td>
-                <td>{formatBitcoin(wallet.amount)} BTC</td>
-              </tr>
-            ))}
-            {!wallets.length && (
-              <tr>
-                <td colSpan={2}>Sin monederos todavía.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </>
   );
 }

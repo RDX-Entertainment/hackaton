@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { Icono } from '../components/iconos/Icono';
 import { TransferFunds } from '../components/TransferFunds';
 import { financesApi, type BankAccount } from '../utils/api';
 import { messageFrom } from '../utils/errors';
@@ -52,18 +53,31 @@ export function FinancesPage() {
         <ChoosePin key={account.id} account={account} onDone={load} />
       ))}
 
-      {accounts.map((account) => (
-        <section className="account-card" key={account.id}>
-          <div>
-            <small>{account.bank_name}</small>
-            <b>{account.account}</b>
-          </div>
-          <div className="account-card__cash">
-            <small>saldo</small>
-            <strong>{account.pin_set ? formatMoney(account.cash) : '—'}</strong>
-          </div>
-        </section>
-      ))}
+      <div className="rejilla-tarjetas">
+        {accounts.map((account) => (
+          <article
+            className={account.pin_set ? 'tarjeta' : 'tarjeta tarjeta--bloqueada'}
+            key={account.id}
+          >
+            <div className="tarjeta__cabecera">
+              <span className="tarjeta__titulo">{account.bank_name}</span>
+              <span className="micro">{account.account}</span>
+            </div>
+
+            <span className="tarjeta__rotulo" style={{ marginTop: '0.75rem' }}>
+              <Icono nombre="dinero" tamano={12} /> saldo
+            </span>
+            <b className={account.pin_set ? 'tarjeta__cifra' : 'tarjeta__cifra tarjeta__cifra--quieta'}>
+              {account.pin_set ? formatMoney(account.cash) : '—'}
+            </b>
+            <div className="tarjeta__regla" />
+
+            {!account.pin_set && (
+              <p className="tarjeta__pie">Sin PIN todavía: no puede mover dinero.</p>
+            )}
+          </article>
+        ))}
+      </div>
 
       {!accounts.length && (
         <p className="muted">
@@ -73,7 +87,9 @@ export function FinancesPage() {
       )}
 
       {accounts.length > 1 && (
-        <p className="muted">Total disponible: {formatMoney(total)}</p>
+        <p className="muted">
+          Entre todas las cuentas con PIN: <b className="dato">{formatMoney(total)}</b>
+        </p>
       )}
 
       <TransferFunds accounts={accounts} onSent={load} />

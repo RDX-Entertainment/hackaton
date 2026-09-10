@@ -76,8 +76,3 @@ input[type="checkbox"] {
   .pin-setup { grid-template-columns: 1fr; align-items: stretch; }
 }
 
-.account-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; padding: .9rem 1.1rem; background: var(--color-surface); border: var(--border-width) solid var(--color-border-strong); border-left: 3px solid var(--color-accent); }
-.account-card small { display: block; color: var(--color-text-subtle); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; }
-.account-card b { color: var(--color-text); font: 1rem var(--font-mono); }
-.account-card__cash { text-align: right; }
-.account-card__cash strong { color: var(--color-accent); font: 1.35rem var(--font-mono); }

@@ -1,31 +1,42 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { Icono } from '../components/iconos/Icono';
 import { StatusMessage } from '../components/StatusMessage';
+import { Tag } from '../components/Tag';
 import { missionsApi, type MissionCommand, type UnknownRow } from '../utils/api';
-import { formatCell } from '../utils/format';
+import { formatMoney } from '../utils/format';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
-/** The legacy status codes: 1 is on offer, 2 is accepted. */
-const STATUS_OFFERED = 1;
-const STATUS_ACCEPTED = 2;
+/** Los códigos del legado: 1 es ofrecido, 2 es aceptado. */
+const OFRECIDO = 1;
+const ACEPTADO = 2;
 
+/**
+ * Los encargos.
+ *
+ * Cada uno era un párrafo con «Prize: $2500 · status 1» dentro: el número que
+ * decide si lo coges —el premio— iba escondido en mitad de una frase, y el
+ * estado era un dígito sin traducir. Ahora el premio es la cifra grande, el
+ * estado usa el vocabulario del sistema y cada encargo lleva una sola acción:
+ * la que toca.
+ */
 export function MissionsPage() {
   const status = useStatusMessage();
-  const [missions, setMissions] = useState<UnknownRow[]>([]);
+  const [encargos, setEncargos] = useState<UnknownRow[]>([]);
 
-  const load = useCallback(() => {
-    missionsApi.listMissions().then(setMissions).catch(() => setMissions([]));
+  const cargar = useCallback(() => {
+    missionsApi.listMissions().then(setEncargos).catch(() => setEncargos([]));
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    cargar();
+  }, [cargar]);
 
-  const command = async (id: number, action: MissionCommand) => {
+  const ordenar = async (id: number, accion: MissionCommand) => {
     try {
-      await missionsApi.commandMission(id, action);
-      status.report(`Mission ${action}ed.`);
-      load();
+      await missionsApi.commandMission(id, accion);
+      status.report(accion === 'accept' ? 'Encargo aceptado.' : 'Encargo abandonado.');
+      cargar();
     } catch (error) {
       status.reportError(error);
     }
@@ -33,31 +44,59 @@ export function MissionsPage() {
 
   return (
     <>
-      <h2>Missions</h2>
+      <h2>Encargos</h2>
       <StatusMessage text={status.message} as="block" />
 
-      {missions.map((mission) => {
-        const id = Number(mission.id);
-        const state = Number(mission.status);
+      {encargos.length ? (
+        <div className="rejilla-tarjetas">
+          {encargos.map((encargo) => {
+            const id = Number(encargo.id);
+            const estado = Number(encargo.status);
+            const premio = Number(encargo.prize);
+            const aceptado = estado === ACEPTADO;
 
-        return (
-          <article className="forum-post" key={id}>
-            <b>
-              Mission #{id} · level {formatCell(mission.level)}
-            </b>
-            <p>
-              Prize: ${formatCell(mission.prize)} · status {formatCell(mission.status)}
-            </p>
+            return (
+              <article className={aceptado ? 'tarjeta tarjeta--viva' : 'tarjeta'} key={id}>
+                <div className="tarjeta__cabecera">
+                  <span className="tarjeta__titulo">Encargo #{id}</span>
+                  <span className="micro">nivel {String(encargo.level ?? '—')}</span>
+                </div>
 
-            {state === STATUS_OFFERED && (
-              <button onClick={() => void command(id, 'accept')}>Accept</button>
-            )}
-            {state === STATUS_ACCEPTED && (
-              <button onClick={() => void command(id, 'abort')}>Abort</button>
-            )}
-          </article>
-        );
-      })}
+                <span className="tarjeta__rotulo" style={{ marginTop: '0.75rem' }}>
+                  <Icono nombre="dinero" tamano={12} /> paga
+                </span>
+                <b className="tarjeta__cifra">{formatMoney(premio)}</b>
+                <div className="tarjeta__regla" />
+
+                <div className="tarjeta__acciones">
+                  {aceptado ? (
+                    <Tag estado="obra">aceptado</Tag>
+                  ) : estado === OFRECIDO ? (
+                    <Tag estado="plano">libre</Tag>
+                  ) : (
+                    <Tag estado="off">cerrado</Tag>
+                  )}
+
+                  {estado === OFRECIDO && (
+                    <button onClick={() => void ordenar(id, 'accept')}>Aceptar</button>
+                  )}
+                  {aceptado && (
+                    <button onClick={() => void ordenar(id, 'abort')}>Abandonar</button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="vacio">
+          <div className="vacio__titulo">No hay encargos en el tablón</div>
+          <p className="vacio__texto">
+            El tablón se repone solo cada cierto tiempo. Mientras tanto, el dinero también
+            entra por la Academia y por lo que consigas por tu cuenta.
+          </p>
+        </div>
+      )}
     </>
   );
 }
