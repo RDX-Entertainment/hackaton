@@ -58,7 +58,7 @@ function ClanMembership({ clan, requests, status, onChanged }: MembershipProps) 
   const accept = async (id: number) => {
     try {
       await clansApi.acceptJoinRequest(id);
-      status.report('Request accepted.');
+      status.report('Dentro: ya es del clan.');
       onChanged();
     } catch (error) {
       status.reportError(error);
@@ -77,17 +77,25 @@ function ClanMembership({ clan, requests, status, onChanged }: MembershipProps) 
 
       {clan.auth_level >= ADMIN_AUTH_LEVEL && (
         <>
-          <h3>Join requests</h3>
+          <h3>Quien pide entrar</h3>
           {requests.length ? (
-            requests.map((request) => (
-              <article className="forum-post" key={request.id}>
-                <b>{request.login}</b>
-                <p>{request.message}</p>
-                <button onClick={() => void accept(request.id)}>Accept</button>
-              </article>
-            ))
+            <div className="rejilla-tarjetas">
+              {requests.map((request) => (
+                <article className="tarjeta" key={request.id}>
+                  <span className="tarjeta__rotulo">pide entrar</span>
+                  <div className="tarjeta__cabecera" style={{ marginTop: '0.35rem' }}>
+                    <span className="tarjeta__titulo">{request.login}</span>
+                  </div>
+                  <p className="tarjeta__texto">{request.message}</p>
+                  <div className="tarjeta__acciones">
+                    <span className="micro">solicitud</span>
+                    <button onClick={() => void accept(request.id)}>Aceptar</button>
+                  </div>
+                </article>
+              ))}
+            </div>
           ) : (
-            <EmptyNotice>No pending requests.</EmptyNotice>
+            <EmptyNotice>Nadie ha pedido entrar.</EmptyNotice>
           )}
         </>
       )}

@@ -71,7 +71,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <h2>Settings · {settings.login}</h2>
+      <h2>Ajustes · {settings.login}</h2>
 
       <form className="compose" onSubmit={(event) => event.preventDefault()}>
         <label>
@@ -91,7 +91,7 @@ export function SettingsPage() {
 
       <form className="compose" onSubmit={save}>
         <label>
-          Email
+          Correo electrónico
           <input
             type="email"
             value={email}
@@ -101,7 +101,7 @@ export function SettingsPage() {
         </label>
 
         <label>
-          Current password
+          Contraseña actual
           <input
             type="password"
             value={currentPassword}
@@ -111,7 +111,7 @@ export function SettingsPage() {
         </label>
 
         <label>
-          New password (optional)
+          Contraseña nueva (si la cambias)
           <input
             type="password"
             value={newPassword}
@@ -120,7 +120,7 @@ export function SettingsPage() {
           />
         </label>
 
-        <button>Save settings</button>
+        <button>Guardar</button>
         <StatusMessage text={status.message} />
       </form>
     </>

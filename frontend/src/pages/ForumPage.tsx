@@ -27,7 +27,7 @@ export function ForumPage() {
       await forumApi.createTopic(title, content);
       setTitle('');
       setContent('');
-      status.report('Topic created.');
+      status.report('Hilo abierto.');
       load();
     } catch (error) {
       status.reportError(error);
@@ -36,16 +36,16 @@ export function ForumPage() {
 
   return (
     <>
-      <h2>Forum</h2>
+      <h2>Foro</h2>
 
       <form className="compose" onSubmit={post}>
         <label>
-          Topic title
+          Título del hilo
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
         </label>
 
         <label>
-          First post
+          Primer mensaje
           <textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}
@@ -53,32 +53,39 @@ export function ForumPage() {
           />
         </label>
 
-        <button>Post topic</button>
+        <button>Abrir hilo</button>
         <StatusMessage text={status.message} />
       </form>
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Topic</th>
-              <th>Author</th>
-              <th>Posts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topics.map((topic) => (
-              <tr key={topic.id}>
-                <td>
-                  <Link to={`/forum/${topic.id}`}>{topic.title}</Link>
-                </td>
-                <td>{topic.author}</td>
-                <td>{topic.posts}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {topics.length ? (
+        <div className="rejilla-tarjetas">
+          {topics.map((topic) => (
+            <article className="tarjeta" key={topic.id}>
+              <span className="tarjeta__rotulo">abrió {topic.author}</span>
+
+              <div className="tarjeta__cabecera" style={{ marginTop: '0.35rem' }}>
+                <Link className="tarjeta__titulo" to={`/forum/${topic.id}`}>
+                  {topic.title}
+                </Link>
+              </div>
+
+              <div className="tarjeta__acciones">
+                <span className="micro">
+                  {topic.posts} {Number(topic.posts) === 1 ? 'mensaje' : 'mensajes'}
+                </span>
+                <Link to={`/forum/${topic.id}`}>leer</Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="vacio">
+          <div className="vacio__titulo">Todavía no hay ningún hilo</div>
+          <p className="vacio__texto">
+            El foro es del juego: lo que se cuenta aquí lo leen los demás jugadores.
+          </p>
+        </div>
+      )}
     </>
   );
 }

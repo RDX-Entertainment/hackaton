@@ -32,7 +32,7 @@ export function FinancesPage() {
   if (!accounts) {
     return (
       <>
-        <h2>Dinero</h2>
+        <h2>Banco</h2>
         <p className="muted">Cargando tus cuentas…</p>
       </>
     );
@@ -45,13 +45,26 @@ export function FinancesPage() {
 
   return (
     <>
-      <h2>Dinero</h2>
+      <h2>Banco</h2>
 
       {failed && <p className="error">{failed}</p>}
 
       {pending.map((account) => (
         <ChoosePin key={account.id} account={account} onDone={load} />
       ))}
+
+      {accounts.length > 1 && (
+        <article className="tarjeta tarjeta--viva" style={{ marginBottom: '1rem' }}>
+          <span className="tarjeta__rotulo">
+            <Icono nombre="dinero" tamano={12} /> entre todas las cuentas con PIN
+          </span>
+          <b className="tarjeta__cifra">{formatMoney(total)}</b>
+          <div className="tarjeta__regla" />
+          <p className="tarjeta__pie">
+            {accounts.length} cuentas &middot; el saldo de una cuenta sin PIN no cuenta.
+          </p>
+        </article>
+      )}
 
       <div className="rejilla-tarjetas">
         {accounts.map((account) => (
@@ -61,7 +74,7 @@ export function FinancesPage() {
           >
             <div className="tarjeta__cabecera">
               <span className="tarjeta__titulo">{account.bank_name}</span>
-              <span className="micro">{account.account}</span>
+              <span className="micro">nº {account.account}</span>
             </div>
 
             <span className="tarjeta__rotulo" style={{ marginTop: '0.75rem' }}>
@@ -83,12 +96,6 @@ export function FinancesPage() {
         <p className="muted">
           No tienes ninguna cuenta. Se abre una sola al registrarte; si no la tienes, es que
           todavía no había ningún banco en el juego. Pídesela a un administrador.
-        </p>
-      )}
-
-      {accounts.length > 1 && (
-        <p className="muted">
-          Entre todas las cuentas con PIN: <b className="dato">{formatMoney(total)}</b>
         </p>
       )}
 

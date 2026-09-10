@@ -46,7 +46,7 @@ export function ProfilePage() {
 
   return (
     <>
-      <h2>Profile</h2>
+      <h2>Perfil</h2>
 
       <IdentityCard profile={profile} clan={clan} />
 
@@ -56,33 +56,33 @@ export function ProfilePage() {
 
       <div className="profile__columns">
         <StatList
-          title="stats"
+          title="números"
           stats={[
-            { label: 'rank', value: profile.rank < 0 ? 'sin clasificar' : `#${profile.rank}` },
-            { label: 'exp', value: formatCount(profile.exp), accent: true },
-            { label: 'hacks', value: formatCount(profile.hacks) },
-            { label: 'certs', value: formatCount(certifications) },
+            { label: 'puesto', value: profile.rank < 0 ? 'sin clasificar' : `#${profile.rank}` },
+            { label: 'experiencia', value: formatCount(profile.exp), accent: true },
+            { label: 'entradas', value: formatCount(profile.hacks) },
+            { label: 'academia', value: formatCount(certifications) },
           ]}
         />
 
         <StatList
-          title="account"
+          title="cuenta"
           stats={[
-            { label: 'uid', value: `#${profile.id}` },
-            { label: 'joined', value: formatDate(profile.date_joined) },
-            { label: 'hardware', value: formatMoney(profile.money_hardware) },
+            { label: 'identificador', value: `#${profile.id}` },
+            { label: 'desde', value: formatDate(profile.date_joined) },
+            { label: 'gastado en piezas', value: formatMoney(profile.money_hardware) },
           ]}
         />
       </div>
 
       {machine && (
         <StatList
-          title="lshw"
+          title="tu equipo"
           stats={[
-            { label: 'cpu', value: formatCount(machine.cpu) },
-            { label: 'ram', value: formatCount(machine.ram) },
-            { label: 'hdd', value: `${formatCount(machine.hdd)} MB` },
-            { label: 'net', value: formatCount(machine.net) },
+            { label: 'procesador', value: formatCount(machine.cpu) },
+            { label: 'memoria', value: formatCount(machine.ram) },
+            { label: 'disco', value: `${formatCount(machine.hdd)} MB` },
+            { label: 'red', value: formatCount(machine.net) },
           ]}
         />
       )}
