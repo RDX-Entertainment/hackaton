@@ -292,11 +292,22 @@
   border: var(--border-width) solid var(--color-border);
 }
 
+/*
+ * La fila del zocalo cabe en la ficha, que mide 16rem y no negocia.
+ *
+ * Era una fila flex con `justify-content: space-between` y dos anchos minimos
+ * dentro del `dd` --2,4rem la cuenta y 8,5rem la potencia--, que sumaban mas de
+ * lo que quedaba libre. Un minimo no encoge: el `dd` media 222 px en una fila de
+ * 208 y se salia de la tarjeta, de la columna y de la pagina, que empezaba a
+ * desplazarse a lo ancho. Ahora la etiqueta y la cuenta comparten renglon y la
+ * potencia baja al suyo, que es lo que crece cuando el equipo lleva numeros de
+ * verdad.
+ */
 .kitprev__slot {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.7rem;
+  gap: 0.1rem 0.7rem;
   padding: 0.42rem 0.6rem;
   background: var(--color-surface);
 }
@@ -321,13 +332,18 @@
 }
 
 .kitprev__slot dd {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto;
   align-items: center;
-  gap: 0.5rem;
+  justify-items: end;
+  gap: 0 0.5rem;
+  min-width: 0;
   margin: 0;
 }
 
 .kitprev__bar {
+  overflow: hidden;
+  min-width: 0;
   color: var(--color-accent);
   font-size: 0.68rem;
   letter-spacing: -0.06em;
@@ -345,8 +361,10 @@
   text-align: right;
 }
 
+/* Segundo renglon, a la derecha: es el dato que se alarga con las cifras. */
 .kitprev__power {
-  min-width: 8.5rem;
+  grid-column: 1 / -1;
+  min-width: 0;
   color: var(--color-text-subtle);
   font-size: 0.64rem;
   font-variant-numeric: tabular-nums;

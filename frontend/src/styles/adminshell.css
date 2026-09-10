@@ -446,3 +446,49 @@
 .shell--admin .game__inner {
   max-width: 1500px;
 }
+
+/* ---------- Pantallas estrechas ---------- */
+
+/*
+ * A 390 px la barra del panel dejaba fuera cinco de las siete secciones, el
+ * enlace de volver al juego y el boton de salir: es una fila `fixed` sin
+ * envolver ni desplazar, asi que lo que no cabia no existia y del panel no se
+ * podia ni salir.
+ *
+ * Debajo de 900 px la barra deja de ser fija y se parte en dos renglones: marca
+ * y sesion arriba, y las secciones abajo en un carril que se desliza a lo ancho
+ * --lo mismo que hace el carril del juego a este ancho--.
+ */
+@media (max-width: 900px) {
+  .shell--admin {
+    padding-top: 0;
+  }
+
+  .topbar--admin {
+    position: static;
+    height: auto;
+    flex-wrap: wrap;
+    gap: var(--e2);
+    padding: var(--e2) var(--e3);
+  }
+
+  .topbar--admin .adminnav {
+    order: 3;
+    width: 100%;
+    height: auto;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  .topbar--admin .adminnav__link {
+    flex: 0 0 auto;
+    height: auto;
+    padding: var(--e2) var(--e3);
+    border-bottom-width: 2px;
+  }
+
+  .topbar--admin .topbar__session {
+    gap: var(--e2);
+  }
+}

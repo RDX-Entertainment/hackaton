@@ -44,11 +44,53 @@ select {
   border: var(--border-width) solid var(--color-border-field);
 }
 
-/* Checkboxes are the one control that keeps a native look, tinted green. */
+/*
+ * La casilla se dibuja entera.
+ *
+ * Con `accent-color` el navegador solo tine la marcada: la vacia se queda con
+ * su caja blanca nativa, que sobre negro es lo mas brillante de la pantalla y
+ * dice «mirame» justo donde no pasa nada. El brillo es informacion, asi que la
+ * vacia es un cuadro de filo duro y solo la marcada se enciende.
+ */
 input[type="checkbox"] {
-  accent-color: var(--color-accent);
+  appearance: none;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-content: center;
   width: 0.95rem;
   height: 0.95rem;
+  margin: 0;
+  background: var(--color-field);
+  border: var(--border-width) solid var(--color-border-field);
+  cursor: pointer;
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+input[type="checkbox"]:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* La marca es una forma, no solo un color: en monocromo el color no llega. */
+input[type="checkbox"]:checked::after {
+  content: "\2713";
+  color: var(--color-bg);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: var(--border-width) solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:disabled {
+  border-color: var(--color-border);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* The status line under a form: an echoed reply, not a label. */
