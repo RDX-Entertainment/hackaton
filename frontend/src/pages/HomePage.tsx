@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { Icono } from '../components/iconos/Icono';
 import { CircuitRail } from '../components/onboarding/CircuitRail';
 import { NextStep } from '../components/onboarding/NextStep';
 import { useOnboarding } from '../components/onboarding/useOnboarding';
@@ -46,18 +47,52 @@ export function HomePage() {
         </>
       )}
 
-      <section className="cards">
-        <article>
-          <b>{formatMoney(dashboard.money)}</b>
-          <small>Dinero</small>
+      <section className="estado">
+        <article className="tarjeta">
+          <span className="tarjeta__rotulo">
+            <Icono nombre="dinero" tamano={12} /> en el banco
+          </span>
+          <b className="tarjeta__cifra">{formatMoney(dashboard.money)}</b>
+          <div className="tarjeta__regla" />
+          <p className="tarjeta__pie">Lo que puedes gastar ahora mismo.</p>
         </article>
-        <article>
-          <b>{dashboard.processes}</b>
-          <small>Procesos</small>
+
+        <article className="tarjeta">
+          <span className="tarjeta__rotulo">
+            <Icono nombre="tiempo" tamano={12} /> en marcha
+          </span>
+          <b
+            className={
+              dashboard.processes
+                ? 'tarjeta__cifra tarjeta__cifra--tiempo'
+                : 'tarjeta__cifra tarjeta__cifra--quieta'
+            }
+          >
+            {dashboard.processes}
+          </b>
+          <div className="tarjeta__regla" />
+          <p className="tarjeta__pie">
+            {dashboard.processes
+              ? 'Tareas que termina el worker por su cuenta.'
+              : 'Nada corriendo. Lo que empieces aparece aquí.'}
+          </p>
         </article>
-        <article>
-          <b>{dashboard.unread_mail}</b>
-          <small>Correo sin leer</small>
+
+        <article className="tarjeta">
+          <span className="tarjeta__rotulo">
+            <Icono nombre="aviso" tamano={12} /> correo
+          </span>
+          <b
+            className={
+              dashboard.unread_mail
+                ? 'tarjeta__cifra'
+                : 'tarjeta__cifra tarjeta__cifra--quieta'
+            }
+          >
+            {dashboard.unread_mail}
+          </b>
+          <div className="tarjeta__regla" />
+          <p className="tarjeta__pie">Sin leer.</p>
         </article>
       </section>
 

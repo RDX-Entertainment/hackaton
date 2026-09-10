@@ -20,27 +20,36 @@
   pointer-events: none;
 }
 
+/*
+ * El barrido: una línea de cada tres, y al 15 %.
+ *
+ * Empezó al 36 % con una línea de cada dos, que era la mitad de la pantalla en
+ * negro: sobre un texto de 13 px se comía los trazos finos y cansaba a los diez
+ * minutos. Ahora se nota como material y no como filtro.
+ */
 .capa--barrido {
   z-index: 90;
   background: repeating-linear-gradient(
     180deg,
     transparent 0 2px,
-    rgba(0, 0, 0, 0.36) 2px 4px
+    rgba(0, 0, 0, 0.15) 2px 3px
   );
 }
 
 .capa--grano {
   z-index: 91;
-  opacity: 0.055;
+  opacity: 0.028;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
 }
 
+/* La viñeta empieza más tarde y llega menos lejos: oscurecía las esquinas
+ * donde vive media interfaz —el carril, las lecturas del HUD—. */
 .capa--vineta {
   z-index: 89;
   background: radial-gradient(
-    ellipse 78% 68% at 50% 46%,
-    transparent 44%,
-    rgba(0, 0, 0, 0.9) 100%
+    ellipse 88% 80% at 50% 46%,
+    transparent 62%,
+    rgba(0, 0, 0, 0.55) 100%
   );
 }
 
@@ -263,4 +272,240 @@
   display: inline-block;
   vertical-align: -0.15em;
   color: inherit;
+}
+
+
+/* ---------- Tarjetas ---------- */
+
+/*
+ * Una tarjeta es un objeto, no un rectángulo con texto dentro.
+ *
+ * Lo que la convierte en objeto son cuatro cosas, y ninguna es un adorno:
+ * el **fondo en degradado**, que le da un arriba y un abajo; la **línea de luz**
+ * del borde superior, que es de donde parece venir la iluminación; las **marcas
+ * de esquina**, que es como se encuadra algo en una pantalla técnica; y que
+ * **responda al ratón**, para que se note que se puede tocar.
+ *
+ * Nada de sombras difusas ni de esquinas redondeadas: el filo sigue siendo duro.
+ */
+.tarjeta {
+  position: relative;
+  padding: var(--e4);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface-raised),
+    var(--color-surface-sunken)
+  );
+  border: var(--border-width) solid var(--color-border-strong);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.07);
+  transition:
+    border-color var(--t-corto) var(--curva-corta),
+    box-shadow var(--t-corto) var(--curva-corta),
+    transform var(--t-corto) var(--curva-corta);
+}
+
+/* Las marcas de esquina, en diagonal: dos bastan para encuadrar. */
+.tarjeta::before,
+.tarjeta::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+}
+
+.tarjeta::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--color-accent-dim);
+  border-left: 2px solid var(--color-accent-dim);
+}
+
+.tarjeta::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--color-accent-dim);
+  border-bottom: 2px solid var(--color-accent-dim);
+}
+
+.tarjeta:hover {
+  border-color: var(--color-accent-dim);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 255, 65, 0.12),
+    var(--brillo-panel);
+  transform: translateY(-1px);
+}
+
+/* Una sola tarjeta viva por pantalla. Dos compiten y no gana ninguna. */
+.tarjeta--viva {
+  border-color: var(--color-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 255, 65, 0.16),
+    0 0 0 1px rgba(0, 255, 65, 0.1),
+    var(--brillo-panel);
+}
+
+.tarjeta--viva::before,
+.tarjeta--viva::after {
+  border-color: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta {
+    transition: none;
+  }
+
+  .tarjeta:hover {
+    transform: none;
+  }
+}
+
+/* La tarjeta de una cifra: rótulo arriba, número grande, y una regla que lo
+ * asienta. El número es lo único que brilla. */
+.tarjeta__rotulo {
+  display: flex;
+  align-items: center;
+  gap: var(--e1);
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.tarjeta__cifra {
+  display: block;
+  margin-top: var(--e2);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  color: var(--color-accent);
+  text-shadow: 0 0 22px rgba(0, 255, 65, 0.3);
+}
+
+.tarjeta__cifra--quieta {
+  color: var(--color-text);
+  text-shadow: none;
+}
+
+.tarjeta__cifra--tiempo {
+  color: var(--color-warn);
+  text-shadow: 0 0 22px rgba(255, 176, 0, 0.3);
+}
+
+/* La regla bajo la cifra: se ilumina a la izquierda y se apaga a la derecha,
+ * así el bloque tiene peso sin necesidad de otra caja. */
+.tarjeta__regla {
+  height: 2px;
+  margin-top: var(--e2);
+  background: linear-gradient(
+    90deg,
+    var(--color-accent-dim),
+    rgba(0, 194, 51, 0)
+  );
+}
+
+.tarjeta__pie {
+  margin-top: var(--e2);
+  font-size: var(--texto-cuerpo);
+  color: var(--color-text-muted);
+}
+
+/* ---------- Las tarjetas que ya existían ---------- */
+
+/*
+ * `.cards` y `.forum-post` vienen del frontend viejo y están puestas en media
+ * docena de pantallas. En vez de tocarlas una por una, heredan aquí el mismo
+ * tratamiento: el juego entero mejora sin abrir seis ficheros.
+ */
+.cards {
+  gap: var(--e2);
+  margin: var(--e4) 0 var(--e6);
+  background: transparent;
+  border: 0;
+}
+
+.cards article {
+  position: relative;
+  padding: var(--e4);
+  background: linear-gradient(
+    180deg,
+    var(--color-surface-raised),
+    var(--color-surface-sunken)
+  );
+  border: var(--border-width) solid var(--color-border-strong);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.07);
+  transition:
+    border-color var(--t-corto) var(--curva-corta),
+    box-shadow var(--t-corto) var(--curva-corta);
+}
+
+.cards article::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid var(--color-accent-dim);
+  border-left: 2px solid var(--color-accent-dim);
+}
+
+.cards article:hover {
+  border-color: var(--color-accent-dim);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 255, 65, 0.12),
+    var(--brillo-panel);
+}
+
+.cards b {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  text-shadow: 0 0 22px rgba(0, 255, 65, 0.3);
+}
+
+.cards small {
+  margin-top: var(--e2);
+  padding-top: var(--e2);
+  border-top: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--color-accent-dim), rgba(0, 194, 51, 0)) 1;
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+}
+
+.forum-post {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    var(--color-surface-raised),
+    var(--color-surface-sunken)
+  );
+  border-color: var(--color-border-strong);
+  border-left-width: 2px;
+  border-left-color: var(--color-accent-deep);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 65, 0.06);
+  transition:
+    border-color var(--t-corto) var(--curva-corta),
+    box-shadow var(--t-corto) var(--curva-corta);
+}
+
+.forum-post::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--color-accent-dim);
+  border-bottom: 2px solid var(--color-accent-dim);
+  pointer-events: none;
+}
+
+.forum-post:hover {
+  border-left-color: var(--color-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 255, 65, 0.1),
+    var(--brillo-panel);
 }

@@ -134,3 +134,17 @@
 .nextstep__practice small {
   color: var(--color-text-subtle);
 }
+
+/* Las tres lecturas de la portada. Tres columnas que se apilan sin ceremonia. */
+.estado {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--e2);
+  margin: var(--e6) 0;
+}
+
+@media (max-width: 700px) {
+  .estado {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
