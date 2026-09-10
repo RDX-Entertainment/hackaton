@@ -1,0 +1,305 @@
+/*
+ * El cliente de correo.
+ *
+ * La disposición de siempre —lista a un lado, mensaje al otro— porque es la que
+ * todo el mundo sabe leer sin que se la expliquen. Lo que cambia es el
+ * material: filo duro, fósforo, y el cuerpo del mensaje tal cual se escribió.
+ */
+
+.correo {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 34rem;
+  background: var(--color-surface-sunken);
+  border: var(--border-width) solid var(--color-border-strong);
+}
+
+/* ---------- La lista ---------- */
+
+.correo__lista {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: var(--border-width) solid var(--color-border-strong);
+}
+
+.correo__barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.correo__barra button {
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--texto-micro);
+}
+
+.correo__mensajes {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/*
+ * Cada fila es un botón —se pulsa, no se «visita»— y lleva la rejilla de un
+ * buzón: punto, quién, asunto, y la primera línea de lo que dice. Sin la última
+ * hay que abrir cada mensaje para saber cuál es cuál.
+ */
+.correo__fila {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 0 var(--e2);
+  width: 100%;
+  margin: 0;
+  padding: var(--e2) var(--e3);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+  cursor: pointer;
+}
+
+.correo__fila::before,
+.correo__fila::after {
+  content: none;
+}
+
+.correo__punto {
+  grid-row: 1 / 3;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.correo__de {
+  font-size: var(--texto-micro);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.correo__asunto {
+  grid-column: 2;
+  color: var(--color-text-muted);
+  font-size: var(--texto-cuerpo);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correo__avance {
+  grid-column: 2;
+  color: var(--color-text-subtle);
+  font-size: var(--texto-micro);
+  letter-spacing: 0;
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.correo__fila:hover {
+  background: var(--color-hover);
+}
+
+/* Lo que no has leído: punto encendido y el asunto en el verde de texto. */
+.correo__fila.es-nuevo .correo__punto {
+  background: var(--color-accent);
+  box-shadow: var(--brillo);
+}
+
+.correo__fila.es-nuevo .correo__asunto {
+  color: var(--color-text);
+}
+
+/* El elegido, con el filo vivo a la izquierda, como el carril. */
+.correo__fila.es-elegido {
+  background: var(--color-accent-glow);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.correo__fila.es-elegido .correo__asunto {
+  color: var(--color-text);
+}
+
+.correo__nada {
+  padding: var(--e6) var(--e3);
+  text-align: center;
+  color: var(--color-text-subtle);
+  font-size: var(--texto-cuerpo);
+}
+
+/* ---------- El panel de lectura ---------- */
+
+.correo__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-surface);
+}
+
+.correo__cabecera {
+  padding: var(--e3) var(--e4);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.correo__titulo {
+  margin: 0 0 var(--e2);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--color-text);
+}
+
+.correo__titulo::before {
+  content: none;
+}
+
+.correo__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e4);
+  font-size: var(--texto-cuerpo);
+  color: var(--color-highlight);
+}
+
+/* El cuerpo va tal cual: un correo del juego puede traer una dirección o una
+ * tabla en ASCII, y reflowear eso lo rompe. */
+.correo__cuerpo {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--e4);
+  overflow: auto;
+  color: var(--color-text-muted);
+  font-size: var(--texto-cuerpo);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.correo__acciones {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.correo__acciones button {
+  margin: 0;
+}
+
+.correo__acciones .muted {
+  margin-right: auto;
+}
+
+.correo__vacio {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e2);
+  padding: var(--e6);
+  text-align: center;
+  color: var(--color-text-subtle);
+}
+
+.correo__vacio p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--texto-cuerpo);
+}
+
+/* ---------- Redactar ---------- */
+
+.correo__redactar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+}
+
+.correo__campo {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2) var(--e4);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.correo__campo input {
+  flex: 1;
+  margin: 0;
+  padding: 0.2rem 0;
+  color: var(--color-text);
+  background: transparent;
+  border: 0;
+}
+
+.correo__campo input:focus {
+  outline: none;
+  color: var(--color-accent-bright);
+}
+
+.correo__cuerpo-editable {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--e4);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--texto-cuerpo);
+  line-height: 1.7;
+  background: transparent;
+  border: 0;
+  resize: none;
+}
+
+.correo__cuerpo-editable:focus {
+  outline: none;
+}
+
+/* ---------- Estrecho ---------- */
+
+/*
+ * A 900 px no caben dos columnas. En vez de encogerlas, el buzón se comporta
+ * como un cliente de móvil: se ve la lista, y al abrir un mensaje **ocupa la
+ * pantalla**; el botón «Volver» de las acciones es el que devuelve la lista.
+ */
+@media (max-width: 900px) {
+  .correo {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .correo__lista {
+    border-right: 0;
+    border-bottom: var(--border-width) solid var(--color-border-strong);
+  }
+
+  .correo__mensajes {
+    max-height: 22rem;
+  }
+
+  .correo__panel {
+    min-height: 18rem;
+  }
+
+  /* Con un mensaje abierto, la lista se aparta del todo. */
+  .correo--leyendo .correo__lista {
+    display: none;
+  }
+}

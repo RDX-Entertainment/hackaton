@@ -1,62 +1,89 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { mailApi } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
 import { StatusMessage } from './StatusMessage';
 
-const MAX_SUBJECT_LENGTH = 40;
+const LARGO_ASUNTO = 40;
 
 type ComposeMailProps = {
-  /** Called after a successful send so the caller can reload its list. */
+  /** Se llama al enviar, para que quien lo monta recargue su lista. */
   onSent: () => void;
+  /** Cerrar el redactor. Sin esto no se puede salir sin enviar. */
+  onCerrar?: () => void;
+  /** Destinatario y asunto ya puestos, para responder. */
+  para?: string;
+  asunto?: string;
 };
 
-export function ComposeMail({ onSent }: ComposeMailProps) {
+/** El redactor. Vive dentro del panel de lectura, en el sitio del mensaje. */
+export function ComposeMail({ onSent, onCerrar, para = '', asunto = '' }: ComposeMailProps) {
   const status = useStatusMessage();
 
-  const [to, setTo] = useState('');
-  const [subject, setSubject] = useState('');
-  const [text, setText] = useState('');
+  const [destinatario, setDestinatario] = useState(para);
+  const [titulo, setTitulo] = useState(asunto);
+  const [texto, setTexto] = useState('');
 
-  const send = async (event: FormEvent) => {
+  // Responder a otro mensaje reutiliza el mismo formulario: si no se repusieran,
+  // seguiria puesto el destinatario del anterior.
+  useEffect(() => {
+    setDestinatario(para);
+    setTitulo(asunto);
+  }, [para, asunto]);
+
+  const enviar = async (event: FormEvent) => {
     event.preventDefault();
 
     try {
-      await mailApi.sendMail(to, subject, text);
-      setTo('');
-      setSubject('');
-      setText('');
-      status.report('E-mail sent.');
+      await mailApi.sendMail(destinatario, titulo, texto);
+      setTexto('');
+      status.report('Enviado.');
       onSent();
+      onCerrar?.();
     } catch (error) {
       status.reportError(error);
     }
   };
 
   return (
-    <form className="compose" onSubmit={send}>
-      <label>
-        To
-        <input value={to} onChange={(event) => setTo(event.target.value)} required />
-      </label>
-
-      <label>
-        Subject
+    <form className="correo__redactar" onSubmit={enviar}>
+      <label className="correo__campo">
+        <span className="micro">para</span>
         <input
-          value={subject}
-          maxLength={MAX_SUBJECT_LENGTH}
-          onChange={(event) => setSubject(event.target.value)}
+          value={destinatario}
+          placeholder="nombre del jugador"
+          onChange={(event) => setDestinatario(event.target.value)}
           required
         />
       </label>
 
-      <label>
-        Message
-        <textarea value={text} onChange={(event) => setText(event.target.value)} required />
+      <label className="correo__campo">
+        <span className="micro">asunto</span>
+        <input
+          value={titulo}
+          maxLength={LARGO_ASUNTO}
+          onChange={(event) => setTitulo(event.target.value)}
+          required
+        />
       </label>
 
-      <button>Send</button>
-      <StatusMessage text={status.message} />
+      <textarea
+        className="correo__cuerpo-editable"
+        value={texto}
+        placeholder="Escribe aquí."
+        onChange={(event) => setTexto(event.target.value)}
+        required
+      />
+
+      <div className="correo__acciones">
+        <StatusMessage text={status.message} />
+        {onCerrar && (
+          <button type="button" onClick={onCerrar}>
+            Descartar
+          </button>
+        )}
+        <button>Enviar</button>
+      </div>
     </form>
   );
 }
