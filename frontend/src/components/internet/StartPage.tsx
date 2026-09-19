@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { Visited } from '../../utils/api';
 import { formatIp } from '../../utils/ip';
 
@@ -15,6 +16,7 @@ type StartPageProps = {
  * portada, y el 404 va debajo del rótulo para que se vea de qué portada se trata.
  */
 export function StartPage({ history, notFound, onVisit }: StartPageProps) {
+  useIdioma();
   return (
     <section className="viewport viewport--start">
       <div className="start">
@@ -37,19 +39,16 @@ export function StartPage({ history, notFound, onVisit }: StartPageProps) {
             </pre>
 
             <p>
-              <b>{formatIp(notFound)}</b> no responde. O no hay nada en esa dirección, o la
-              máquina no tiene salida a Internet.
-            </p>
+              <b>{formatIp(notFound)}</b> {tr("no responde. O no hay nada en esa dirección, o la máquina no tiene salida a Internet.")} </p>
           </section>
         )}
 
         <p className="start__lead">
-          Escribe una dirección arriba, o entra por una de las conocidas del listín.
-        </p>
+          {tr("Escribe una dirección arriba, o entra por una de las conocidas del listín.")} </p>
 
         {history.length > 0 && (
           <section className="start__block">
-            <h4>Últimas visitas</h4>
+            <h4>{tr("Últimas visitas")}</h4>
 
             <div className="start__recent">
               {history.slice(0, 10).map((one) => (

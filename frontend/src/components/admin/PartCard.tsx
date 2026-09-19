@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { Part } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
 import { PartIcon } from './PartIcon';
@@ -17,6 +18,7 @@ type PartCardProps = {
 };
 
 export function PartCard({ part, busy, onEdit, onRemove }: PartCardProps) {
+  useIdioma();
   const isBoard = part.kind === 'mobo';
 
   const specs = isBoard
@@ -24,11 +26,11 @@ export function PartCard({ part, busy, onEdit, onRemove }: PartCardProps) {
         { key: 'chipset', value: part.chipset ?? '—' },
         { key: 'acepta', value: `DDR${part.generation}` },
         {
-          key: 'zócalos',
+          key: tr("zócalos"),
           value: `${part.cpu_slots}c ${part.ram_slots}r ${part.hdd_slots}d ${part.net_slots}n`,
         },
-        { key: 'ram máx', value: `${formatCount(part.max_ram)} MB` },
-        { key: 'hdd máx', value: `${formatCount(part.max_hdd)} MB` },
+        { key: tr("ram máx"), value: `${formatCount(part.max_ram)} MB` },
+        { key: tr("hdd máx"), value: `${formatCount(part.max_hdd)} MB` },
       ]
     : [
         { key: 'capacidad', value: `${formatCount(part.power)} ${UNIT[part.kind] ?? ''}` },
@@ -63,15 +65,13 @@ export function PartCard({ part, busy, onEdit, onRemove }: PartCardProps) {
       <footer className="partitem__foot">
         <span className="partitem__price">{formatMoney(part.price)}</span>
 
-        {!part.listed && <span className="partitem__retired">retirada</span>}
+        {!part.listed && <span className="partitem__retired">{tr("retirada")}</span>}
 
         <span className="partitem__actions">
           <button type="button" disabled={busy} onClick={() => onEdit(part)}>
-            editar
-          </button>
+            {tr("editar")} </button>
           <button type="button" disabled={busy} onClick={() => onRemove(part)}>
-            borrar
-          </button>
+            {tr("borrar")} </button>
         </span>
       </footer>
     </article>

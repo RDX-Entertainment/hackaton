@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import type { ReactNode } from 'react';
 
 type NoticeProps = {
@@ -5,7 +6,8 @@ type NoticeProps = {
 };
 
 /** Esperando la primera carga. */
-export function Loading({ children = 'Cargando…' }: { children?: ReactNode }) {
+export function Loading({ children = tr("Cargando…") }: { children?: ReactNode }) {
+  useIdioma();
   return <p className="muted">{children}</p>;
 }
 
@@ -16,6 +18,7 @@ export function Loading({ children = 'Cargando…' }: { children?: ReactNode }) 
  * significa pérdida: algo no se ha hecho.
  */
 export function ErrorNotice({ children }: NoticeProps) {
+  useIdioma();
   return (
     <p className="nota nota--error">
       <span>{children}</span>
@@ -25,5 +28,6 @@ export function ErrorNotice({ children }: NoticeProps) {
 
 /** No hay nada que enseñar, pero tampoco ha ido nada mal. */
 export function EmptyNotice({ children }: NoticeProps) {
+  useIdioma();
   return <p className="muted">{children}</p>;
 }

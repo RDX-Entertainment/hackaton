@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { formatCount } from '../../utils/format';
@@ -21,8 +22,8 @@ function bytesOf(text: string): number {
 export type EditorLayout = 'split' | 'full';
 
 const LAYOUTS: { value: EditorLayout; label: string; hint: string }[] = [
-  { value: 'split', label: 'mitad y mitad', hint: 'código y vista, uno al lado del otro' },
-  { value: 'full', label: 'pantalla completa', hint: 'la vista entera, y el código debajo' },
+  { value: 'split', get label() { return tr("mitad y mitad"); }, get hint() { return tr("código y vista, uno al lado del otro"); } },
+  { value: 'full', get label() { return tr("pantalla completa"); }, get hint() { return tr("la vista entera, y el código debajo"); } },
 ];
 
 const RULES = [
@@ -46,6 +47,7 @@ type SiteEditorProps = {
  * aquí es exactamente lo que verá quien te visite — incluido lo que se rompa.
  */
 export function SiteEditor({ ip, name, web, busy, error, onSave }: SiteEditorProps) {
+  useIdioma();
   const [draft, setDraft] = useState(web);
   const [live, setLive] = useState(web);
   const [layout, setLayout] = useState<EditorLayout>('split');
@@ -77,7 +79,7 @@ export function SiteEditor({ ip, name, web, busy, error, onSave }: SiteEditorPro
   return (
     <form className={`editor editor--${layout}`} onSubmit={save}>
       <div className="editor__modes">
-        <span className="editor__modeslabel">vista</span>
+        <span className="editor__modeslabel">{tr("vista")}</span>
 
         {LAYOUTS.map((one) => (
           <button
@@ -104,7 +106,7 @@ export function SiteEditor({ ip, name, web, busy, error, onSave }: SiteEditorPro
 
         <ul className="editor__rules">
           {RULES.map((rule) => (
-            <li key={rule}>{rule}</li>
+            <li key={rule}>{tr(rule)}</li>
           ))}
         </ul>
 
@@ -113,16 +115,15 @@ export function SiteEditor({ ip, name, web, busy, error, onSave }: SiteEditorPro
         <div className="editor__foot">
           <span className={over ? 'editor__count is-over' : 'editor__count'}>
             {over
-              ? `${formatCount(size - MAX_BYTES)} bytes de más`
-              : `${formatCount(MAX_BYTES - size)} bytes libres`}
+              ? tr("{0} bytes de más", formatCount(size - MAX_BYTES))
+              : tr("{0} bytes libres", formatCount(MAX_BYTES - size))}
           </span>
 
           <span className="editor__buttons">
             <button type="button" disabled={busy || !dirty} onClick={() => setDraft(web)}>
-              descartar
-            </button>
+              {tr("descartar")} </button>
             <button className="is-primary" disabled={busy || !dirty || over}>
-              {busy ? 'guardando…' : 'publicar'}
+              {busy ? tr("guardando…") : tr("publicar")}
             </button>
           </span>
         </div>

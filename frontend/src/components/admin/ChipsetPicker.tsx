@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useRef, useState } from 'react';
 
 import { adminApi, type Chipset } from '../../utils/api';
@@ -18,8 +19,9 @@ export function ChipsetPicker({
   onChange,
   onCreated,
   label = 'chipset',
-  emptyLabel = 'sin chipset',
+  emptyLabel = tr("sin chipset"),
 }: ChipsetPickerProps) {
+  useIdioma();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -105,7 +107,7 @@ export function ChipsetPicker({
           <div className="chipset__create">
             <input
               value={name}
-              placeholder="nuevo chipset"
+              placeholder={tr("nuevo chipset")}
               autoFocus
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
@@ -123,7 +125,7 @@ export function ChipsetPicker({
               type="button"
               className="chipset__add"
               disabled={busy || !name.trim()}
-              aria-label="Crear chipset"
+              aria-label={tr("Crear chipset")}
               onClick={() => void create()}
             >
               +
@@ -163,7 +165,7 @@ export function ChipsetPicker({
                   type="button"
                   className="chipset__remove"
                   disabled={busy}
-                  aria-label={`Borrar ${chipset.name}`}
+                  aria-label={tr("Borrar {0}", chipset.name)}
                   onClick={() => void remove(chipset)}
                 >
                   ×

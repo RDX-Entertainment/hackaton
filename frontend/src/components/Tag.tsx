@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 /**
  * El vocabulario del circuito, en una sola pieza.
  *
@@ -12,12 +13,12 @@
 export type Estado = 'memoria' | 'disco' | 'plano' | 'obra' | 'mal' | 'off';
 
 const PALABRA: Record<Estado, string> = {
-  memoria: 'en memoria',
-  disco: 'en disco',
-  plano: 'solo diseño',
-  obra: 'compilando',
-  mal: 'no cabe',
-  off: 'bloqueado',
+  get memoria() { return tr("en memoria"); },
+  get disco() { return tr("en disco"); },
+  get plano() { return tr("solo diseño"); },
+  get obra() { return tr('compilando'); },
+  get mal() { return tr("no cabe"); },
+  get off() { return tr('bloqueado'); },
 };
 
 type TagProps = {
@@ -27,5 +28,6 @@ type TagProps = {
 };
 
 export function Tag({ estado, children }: TagProps) {
+  useIdioma();
   return <span className={`tag tag--${estado}`}>{children ?? PALABRA[estado]}</span>;
 }

@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AccountsBoard } from '../../components/admin/AccountsBoard';
@@ -29,10 +30,10 @@ import { formatIp } from '../../utils/ip';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 
 const ZONES: { value: NetworkZone; label: string; hint: string }[] = [
-  { value: 'public', label: 'Pública', hint: 'visible desde Internet' },
-  { value: 'dmz', label: 'DMZ', hint: 'perímetro de la organización' },
-  { value: 'internal', label: 'Interna', hint: 'reservada para red privada' },
-  { value: 'restricted', label: 'Restringida', hint: 'activos especialmente sensibles' },
+  { value: 'public', get label() { return tr("Pública"); }, get hint() { return tr("visible desde Internet"); } },
+  { value: 'dmz', label: 'DMZ', get hint() { return tr("perímetro de la organización"); } },
+  { value: 'internal', get label() { return tr("Interna"); }, get hint() { return tr("reservada para red privada"); } },
+  { value: 'restricted', get label() { return tr("Restringida"); }, get hint() { return tr("activos especialmente sensibles"); } },
 ];
 
 const emptyOrganization = (): OrganizationInput => ({
@@ -81,20 +82,21 @@ function behaviorText(behaviors: OrganizationBehavior[]) {
 
 function behaviorFromText(text: string): OrganizationBehavior[] {
   const value: unknown = JSON.parse(text || '[]');
-  if (!Array.isArray(value)) throw new Error('Los comportamientos deben ser una lista JSON.');
+  if (!Array.isArray(value)) throw new Error(tr("Los comportamientos deben ser una lista JSON."));
   return value.map((item) => {
     if (!item || typeof item !== 'object' || typeof (item as { code?: unknown }).code !== 'string') {
-      throw new Error('Cada comportamiento requiere un campo "code".');
+      throw new Error(tr("Cada comportamiento requiere un campo \"code\"."));
     }
     const config = (item as { config?: unknown }).config;
     if (config !== undefined && (!config || typeof config !== 'object' || Array.isArray(config))) {
-      throw new Error('La configuración de cada comportamiento debe ser un objeto JSON.');
+      throw new Error(tr("La configuración de cada comportamiento debe ser un objeto JSON."));
     }
     return { code: (item as { code: string }).code, config: (config ?? {}) as Record<string, unknown> };
   });
 }
 
 export function OrganizationsPage() {
+  useIdioma();
   const status = useStatusMessage();
   const [organizations, setOrganizations] = useState<Organization[]>();
   const [kits, setKits] = useState<Kit[]>([]);
@@ -125,7 +127,7 @@ export function OrganizationsPage() {
 
   const selected = useMemo(
     () => organizations?.find((organization) => organization.id === selectedId) ?? null,
-    [organizations, selectedId],
+    [organizations, selectedId, idiomaActual()],
   );
 
   const choose = (organization: Organization) => {
@@ -156,49 +158,49 @@ export function OrganizationsPage() {
       const input = { ...form, behaviors: behaviorFromText(behaviorJson) };
       if (selected) {
         await adminApi.editOrganization(selected.id, input);
-        return `${input.name} actualizada.`;
+        return tr("{0} actualizada.", input.name);
       }
       const created = await adminApi.createOrganization(input);
       setSelectedId(created.id);
-      return `${input.name} creada. Ahora añade su primera red.`;
+      return tr("{0} creada. Ahora añade su primera red.", input.name);
     });
   };
 
-  if (denied) return <><h2>Organizaciones</h2><p className="muted">Esta sección requiere una cuenta administradora.</p></>;
+  if (denied) return <><h2>{tr("Organizaciones")}</h2><p className="muted">{tr("Esta sección requiere una cuenta administradora.")}</p></>;
   if (!organizations) return <Loading />;
 
   return (
     <>
-      <h2>Organizaciones</h2>
-      <p className="muted">Define las instituciones del juego y compón su infraestructura sin salir del panel.</p>
+      <h2>{tr("Organizaciones")}</h2>
+      <p className="muted">{tr("Define las instituciones del juego y compón su infraestructura sin salir del panel.")}</p>
       <StatusMessage text={status.message} as="block" />
 
       <div className="org-layout">
-        <AdminCard prefix="01/" brand="organización" note={selected ? 'editar entidad' : 'nueva entidad'}>
+        <AdminCard prefix="01/" brand="organización" note={selected ? tr("editar entidad") : tr("nueva entidad")}>
           <form className="org-form" onSubmit={saveOrganization}>
             <div className="org-form__grid">
-              <label>Nombre<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Banco Central" /></label>
+              <label>{tr("Nombre")}<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={tr("Banco Central")} /></label>
               <label>Slug<input required pattern="[a-z0-9-]+" value={form.slug} onChange={(e) => setForm({ ...form, slug: toCode(e.target.value) })} placeholder="banco-central" /></label>
-              <label>Categoría<input required pattern="[a-z0-9-]+" value={form.category} onChange={(e) => setForm({ ...form, category: toCode(e.target.value) })} placeholder="finanzas" /><small>Se normaliza automáticamente: “Sector Público” → “sector-publico”.</small></label>
-              <label className="org-check"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Activa en el juego</label>
-              <label className="org-check"><input type="checkbox" checked={isBank(behaviorsOrEmpty(behaviorJson))} onChange={(e) => setBehaviorJson(behaviorText(withBanking(behaviorsOrEmpty(behaviorJson), e.target.checked)))} /> Ofrece cuentas bancarias</label>
+              <label>{tr("Categoría")}<input required pattern="[a-z0-9-]+" value={form.category} onChange={(e) => setForm({ ...form, category: toCode(e.target.value) })} placeholder="finanzas" /><small>{tr("Se normaliza automáticamente: “Sector Público” → “sector-publico”.")}</small></label>
+              <label className="org-check"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> {tr("Activa en el juego")}</label>
+              <label className="org-check"><input type="checkbox" checked={isBank(behaviorsOrEmpty(behaviorJson))} onChange={(e) => setBehaviorJson(behaviorText(withBanking(behaviorsOrEmpty(behaviorJson), e.target.checked)))} /> {tr("Ofrece cuentas bancarias")}</label>
             </div>
-            <label>Descripción<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Qué representa esta institución y cuál es su función." /></label>
+            <label>{tr("Descripción")}<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={tr("Qué representa esta institución y cuál es su función.")} /></label>
             <details className="org-behaviors">
-              <summary>Comportamientos <small>avanzado · JSON declarativo</small></summary>
+              <summary>{tr("Comportamientos")} <small>{tr("avanzado · JSON declarativo")}</small></summary>
               <textarea value={behaviorJson} onChange={(e) => setBehaviorJson(e.target.value)} spellCheck={false} />
-              <p>Ejemplo: <code>[{'{'}"code":"banking","config":{'{}'}{'}'}]</code>. Se almacenan para que las acciones web futuras los interpreten.</p>
+              <p>{tr("Ejemplo:")} <code>[{'{'}"code":"banking","config":{'{}'}{'}'}]</code>{tr(". Se almacenan para que las acciones web futuras los interpreten.")}</p>
             </details>
-            <div className="org-actions"><button type="button" onClick={newOrganization} disabled={busy}>Nueva</button><button className="is-primary" disabled={busy}>{selected ? 'Guardar cambios' : 'Crear organización'}</button></div>
+            <div className="org-actions"><button type="button" onClick={newOrganization} disabled={busy}>{tr("Nueva")}</button><button className="is-primary" disabled={busy}>{selected ? tr("Guardar cambios") : tr("Crear organización")}</button></div>
           </form>
         </AdminCard>
 
-        <AdminCard prefix="map/" brand="instituciones" note={`${organizations.length} registradas`} accent="lime">
+        <AdminCard prefix="map/" brand="instituciones" note={tr("{0} registradas", organizations.length)} accent="lime">
           <div className="org-list">
             {organizations.map((organization) => <button type="button" key={organization.id} className={`org-list__item ${organization.id === selectedId ? 'is-active' : ''}`} onClick={() => choose(organization)}>
-              <span><b>{organization.name}</b><small>{organization.category} · {organization.networks.length} redes</small></span><em>{organization.active ? 'activa' : 'pausada'}</em>
+              <span><b>{organization.name}</b><small>{organization.category} · {organization.networks.length} {tr("redes")}</small></span><em>{organization.active ? 'activa' : tr("pausada")}</em>
             </button>)}
-            {!organizations.length && <p className="org-empty">Crea la primera organización para comenzar.</p>}
+            {!organizations.length && <p className="org-empty">{tr("Crea la primera organización para comenzar.")}</p>}
           </div>
         </AdminCard>
       </div>
@@ -214,6 +216,7 @@ export function OrganizationsPage() {
  * no sea un banco también tiene dinero: el FBI cobra en Pinance sin ofrecer cuentas a nadie.
  */
 function Accounts({ organization, busy, onRun }: { organization: Organization; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  useIdioma();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
 
   const load = useCallback(() => {
@@ -222,8 +225,8 @@ function Accounts({ organization, busy, onRun }: { organization: Organization; b
 
   useEffect(() => { load(); }, [load]);
 
-  return <AdminCard prefix="03/" brand="cuentas" note={`${accounts.length} abiertas`} accent="lime">
-    <p className="org-infra__intro">Un banco es una organización con «Ofrece cuentas bancarias» marcado. Cualquier organización puede tener cuenta en uno.</p>
+  return <AdminCard prefix="03/" brand="cuentas" note={tr("{0} abiertas", accounts.length)} accent="lime">
+    <p className="org-infra__intro">{tr("Un banco es una organización con «Ofrece cuentas bancarias» marcado. Cualquier organización puede tener cuenta en uno.")}</p>
     <AccountsBoard
       accounts={accounts}
       busy={busy}
@@ -231,13 +234,13 @@ function Accounts({ organization, busy, onRun }: { organization: Organization; b
       onOpen={(bankId, pin) => void onRun(async () => {
         const opened = await adminApi.openOrganizationAccount(organization.id, { bank_id: bankId, password: pin });
         load();
-        return `Cuenta ${opened.account} abierta a nombre de ${organization.name}.`;
+        return tr("Cuenta {0} abierta a nombre de {1}.", opened.account, organization.name);
       })}
       onAdjust={(account, amount) => void onRun(async () => {
         const { cash } = await adminApi.adjustAccountCash(account.id, amount);
         load();
-        const verbo = amount > 0 ? 'Ingresados' : 'Retirados';
-        return `${verbo} ${formatMoney(Math.abs(amount))} en ${account.account}. Saldo: ${formatMoney(cash)}.`;
+        const verbo = amount > 0 ? tr("Ingresados") : tr("Retirados");
+        return tr("{0} {1} en {2}. Saldo: {3}.", verbo, formatMoney(Math.abs(amount)), account.account, formatMoney(cash));
       })}
     />
   </AdminCard>;
@@ -249,6 +252,7 @@ type InfrastructureProps = {
 };
 
 function Infrastructure(props: InfrastructureProps) {
+  useIdioma();
   const { organization, kits, parts, sites, busy, onRun } = props;
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [connectionSource, setConnectionSource] = useState<{ network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null>(null);
@@ -259,14 +263,14 @@ function Infrastructure(props: InfrastructureProps) {
       if (npc) return { network, npc };
     }
     return null;
-  }, [organization.networks, selectedNodeId]);
+  }, [organization.networks, selectedNodeId, idiomaActual()]);
   return <AdminCard prefix="02/" brand="infraestructura" note={organization.name} accent="lime">
     <div className="org-infra">
-      <p className="org-infra__intro">Una red es interna por defecto. Un nodo pasa a Internet al instalarle una interfaz de red desde Computer.</p>
+      <p className="org-infra__intro">{tr("Una red es interna por defecto. Un nodo pasa a Internet al instalarle una interfaz de red desde Computer.")}</p>
       <OrganizationNodeMap organization={organization} kits={kits} busy={busy} onSelectNode={({ npc }) => setSelectedNodeId(npc.id)} onRun={onRun} />
       <div className="org-networks">
       {selectedNode && <NodeInspector organization={organization} network={selectedNode.network} npc={selectedNode.npc} kits={kits} parts={parts} sites={sites} busy={busy} connectionSource={connectionSource} setConnectionSource={setConnectionSource} onRun={onRun} onRemoved={() => setSelectedNodeId(null)} />}
-        {!organization.networks.length && <p className="org-empty">Todavía no hay redes. Empieza por una red pública si el servicio tendrá web.</p>}
+        {!organization.networks.length && <p className="org-empty">{tr("Todavía no hay redes. Empieza por una red pública si el servicio tendrá web.")}</p>}
         {organization.networks.map((network) => <NetworkRow key={network.id} organization={organization} network={network} busy={busy} onRun={onRun} />)}
         <CreateNetworkForm organization={organization} busy={busy} onRun={onRun} />
       </div>
@@ -276,17 +280,19 @@ function Infrastructure(props: InfrastructureProps) {
 
 /** Borrar no se deshace: el primer clic arma el boton y el segundo ejecuta. Se desarma solo. */
 function DangerButton({ label, busy, onConfirm }: { label: string; busy: boolean; onConfirm: () => void }) {
+  useIdioma();
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
     const timer = setTimeout(() => setArmed(false), 4000);
     return () => clearTimeout(timer);
   }, [armed]);
-  return <button type="button" className={armed ? 'org-danger is-armed' : 'org-danger'} disabled={busy} onClick={() => { if (armed) { setArmed(false); onConfirm(); } else { setArmed(true); } }}>{armed ? '¿Seguro?' : label}</button>;
+  return <button type="button" className={armed ? 'org-danger is-armed' : 'org-danger'} disabled={busy} onClick={() => { if (armed) { setArmed(false); onConfirm(); } else { setArmed(true); } }}>{armed ? tr("¿Seguro?") : label}</button>;
 }
 
 /** Renombrar una red, cambiarle la zona o eliminarla. El servidor la protege mientras tenga nodos. */
 function NetworkRow({ organization, network, busy, onRun }: { organization: Organization; network: OrganizationNetwork; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  useIdioma();
   const [name, setName] = useState(network.name);
   const [zone, setZone] = useState<NetworkZone>(network.zone);
   // La recarga tras guardar trae una red nueva: sin esto el formulario seguiria mostrando lo viejo.
@@ -296,31 +302,33 @@ function NetworkRow({ organization, network, busy, onRun }: { organization: Orga
     event.preventDefault();
     void onRun(async () => {
       await adminApi.editOrganizationNetwork(organization.id, network.id, { name: name.trim(), zone });
-      return `Red ${name.trim()} actualizada.`;
+      return tr("Red {0} actualizada.", name.trim());
     });
   };
   const remove = () => void onRun(async () => {
     await adminApi.removeOrganizationNetwork(organization.id, network.id);
-    return `Red ${network.name} eliminada.`;
+    return tr("Red {0} eliminada.", network.name);
   });
-  return <form className="org-network-row" onSubmit={save}><input required value={name} onChange={(event) => setName(event.target.value)} /><select value={zone} onChange={(event) => setZone(event.target.value as NetworkZone)}>{ZONES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select><small>{network.npcs.length} {network.npcs.length === 1 ? 'nodo' : 'nodos'}</small><button disabled={busy || !dirty || !name.trim()}>Guardar</button><DangerButton label="Eliminar" busy={busy} onConfirm={remove} /></form>;
+  return <form className="org-network-row" onSubmit={save}><input required value={name} onChange={(event) => setName(event.target.value)} /><select value={zone} onChange={(event) => setZone(event.target.value as NetworkZone)}>{ZONES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select><small>{network.npcs.length} {network.npcs.length === 1 ? 'nodo' : 'nodos'}</small><button disabled={busy || !dirty || !name.trim()}>{tr("Guardar")}</button><DangerButton label={tr("Eliminar")} busy={busy} onConfirm={remove} /></form>;
 }
 
 /** Sin una red no hay donde colgar un nodo: el desplegable del mapa se queda vacio y no deja crear. */
 function CreateNetworkForm({ organization, busy, onRun }: { organization: Organization; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  useIdioma();
   const [draft, setDraft] = useState<OrganizationNetworkInput>({ name: '', zone: 'internal' });
   const create = (event: FormEvent) => {
     event.preventDefault();
     void onRun(async () => {
       await adminApi.createOrganizationNetwork(organization.id, draft);
       setDraft({ name: '', zone: 'internal' });
-      return `Red ${draft.name} creada.`;
+      return tr("Red {0} creada.", draft.name);
     });
   };
-  return <form className="org-network-create" onSubmit={create}><b>Crear red</b><input required value={draft.name} placeholder="Nombre de la red" onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /><select value={draft.zone} onChange={(event) => setDraft((current) => ({ ...current, zone: event.target.value as NetworkZone }))}>{ZONES.map((zone) => <option value={zone.value} key={zone.value}>{zone.label}</option>)}</select><button className="is-primary" disabled={busy || !draft.name.trim()}>Crear red</button></form>;
+  return <form className="org-network-create" onSubmit={create}><b>{tr("Crear red")}</b><input required value={draft.name} placeholder={tr("Nombre de la red")} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /><select value={draft.zone} onChange={(event) => setDraft((current) => ({ ...current, zone: event.target.value as NetworkZone }))}>{ZONES.map((zone) => <option value={zone.value} key={zone.value}>{zone.label}</option>)}</select><button className="is-primary" disabled={busy || !draft.name.trim()}>{tr("Crear red")}</button></form>;
 }
 
 function NodeInspector({ organization, network, npc, kits, parts, sites, busy, connectionSource, setConnectionSource, onRun, onRemoved }: { organization: Organization; network: OrganizationNetwork; npc: OrganizationNetworkNpc; kits: Kit[]; parts: Part[]; sites: Site[]; busy: boolean; connectionSource: { network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null; setConnectionSource: (node: { network: OrganizationNetwork; npc: OrganizationNetworkNpc } | null) => void; onRun: (work: () => Promise<string>) => Promise<void>; onRemoved: () => void }) {
+  useIdioma();
   const [editorOpen, setEditorOpen] = useState(false);
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerConfiguration, setComputerConfiguration] = useState<OrganizationComputerConfiguration | null>(null);
@@ -332,21 +340,22 @@ function NodeInspector({ organization, network, npc, kits, parts, sites, busy, c
     event.preventDefault();
     void onRun(async () => {
       await adminApi.editOrganizationNode(organization.id, network.id, npc.id, { role: role.trim(), map_x: npc.map_x, map_y: npc.map_y });
-      return `${npc.name} actualizado.`;
+      return tr("{0} actualizado.", npc.name);
     });
   };
   const removeNode = () => void onRun(async () => {
     await adminApi.removeOrganizationNode(organization.id, network.id, npc.id);
     onRemoved();
-    return `${npc.name} eliminado del mapa.`;
+    return tr("{0} eliminado del mapa.", npc.name);
   });
   const site = sites.find((item) => item.kind === 'npc' && item.id === npc.id);
-  const selectPort = () => { if (!connectionSource) { setConnectionSource({ network, npc }); return; } if (connectionSource.npc.id === npc.id) { setConnectionSource(null); return; } void onRun(async () => { await adminApi.createOrganizationLink(organization.id, { from_npc_id: connectionSource.npc.id, to_npc_id: npc.id }); setConnectionSource(null); return 'Conexión LAN creada.'; }); };
+  const selectPort = () => { if (!connectionSource) { setConnectionSource({ network, npc }); return; } if (connectionSource.npc.id === npc.id) { setConnectionSource(null); return; } void onRun(async () => { await adminApi.createOrganizationLink(organization.id, { from_npc_id: connectionSource.npc.id, to_npc_id: npc.id }); setConnectionSource(null); return tr("Conexión LAN creada."); }); };
   const openComputer = () => void onRun(async () => { setComputerConfiguration(await adminApi.getOrganizationComputer(organization.id, network.id, npc.id)); setComputerOpen(true); return ''; });
-  return <section className="org-node-inspector"><header><span className={`org-zone org-zone--${npc.zone}`}>{npc.zone}</span><h3>{npc.name}</h3></header><dl><div><dt>IP</dt><dd>{formatIp(npc.ip)}</dd></div><div><dt>Red</dt><dd>{network.name}</dd></div><div><dt>Rol</dt><dd>{npc.role}</dd></div><div><dt>Equipo</dt><dd>{npc.computer_components ? `${npc.computer_components} piezas · ${npc.source_kit_id ? `kit #${npc.source_kit_id}` : 'personalizado'}` : 'Sin configurar'}</dd></div></dl><div className="org-node-inspector__ports"><small>Puertos LAN {connectionSource ? '· selecciona este puerto para conectar' : ''}</small>{Array.from({ length: Math.max(0, npc.lan_available) }).map((_, index) => <button type="button" className={connectionSource ? 'is-linkable' : ''} key={index} onClick={selectPort} aria-label={`Puerto LAN ${index + 1}`} />)}{!npc.lan_available && <em>Sin puertos libres</em>}</div><form className="org-node-edit" onSubmit={saveNode}><label>rol<input value={role} maxLength={40} onChange={(event) => setRole(event.target.value)} /></label><small className="org-node-edit__hint">{npc.zone === 'public' ? 'En Internet porque tiene una interfaz de red instalada. Quítasela en Computer y dejará de responder.' : 'Fuera de Internet. Instálale una interfaz de red en Computer para exponerlo.'}</small><button disabled={busy || !nodeDirty || !role.trim()}>Guardar nodo</button><DangerButton label="Eliminar nodo" busy={busy} onConfirm={removeNode} /></form><div className="org-node-inspector__menus"><button className="is-primary" type="button" onClick={openComputer}>Computer</button><button type="button" onClick={() => setEditorOpen(true)}>Web</button></div><ComputerEditorDialog open={computerOpen} title={npc.name} kits={kits} parts={parts} configuration={computerConfiguration} lanLinks={Math.max(0, npc.lan_total - npc.lan_available - (npc.zone === 'public' ? 1 : 0))} busy={busy} onClose={() => setComputerOpen(false)} onSave={(input) => void onRun(async () => { await adminApi.saveOrganizationComputer(organization.id, network.id, npc.id, input); setComputerOpen(false); return `PC de ${npc.name} instalado en modo creativo.`; })} /><SiteEditorDialog open={editorOpen} title={npc.name} initialWeb={site?.web ?? ''} busy={busy} onClose={() => setEditorOpen(false)} onSave={(web) => void onRun(async () => { await adminApi.saveSite('npc', npc.id, web); setEditorOpen(false); return `Web de ${npc.name} guardada.`; })} /></section>;
+  return <section className="org-node-inspector"><header><span className={`org-zone org-zone--${npc.zone}`}>{npc.zone}</span><h3>{npc.name}</h3></header><dl><div><dt>IP</dt><dd>{formatIp(npc.ip)}</dd></div><div><dt>{tr("Red")}</dt><dd>{network.name}</dd></div><div><dt>{tr("Rol")}</dt><dd>{npc.role}</dd></div><div><dt>{tr("Equipo")}</dt><dd>{npc.computer_components ? tr("{0} piezas · {1}", npc.computer_components, npc.source_kit_id ? `kit #${npc.source_kit_id}` : 'personalizado') : tr("Sin configurar")}</dd></div></dl><div className="org-node-inspector__ports"><small>{tr("Puertos LAN")} {connectionSource ? tr("· selecciona este puerto para conectar") : ''}</small>{Array.from({ length: Math.max(0, npc.lan_available) }).map((_, index) => <button type="button" className={connectionSource ? 'is-linkable' : ''} key={index} onClick={selectPort} aria-label={tr("Puerto LAN {0}", index + 1)} />)}{!npc.lan_available && <em>{tr("Sin puertos libres")}</em>}</div><form className="org-node-edit" onSubmit={saveNode}><label>{tr("rol")}<input value={role} maxLength={40} onChange={(event) => setRole(event.target.value)} /></label><small className="org-node-edit__hint">{npc.zone === 'public' ? tr("En Internet porque tiene una interfaz de red instalada. Quítasela en Computer y dejará de responder.") : tr("Fuera de Internet. Instálale una interfaz de red en Computer para exponerlo.")}</small><button disabled={busy || !nodeDirty || !role.trim()}>{tr("Guardar nodo")}</button><DangerButton label={tr("Eliminar nodo")} busy={busy} onConfirm={removeNode} /></form><div className="org-node-inspector__menus"><button className="is-primary" type="button" onClick={openComputer}>Computer</button><button type="button" onClick={() => setEditorOpen(true)}>Web</button></div><ComputerEditorDialog open={computerOpen} title={npc.name} kits={kits} parts={parts} configuration={computerConfiguration} lanLinks={Math.max(0, npc.lan_total - npc.lan_available - (npc.zone === 'public' ? 1 : 0))} busy={busy} onClose={() => setComputerOpen(false)} onSave={(input) => void onRun(async () => { await adminApi.saveOrganizationComputer(organization.id, network.id, npc.id, input); setComputerOpen(false); return tr("PC de {0} instalado en modo creativo.", npc.name); })} /><SiteEditorDialog open={editorOpen} title={npc.name} initialWeb={site?.web ?? ''} busy={busy} onClose={() => setEditorOpen(false)} onSave={(web) => void onRun(async () => { await adminApi.saveSite('npc', npc.id, web); setEditorOpen(false); return tr("Web de {0} guardada.", npc.name); })} /></section>;
 }
 
 function Network({ organization, network, kits, npcs, sites, busy, onRun }: { organization: Organization; network: OrganizationNetwork; kits: Kit[]; npcs: OrganizationNpcCatalog[]; sites: Site[]; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  useIdioma();
   const [server, setServer] = useState<CreateOrganizationServerInput>({ name: '', kit_id: kits[0]?.id ?? 0, role: 'server', npc_type: 70, web: '' });
   const [npcId, setNpcId] = useState('');
   const [role, setRole] = useState('operator');
@@ -360,22 +369,22 @@ function Network({ organization, network, kits, npcs, sites, busy, onRun }: { or
   const createServer = (event: FormEvent) => { event.preventDefault(); void onRun(async () => {
     const made = await adminApi.createOrganizationServer(organization.id, network.id, server);
     setServer({ ...server, name: '', web: '' });
-    return `Servidor creado: ${formatIp(made.ip)} · contraseña inicial: ${made.password}. Guárdala ahora; no se vuelve a mostrar.`;
+    return tr("Servidor creado: {0} · contraseña inicial: {1}. Guárdala ahora; no se vuelve a mostrar.", formatIp(made.ip), made.password);
   }); };
   const assignNpc = (event: FormEvent) => { event.preventDefault(); if (!npcId) return; void onRun(async () => {
-    await adminApi.assignOrganizationNpc(organization.id, network.id, { npc_id: Number(npcId), role }); setNpcId(''); return 'NPC asignado a la red.';
+    await adminApi.assignOrganizationNpc(organization.id, network.id, { npc_id: Number(npcId), role }); setNpcId(''); return tr("NPC asignado a la red.");
   }); };
   return <article className="org-network">
-    <header><div><span className={`org-zone org-zone--${network.zone}`}>{ZONES.find((zone) => zone.value === network.zone)?.label}</span><h3>{network.name}</h3></div><button className="org-danger" disabled={busy} onClick={() => void onRun(async () => { await adminApi.removeOrganizationNetwork(organization.id, network.id); return `${network.name} eliminada.`; })}>Eliminar red</button></header>
-    <details className="org-network-edit"><summary>Modificar esta red</summary><form onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await adminApi.editOrganizationNetwork(organization.id, network.id, { name: networkName, zone: networkZone }); return `Red ${networkName} actualizada.`; }); }}><input required value={networkName} onChange={(event) => setNetworkName(event.target.value)} /><select value={networkZone} onChange={(event) => setNetworkZone(event.target.value as NetworkZone)}>{ZONES.map((zone) => <option value={zone.value} key={zone.value}>{zone.label}</option>)}</select><button disabled={busy}>Guardar red</button></form></details>
+    <header><div><span className={`org-zone org-zone--${network.zone}`}>{ZONES.find((zone) => zone.value === network.zone)?.label}</span><h3>{network.name}</h3></div><button className="org-danger" disabled={busy} onClick={() => void onRun(async () => { await adminApi.removeOrganizationNetwork(organization.id, network.id); return tr("{0} eliminada.", network.name); })}>{tr("Eliminar red")}</button></header>
+    <details className="org-network-edit"><summary>{tr("Modificar esta red")}</summary><form onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await adminApi.editOrganizationNetwork(organization.id, network.id, { name: networkName, zone: networkZone }); return tr("Red {0} actualizada.", networkName); }); }}><input required value={networkName} onChange={(event) => setNetworkName(event.target.value)} /><select value={networkZone} onChange={(event) => setNetworkZone(event.target.value as NetworkZone)}>{ZONES.map((zone) => <option value={zone.value} key={zone.value}>{zone.label}</option>)}</select><button disabled={busy}>{tr("Guardar red")}</button></form></details>
     <div className="org-network__machines">
       {network.npcs.map((npc) => <button type="button" className={`org-machine ${npc.id === selectedNpc?.id ? 'is-active' : ''}`} onClick={() => { setSelectedNpcId(npc.id); setWeb(sites.find((item) => item.kind === 'npc' && item.id === npc.id)?.web ?? ''); }} key={npc.id}><b>{npc.name}</b><span>{formatIp(npc.ip)} · {npc.role}{npc.source_kit_id ? ` · kit #${npc.source_kit_id}` : ''}</span></button>)}
-      {!network.npcs.length && <p className="org-empty">Sin equipos todavía.</p>}
+      {!network.npcs.length && <p className="org-empty">{tr("Sin equipos todavía.")}</p>}
     </div>
-    {selectedNpc && <form className="org-web-form" onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await adminApi.saveSite('npc', selectedNpc.id, web); return `Web de ${selectedNpc.name} guardada.`; }); }}><div><b>Web de {selectedNpc.name}</b><small>{formatIp(selectedNpc.ip)} · HTML que verá quien visite este servidor.</small></div><textarea value={web} onChange={(event) => setWeb(event.target.value)} placeholder="<h1>Bienvenido</h1>" spellCheck={false} /><button className="is-primary" disabled={busy}>Guardar nodo</button></form>}
+    {selectedNpc && <form className="org-web-form" onSubmit={(event) => { event.preventDefault(); void onRun(async () => { await adminApi.saveSite('npc', selectedNpc.id, web); return tr("Web de {0} guardada.", selectedNpc.name); }); }}><div><b>{tr("Web de")} {selectedNpc.name}</b><small>{formatIp(selectedNpc.ip)} {tr("· HTML que verá quien visite este servidor.")}</small></div><textarea value={web} onChange={(event) => setWeb(event.target.value)} placeholder="<h1>Bienvenido</h1>" spellCheck={false} /><button className="is-primary" disabled={busy}>{tr("Guardar nodo")}</button></form>}
     <div className="org-network__actions">
-      <form className="org-server-form" onSubmit={createServer}><b>Crear servidor desde un kit</b><input required value={server.name} onChange={(e) => setServer({ ...server, name: e.target.value })} placeholder="Gateway público" /><select required value={server.kit_id} onChange={(e) => setServer({ ...server, kit_id: Number(e.target.value) })}><option value={0} disabled>Selecciona un kit</option>{kits.map((kit) => <option value={kit.id} key={kit.id}>{kit.name}</option>)}</select><input value={server.role} onChange={(e) => setServer({ ...server, role: e.target.value })} placeholder="Rol" /><textarea value={server.web} onChange={(e) => setServer({ ...server, web: e.target.value })} placeholder="Web inicial opcional: <h1>Servicio</h1>" spellCheck={false} /><button className="is-primary" disabled={busy || !kits.length}>Crear servidor</button>{!kits.length && <small>Antes crea un kit válido en la sección Kits.</small>}</form>
-      <form className="org-npc-form" onSubmit={assignNpc}><b>Asignar NPC existente</b><select value={npcId} onChange={(e) => setNpcId(e.target.value)}><option value="">Selecciona un NPC</option>{availableNpcs.map((npc) => <option value={npc.id} key={npc.id}>{npc.name} · {formatIp(npc.ip)}{npc.zone ? ` · ${npc.zone}` : ''}</option>)}</select><input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Rol" /><button disabled={busy || !npcId}>Asignar</button></form>
+      <form className="org-server-form" onSubmit={createServer}><b>{tr("Crear servidor desde un kit")}</b><input required value={server.name} onChange={(e) => setServer({ ...server, name: e.target.value })} placeholder={tr("Gateway público")} /><select required value={server.kit_id} onChange={(e) => setServer({ ...server, kit_id: Number(e.target.value) })}><option value={0} disabled>{tr("Selecciona un kit")}</option>{kits.map((kit) => <option value={kit.id} key={kit.id}>{kit.name}</option>)}</select><input value={server.role} onChange={(e) => setServer({ ...server, role: e.target.value })} placeholder={tr("Rol")} /><textarea value={server.web} onChange={(e) => setServer({ ...server, web: e.target.value })} placeholder={tr("Web inicial opcional: <h1>Servicio</h1>")} spellCheck={false} /><button className="is-primary" disabled={busy || !kits.length}>{tr("Crear servidor")}</button>{!kits.length && <small>{tr("Antes crea un kit válido en la sección Kits.")}</small>}</form>
+      <form className="org-npc-form" onSubmit={assignNpc}><b>{tr("Asignar NPC existente")}</b><select value={npcId} onChange={(e) => setNpcId(e.target.value)}><option value="">{tr("Selecciona un NPC")}</option>{availableNpcs.map((npc) => <option value={npc.id} key={npc.id}>{npc.name} · {formatIp(npc.ip)}{npc.zone ? ` · ${npc.zone}` : ''}</option>)}</select><input value={role} onChange={(e) => setRole(e.target.value)} placeholder={tr("Rol")} /><button disabled={busy || !npcId}>{tr("Asignar")}</button></form>
     </div>
   </article>;
 }

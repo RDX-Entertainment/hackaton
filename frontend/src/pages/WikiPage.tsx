@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -8,6 +9,7 @@ import { useStatusMessage } from '../utils/useStatusMessage';
 const DEFAULT_SLUG = 'start';
 
 export function WikiPage() {
+  useIdioma();
   const { slug = DEFAULT_SLUG } = useParams();
   const status = useStatusMessage();
 
@@ -40,7 +42,7 @@ export function WikiPage() {
 
     try {
       await wikiApi.saveWikiPage(slug, title, content);
-      status.report('Saved.');
+      status.report(tr("Saved."));
       load();
     } catch (error) {
       status.reportError(error);
@@ -50,35 +52,33 @@ export function WikiPage() {
   return (
     <>
       <p>
-        <Link to="/wiki">← Wiki index</Link>
+        <Link to="/wiki">{tr("← Wiki index")}</Link>
       </p>
 
-      <h2>{page?.title || `New page: ${slug}`}</h2>
+      <h2>{page?.title || tr("New page: {0}", slug)}</h2>
 
       {page && (
         <article className="wiki-content">
           <pre>{page.content}</pre>
-          <small>Last author: {page.author || 'unknown'}</small>
+          <small>{tr("Last author:")} {page.author || 'unknown'}</small>
         </article>
       )}
 
-      <h3>Edit</h3>
+      <h3>{tr("Edit")}</h3>
       <form className="compose" onSubmit={save}>
         <label>
-          Title
-          <input value={title} onChange={(event) => setTitle(event.target.value)} required />
+          {tr("Title")} <input value={title} onChange={(event) => setTitle(event.target.value)} required />
         </label>
 
         <label>
-          Content
-          <textarea
+          {tr("Content")} <textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}
             required
           />
         </label>
 
-        <button>Save revision</button>
+        <button>{tr("Save revision")}</button>
         <StatusMessage text={status.message} />
       </form>
     </>

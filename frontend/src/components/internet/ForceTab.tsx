@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useAccion } from '../../app/tutorial';
 import type { HackKind, Remote } from '../../utils/api';
 
@@ -27,26 +28,27 @@ type ForceTabProps = {
  * finge un resultado que todavía no existe.
  */
 export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceTabProps) {
+  useIdioma();
   const hackear = useAccion('red.hackear');
 
-  const down = remote.down ? 'La máquina no responde.' : undefined;
-  const inside = remote.access ? 'Ya tienes sesión abierta aquí.' : undefined;
+  const down = remote.down ? tr("La máquina no responde.") : undefined;
+  const inside = remote.access ? tr("Ya tienes sesión abierta aquí.") : undefined;
 
   const attacks: Attack[] = [
     {
       key: 'scan',
-      title: 'Escaneo de puertos',
+      title: tr("Escaneo de puertos"),
       command: 'nmap',
-      detail: 'Mira qué servicios están abiertos. Es lo que decide si el exploit tiene por dónde entrar.',
+      detail: tr("Mira qué servicios están abiertos. Es lo que decide si el exploit tiene por dónde entrar."),
       run: () => onCrack('scan'),
       done: remote.scanned,
       blocked: down,
     },
     {
       key: 'bf',
-      title: 'Fuerza bruta',
+      title: tr("Fuerza bruta"),
       command: 'cracker',
-      detail: 'Tu crackeador contra su contraseña. Lo que tarda depende de la diferencia de versiones.',
+      detail: tr("Tu crackeador contra su contraseña. Lo que tarda depende de la diferencia de versiones."),
       run: () => onCrack('bf'),
       blocked: down ?? inside,
     },
@@ -54,15 +56,15 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
       key: 'exploit',
       title: 'Exploit FTP / SSH',
       command: 'exploit',
-      detail: 'Entra por un servicio abierto en vez de por la puerta. Escanea antes o irás a ciegas.',
+      detail: tr("Entra por un servicio abierto en vez de por la puerta. Escanea antes o irás a ciegas."),
       run: onExploit,
       blocked: down ?? inside,
     },
     {
       key: 'analyze',
-      title: 'Análisis',
+      title: tr("Análisis"),
       command: 'analyzer',
-      detail: 'Estima el hardware que hay detrás. No es un ataque, pero dice contra qué te enfrentas.',
+      detail: tr("Estima el hardware que hay detrás. No es un ataque, pero dice contra qué te enfrentas."),
       run: onAnalyze,
       done: Boolean(remote.analysis),
       blocked: down,
@@ -72,9 +74,7 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
   return (
     <div className="page">
       <p className="force__warn">
-        Todo lo de aquí queda registrado en la máquina de enfrente. Si es de un jugador, lo
-        verá — y el registro se puede reescribir desde <b>acceso</b>, si llegas a entrar.
-      </p>
+        {tr("Todo lo de aquí queda registrado en la máquina de enfrente. Si es de un jugador, lo verá — y el registro se puede reescribir desde")} <b>{tr("acceso")}</b>{tr(", si llegas a entrar.")} </p>
 
       <ul className="force">
         {attacks.map((attack) => (
@@ -85,7 +85,7 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
             <div className="attack__head">
               <span className="attack__cmd">{attack.command}</span>
               <h4>{attack.title}</h4>
-              {attack.done && <span className="attack__done">hecho</span>}
+              {attack.done && <span className="attack__done">{tr("hecho")}</span>}
             </div>
 
             <p className="attack__detail">{attack.detail}</p>
@@ -102,8 +102,7 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
                   title={hackear.motivo ?? undefined}
                   onClick={attack.run}
                 >
-                  lanzar
-                </button>
+                  {tr("lanzar")} </button>
               )}
             </div>
           </li>
@@ -111,9 +110,7 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
       </ul>
 
       <p className="page__note">
-        Nada de esto es inmediato: cada uno encola un proceso y el worker lo resuelve. Míralo
-        en Procesos y vuelve cuando termine.
-      </p>
+        {tr("Nada de esto es inmediato: cada uno encola un proceso y el worker lo resuelve. Míralo en Procesos y vuelve cuando termine.")} </p>
     </div>
   );
 }

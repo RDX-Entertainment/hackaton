@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { KitClan } from '../../utils/api';
 
 type ClanPickerProps = {
@@ -7,15 +8,14 @@ type ClanPickerProps = {
 };
 
 export function ClanPicker({ clans, chosen, onChange }: ClanPickerProps) {
+  useIdioma();
   const toggle = (id: number) =>
     onChange(chosen.includes(id) ? chosen.filter((one) => one !== id) : [...chosen, id]);
 
   if (clans.length === 0) {
     return (
       <p className="clanpick__empty">
-        No hay ninguna corporación creada todavía, así que un kit de corporación no lo vería
-        nadie.
-      </p>
+        {tr("No hay ninguna corporación creada todavía, así que un kit de corporación no lo vería nadie.")} </p>
     );
   }
 

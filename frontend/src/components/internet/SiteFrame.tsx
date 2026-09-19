@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useRef, useState } from 'react';
 
 import { formatIp } from '../../utils/ip';
@@ -35,10 +36,9 @@ function blankPage(ip: number): string {
     .foot{color:#999;font-size:12px}
   </style>
   <div class="box">
-    <h1>Funciona</h1>
-    <p>Este servidor está en marcha pero todavía no sirve ningún contenido.</p>
-    <p>Si has llegado hasta aquí buscando algo, no hay nada que ver: el disco está detrás
-    del acceso, no de esta página.</p>
+    <h1>${tr('Funciona')}</h1>
+    <p>${tr('Este servidor está en marcha pero todavía no sirve ningún contenido.')}</p>
+    <p>${tr('Si has llegado hasta aquí buscando algo, no hay nada que ver: el disco está detrás del acceso, no de esta página.')}</p>
     <hr>
     <p class="foot">httpd &middot; ${formatIp(ip)}</p>
   </div>`;
@@ -65,6 +65,7 @@ type SiteFrameProps = {
 };
 
 export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrameProps) {
+  useIdioma();
   const [big, setBig] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -117,8 +118,8 @@ export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrame
     return (
       <div className="site site--down">
         <p className="site__error">
-          <b>No se pudo establecer conexión</b>
-          <span>La máquina de {formatIp(ip)} no responde.</span>
+          <b>{tr("No se pudo establecer conexión")}</b>
+          <span>{tr("La máquina de")} {formatIp(ip)} {tr("no responde.")}</span>
         </p>
       </div>
     );
@@ -131,7 +132,7 @@ export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrame
     <div className={big ? 'site is-big' : 'site'}>
       <div className="site__bar">
         <span className="site__label">
-          {served ? 'sirviendo' : 'sin contenido'} · {formatIp(ip)}
+          {served ? 'sirviendo' : tr("sin contenido")} · {formatIp(ip)}
         </span>
 
         <button type="button" className="site__zoom" onClick={() => setBig((one) => !one)}>
@@ -142,7 +143,7 @@ export function SiteFrame({ ip, html, name, down, onAction, onReady }: SiteFrame
       <iframe
         ref={frame}
         className="site__frame"
-        title={`Página de ${name || formatIp(ip)}`}
+        title={tr("Página de {0}", name || formatIp(ip))}
         sandbox={onAction ? 'allow-same-origin' : ''}
         loading="lazy"
         srcDoc={page}

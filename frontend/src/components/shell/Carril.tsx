@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
@@ -27,6 +28,7 @@ const nombrePantalla = (path: string, respaldo: string) =>
  * dos pantallas.
  */
 export function Carril() {
+  useIdioma();
   const location = useLocation();
   const navigate = useNavigate();
   const actual = destinoDe(location.pathname);
@@ -67,7 +69,7 @@ export function Carril() {
   }, [navigate, tutorial]);
 
   return (
-    <nav className="carril" aria-label={t('nav.destinations') ?? 'Destinos del juego'}>
+    <nav className="carril" aria-label={t('nav.destinations') ?? tr("Destinos del juego")}>
       {DESTINOS.map((destino) => {
         const abierta = primeraAbierta(destino);
 
@@ -109,6 +111,7 @@ export function Carril() {
 
 /** Las pantallas del destino en el que estás. Vacía fuera de ellos. */
 export function Tira() {
+  useIdioma();
   const location = useLocation();
   const actual = destinoDe(location.pathname);
   const tutorial = useTutorial();
@@ -120,7 +123,7 @@ export function Tira() {
   return (
     <nav
       className="tira"
-      aria-label={`${t('nav.screens') ?? 'Pantallas'}: ${nombreDestino(actual.nombre)}`}
+      aria-label={`${t('nav.screens') ?? tr("Pantallas")}: ${nombreDestino(actual.nombre)}`}
     >
       {actual.items.map((item) =>
         tutorial.permiteVista(item.path) ? (

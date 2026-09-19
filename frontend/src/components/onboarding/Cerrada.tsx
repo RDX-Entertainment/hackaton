@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 import { Link } from 'react-router-dom';
 
 import { useTutorial } from '../../app/tutorial';
@@ -44,7 +45,7 @@ export function Cerrada({ titulo, motivo }: { titulo: string; motivo: string }) 
             className="cerrada__ir"
             to={`/${tutorial.onboarding?.rules?.focus_view ?? RUTA_DEL_PASO[paso]?.slice(1) ?? ''}`}
           >
-            {t(`onboarding.${paso}.action`) ?? t('tutorial.go') ?? 'Ir al paso'}
+            {t(`onboarding.${paso}.action`) ?? t('tutorial.go') ?? tr("Ir al paso")}
           </Link>
         </>
       )}

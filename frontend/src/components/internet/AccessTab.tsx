@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState, type FormEvent } from 'react';
 
 import type { Remote } from '../../utils/api';
@@ -26,6 +27,7 @@ export function AccessTab({
   onRewriteLog,
   onWipeLog,
 }: AccessTabProps) {
+  useIdioma();
   const entrar = useAccion('red.entrar');
 
   const [user, setUser] = useState('root');
@@ -43,7 +45,7 @@ export function AccessTab({
   if (remote.down) {
     return (
       <div className="page">
-        <p className="page__note">La máquina no responde. No hay a qué conectarse.</p>
+        <p className="page__note">{tr("La máquina no responde. No hay a qué conectarse.")}</p>
       </div>
     );
   }
@@ -53,11 +55,11 @@ export function AccessTab({
       <div className="page">
         <form className="ssh" onSubmit={(event) => void submit(event)}>
           <p className="ssh__line">
-            <span className="ssh__prompt">$</span> ssh {user || 'usuario'}@{formatIp(remote.ip)}
+            <span className="ssh__prompt">$</span> ssh {user || tr("usuario")}@{formatIp(remote.ip)}
           </p>
 
           <label className="ssh__field">
-            <span>usuario</span>
+            <span>{tr("usuario")}</span>
             <input
               value={user}
               spellCheck={false}
@@ -67,7 +69,7 @@ export function AccessTab({
           </label>
 
           <label className="ssh__field">
-            <span>contraseña</span>
+            <span>{tr("contraseña")}</span>
             <input
               type="password"
               value={password}
@@ -82,12 +84,10 @@ export function AccessTab({
             disabled={!entrar.permitida}
             title={entrar.motivo ?? undefined}
           >
-            entrar
-          </button>
+            {tr("entrar")} </button>
 
           <p className="ssh__hint">
-            ¿No la sabes? En <b>force</b> están las formas de conseguirla.
-          </p>
+            {tr("¿No la sabes? En")} <b>force</b> {tr("están las formas de conseguirla.")} </p>
         </form>
       </div>
     );
@@ -96,12 +96,12 @@ export function AccessTab({
   return (
     <div className="page">
       <p className="ssh__line ssh__line--in">
-        <span className="ssh__prompt">$</span> sesión abierta como <b>{remote.access_as ?? 'root'}</b> en{' '}
+        <span className="ssh__prompt">$</span> {tr("sesión abierta como")} <b>{remote.access_as ?? 'root'}</b> {tr("en")}{' '}
         {formatIp(remote.ip)}
       </p>
 
       <section className="page__block">
-        <h4>Registro</h4>
+        <h4>{tr("Registro")}</h4>
         <RemoteLogEditor log={log} onRewrite={onRewriteLog} onWipe={onWipeLog} />
       </section>
     </div>

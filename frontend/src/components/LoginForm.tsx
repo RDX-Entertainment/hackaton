@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useState, type FormEvent } from 'react';
 
 import { authenticated } from '../app/authSlice';
@@ -19,6 +20,7 @@ type LoginFormProps = {
  * calls the shell makes, wrapped in a form instead of a prompt.
  */
 export function LoginForm({ startRegistering = false }: LoginFormProps) {
+  useIdioma();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const status = useStatusMessage();
@@ -58,14 +60,13 @@ export function LoginForm({ startRegistering = false }: LoginFormProps) {
         Hackaton<b>V-Rustup</b>
       </p>
       <p className="login__lead">
-        {registering ? 'Crea una cuenta para empezar.' : 'Entra con tu cuenta.'}
+        {registering ? tr("Crea una cuenta para empezar.") : tr("Entra con tu cuenta.")}
       </p>
 
       <form className="login__form" onSubmit={submit}>
         {registering && (
           <label>
-            Username
-            <input
+            {tr("Username")} <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
@@ -75,7 +76,7 @@ export function LoginForm({ startRegistering = false }: LoginFormProps) {
         )}
 
         <label>
-          {registering ? 'Email' : 'Email o usuario'}
+          {registering ? tr("Email") : tr("Email o usuario")}
           <input
             type={registering ? 'email' : 'text'}
             value={identifier}
@@ -86,8 +87,7 @@ export function LoginForm({ startRegistering = false }: LoginFormProps) {
         </label>
 
         <label>
-          Password
-          <input
+          {tr("Password")} <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -95,20 +95,20 @@ export function LoginForm({ startRegistering = false }: LoginFormProps) {
             minLength={registering ? MIN_PASSWORD_LENGTH : undefined}
             required
           />
-          {registering && <small>Mínimo {MIN_PASSWORD_LENGTH} caracteres.</small>}
+          {registering && <small>{tr("Mínimo")} {MIN_PASSWORD_LENGTH} {tr("caracteres.")}</small>}
         </label>
 
         {status.message && <output className="login__error">{status.message}</output>}
 
         <button className="login__submit" disabled={busy}>
-          {busy ? 'espera…' : registering ? 'crear cuenta' : 'entrar'}
+          {busy ? tr("espera…") : registering ? tr("crear cuenta") : tr("entrar")}
         </button>
       </form>
 
       <p className="login__swap">
-        {registering ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}{' '}
+        {registering ? tr("¿Ya tienes cuenta?") : tr("¿No tienes cuenta?")}{' '}
         <button type="button" className="login__link" onClick={swap}>
-          {registering ? 'entrar' : 'crear una'}
+          {registering ? tr("entrar") : tr("crear una")}
         </button>
       </p>
     </div>

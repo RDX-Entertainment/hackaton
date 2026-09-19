@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 import { useState, type ChangeEvent } from 'react';
 
 import { authenticated } from '../../app/authSlice';
@@ -53,7 +54,7 @@ export function LanguageSelect() {
     }
   };
 
-  const etiqueta = t('language.label') ?? 'Idioma';
+  const etiqueta = t('language.label') ?? tr("Idioma");
 
   return (
     <label className="selector-idioma" title={error}>

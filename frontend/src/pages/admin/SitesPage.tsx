@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AdminCard } from '../../components/admin/AdminCard';
@@ -13,7 +14,7 @@ import { useStatusMessage } from '../../utils/useStatusMessage';
 type Filter = 'all' | Site['kind'];
 
 const FILTERS: { value: Filter; label: string }[] = [
-  { value: 'all', label: 'todos' },
+  { value: 'all', get label() { return tr("todos"); } },
   { value: 'npc', label: 'NPC' },
   { value: 'player', label: 'jugadores' },
 ];
@@ -23,6 +24,7 @@ function keyOf(site: Site): string {
 }
 
 export function SitesPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [sites, setSites] = useState<Site[]>();
@@ -67,7 +69,7 @@ export function SitesPage() {
       const words = `${site.name} ${formatIp(site.ip)}`.toLowerCase();
       return terms.every((term) => words.includes(term));
     });
-  }, [sites, filter, text]);
+  }, [sites, filter, text, idiomaActual()]);
 
   const current = sites?.find((site) => keyOf(site) === chosen) ?? null;
 
@@ -83,7 +85,7 @@ export function SitesPage() {
     try {
       await adminApi.saveSite(current.kind, current.id, web);
       await load();
-      status.report(`${current.name} publicado.`);
+      status.report(tr("{0} publicado.", current.name));
     } catch (error) {
       setRefused(messageFrom(error));
     } finally {
@@ -94,11 +96,9 @@ export function SitesPage() {
   if (denied) {
     return (
       <>
-        <h2>Sitios</h2>
+        <h2>{tr("Sitios")}</h2>
         <p className="muted">
-          Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es
-          administrador, igual que a una ruta inventada.
-        </p>
+          {tr("Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es administrador, igual que a una ruta inventada.")} </p>
       </>
     );
   }
@@ -111,13 +111,13 @@ export function SitesPage() {
 
   return (
     <>
-      <h2>Sitios</h2>
+      <h2>{tr("Sitios")}</h2>
       <StatusMessage text={status.message} as="block" />
 
       <AdminCard
         prefix="Net"
         brand="Host"
-        note={`${sites.length} páginas · ${empty} sin contenido`}
+        note={tr("{0} páginas · {1} sin contenido", sites.length, empty)}
       >
         <div className="sites">
           <div className="sites__list">
@@ -126,7 +126,7 @@ export function SitesPage() {
                 <span aria-hidden="true">⌕</span>
                 <input
                   value={text}
-                  placeholder="nombre o dirección…"
+                  placeholder={tr("nombre o dirección…")}
                   onChange={(event) => setText(event.target.value)}
                 />
               </div>
@@ -167,18 +167,18 @@ export function SitesPage() {
                     </span>
 
                     <span className="srow__text">
-                      <span className="srow__name">{site.name || 'sin nombre'}</span>
+                      <span className="srow__name">{site.name || tr("sin nombre")}</span>
                       <span className="srow__ip">{formatIp(site.ip)}</span>
                     </span>
 
                     <span className={site.web.trim() ? 'srow__bytes' : 'srow__bytes is-empty'}>
-                      {site.web.trim() ? `${formatCount(site.web.length)} B` : 'vacío'}
+                      {site.web.trim() ? `${formatCount(site.web.length)} B` : tr("vacío")}
                     </span>
                   </button>
                 </li>
               ))}
 
-              {shown.length === 0 && <li className="sites__none">Ninguno encaja.</li>}
+              {shown.length === 0 && <li className="sites__none">{tr("Ninguno encaja.")}</li>}
             </ul>
           </div>
 
@@ -194,9 +194,7 @@ export function SitesPage() {
               />
             ) : (
               <p className="sites__idle">
-                Elige una página de la lista. Se editan igual las de un NPC y las de un
-                jugador: lo que cambia es de quién es la máquina que la sirve.
-              </p>
+                {tr("Elige una página de la lista. Se editan igual las de un NPC y las de un jugador: lo que cambia es de quién es la máquina que la sirve.")} </p>
             )}
           </div>
         </div>

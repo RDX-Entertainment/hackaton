@@ -1,3 +1,4 @@
+import { tr } from '../i18n/text';
 import type { ComponentKind, Part, Tier } from './api';
 
 /**
@@ -61,7 +62,7 @@ export const KIND_UNIT: Record<ComponentKind, string> = {
 };
 
 export const TIER_LABEL: Record<Tier, string> = {
-  domestica: 'doméstica',
+  get domestica() { return tr("doméstica"); },
   gaming: 'gaming',
   server: 'servidor',
   industrial: 'industrial',
@@ -85,11 +86,11 @@ export function build(items: BuildItem[]): Build {
   }
 
   if (!board) {
-    problems.push('Un kit necesita una placa base.');
+    problems.push(tr("Un kit necesita una placa base."));
   }
 
   if (boards.length > 1 || (boards[0]?.amount ?? 1) > 1) {
-    problems.push('Un equipo lleva una placa, no varias.');
+    problems.push(tr("Un equipo lleva una placa, no varias."));
   }
 
   const slots: SlotUse[] = SLOTTED.map((kind) => {
@@ -116,17 +117,17 @@ export function build(items: BuildItem[]): Build {
 
       if (part.tier !== board.tier) {
         problems.push(
-          `${part.name} es ${TIER_LABEL[part.tier]} y la placa es ${TIER_LABEL[board.tier]}.`,
+          tr("{0} es {1} y la placa es {2}.", part.name, TIER_LABEL[part.tier], TIER_LABEL[board.tier]),
         );
       }
 
       if (part.kind === 'cpu' && part.chipset_id && part.chipset_id !== board.chipset_id) {
-        problems.push(`${part.name} pide chipset ${part.chipset} y la placa es ${board.chipset}.`);
+        problems.push(tr("{0} pide chipset {1} y la placa es {2}.", part.name, part.chipset, board.chipset));
       }
 
       if (part.kind === 'ram' && part.generation !== board.generation) {
         problems.push(
-          `${part.name} es DDR${part.generation} y la placa acepta DDR${board.generation}.`,
+          tr("{0} es DDR{1} y la placa acepta DDR{2}.", part.name, part.generation, board.generation),
         );
       }
     }
@@ -134,13 +135,13 @@ export function build(items: BuildItem[]): Build {
     for (const slot of slots) {
       if (slot.used > slot.total) {
         problems.push(
-          `${slot.used} piezas de ${slot.kind} y la placa tiene ${slot.total} ranuras.`,
+          tr("{0} piezas de {1} y la placa tiene {2} ranuras.", slot.used, slot.kind, slot.total),
         );
       }
 
       if (slot.power > slot.max) {
         problems.push(
-          `${slot.power} ${KIND_UNIT[slot.kind]} de ${slot.kind} sobre un máximo de ${slot.max}.`,
+          tr("{0} {1} de {2} sobre un máximo de {3}.", slot.power, KIND_UNIT[slot.kind], slot.kind, slot.max),
         );
       }
     }

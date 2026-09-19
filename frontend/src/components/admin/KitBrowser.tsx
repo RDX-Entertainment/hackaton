@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo, useState } from 'react';
 
 import type { Kit, KitScope } from '../../utils/api';
@@ -7,11 +8,11 @@ import { KitCard } from './KitCard';
 const COLLAPSED = 4;
 
 const SCOPES: { value: KitScope | 'all'; label: string }[] = [
-  { value: 'all', label: 'todos' },
+  { value: 'all', get label() { return tr("todos"); } },
   { value: 'shop', label: 'tienda' },
-  { value: 'clan', label: 'corporación' },
+  { value: 'clan', get label() { return tr("corporación"); } },
   { value: 'marketplace', label: 'mercado' },
-  { value: 'hidden', label: 'oculto' },
+  { value: 'hidden', get label() { return tr("oculto"); } },
 ];
 
 type KitBrowserProps = {
@@ -23,6 +24,7 @@ type KitBrowserProps = {
 };
 
 export function KitBrowser({ kits, busy, onEdit, onRemove, onDefault }: KitBrowserProps) {
+  useIdioma();
   const [scope, setScope] = useState<KitScope | 'all'>('all');
   const [text, setText] = useState('');
   const [expanded, setExpanded] = useState(false);
@@ -51,7 +53,7 @@ export function KitBrowser({ kits, busy, onEdit, onRemove, onDefault }: KitBrows
 
       return terms.every((term) => haystack.includes(term));
     });
-  }, [kits, scope, text]);
+  }, [kits, scope, text, idiomaActual()]);
 
   const visible = expanded ? shown : shown.slice(0, COLLAPSED);
   const hidden = shown.length - visible.length;
@@ -60,7 +62,7 @@ export function KitBrowser({ kits, busy, onEdit, onRemove, onDefault }: KitBrows
     value === 'all' ? kits.length : kits.filter((kit) => kit.scope === value).length;
 
   return (
-    <AdminCard prefix="Kit" brand="Menu" note={`${shown.length} de ${kits.length} equipos`}>
+    <AdminCard prefix="Kit" brand="Menu" note={tr("{0} de {1} equipos", shown.length, kits.length)}>
       <div className="catalog">
         <div className="filters">
           <div className="filters__search">
@@ -69,21 +71,21 @@ export function KitBrowser({ kits, busy, onEdit, onRemove, onDefault }: KitBrows
             </span>
             <input
               value={text}
-              placeholder="buscar por nombre, pieza, corporación…"
+              placeholder={tr("buscar por nombre, pieza, corporación…")}
               onChange={(event) => {
                 setText(event.target.value);
                 setExpanded(false);
               }}
             />
             {text && (
-              <button type="button" aria-label="Limpiar búsqueda" onClick={() => setText('')}>
+              <button type="button" aria-label={tr("Limpiar búsqueda")} onClick={() => setText('')}>
                 ×
               </button>
             )}
           </div>
 
           <div className="filters__group">
-            <span className="filters__legend">ámbito</span>
+            <span className="filters__legend">{tr("ámbito")}</span>
 
             <div className="chips">
               {SCOPES.map((option) => (
@@ -104,7 +106,7 @@ export function KitBrowser({ kits, busy, onEdit, onRemove, onDefault }: KitBrows
         </div>
 
         {shown.length === 0 ? (
-          <p className="catalog__empty">Ningún kit encaja con esos filtros.</p>
+          <p className="catalog__empty">{tr("Ningún kit encaja con esos filtros.")}</p>
         ) : (
           <>
             <div className="kitgrid">
@@ -128,7 +130,7 @@ export function KitBrowser({ kits, busy, onEdit, onRemove, onDefault }: KitBrows
                 onClick={() => setExpanded((current) => !current)}
               >
                 <span className={expanded ? 'catalog__chevron is-up' : 'catalog__chevron'}>▾</span>
-                {expanded ? 'ver menos' : `ver ${hidden} equipos más`}
+                {expanded ? tr("ver menos") : tr("ver {0} equipos más", hidden)}
               </button>
             )}
           </>

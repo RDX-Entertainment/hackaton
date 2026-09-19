@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import type { Chipset, ComponentKind, Part, PartInput, Tier } from '../../utils/api';
@@ -7,11 +8,11 @@ import { PartIcon } from './PartIcon';
 import { PartPreview } from './PartPreview';
 
 const KINDS: { value: ComponentKind; label: string }[] = [
-  { value: 'mobo', label: 'placa base' },
-  { value: 'cpu', label: 'procesador' },
-  { value: 'ram', label: 'memoria' },
-  { value: 'hdd', label: 'disco' },
-  { value: 'net', label: 'red' },
+  { value: 'mobo', get label() { return tr("placa base"); } },
+  { value: 'cpu', get label() { return tr("procesador"); } },
+  { value: 'ram', get label() { return tr("memoria"); } },
+  { value: 'hdd', get label() { return tr("disco"); } },
+  { value: 'net', get label() { return tr("red"); } },
 ];
 
 const TIERS: Tier[] = ['domestica', 'gaming', 'server', 'industrial'];
@@ -20,17 +21,17 @@ const DDR: number[] = [2, 3, 4, 5];
 
 const POWER_LABEL: Record<ComponentKind, string> = {
   mobo: '',
-  cpu: 'proceso (MHz)',
-  ram: 'capacidad (MB)',
-  hdd: 'capacidad (MB)',
-  net: 'ancho de banda (Mbit)',
+  get cpu() { return tr("proceso (MHz)"); },
+  get ram() { return tr("capacidad (MB)"); },
+  get hdd() { return tr("capacidad (MB)"); },
+  get net() { return tr("ancho de banda (Mbit)"); },
 };
 
 const CEILINGS = [
-  { key: 'max_cpu', slots: 'cpu_slots', label: 'proceso máx. (MHz)', slotLabel: 'zócalos cpu' },
-  { key: 'max_ram', slots: 'ram_slots', label: 'memoria máx. (MB)', slotLabel: 'zócalos ram' },
-  { key: 'max_hdd', slots: 'hdd_slots', label: 'espacio máx. (MB)', slotLabel: 'bahías disco' },
-  { key: 'max_net', slots: 'net_slots', label: 'red máx. (Mbit)', slotLabel: 'puertos red' },
+  { key: 'max_cpu', slots: 'cpu_slots', get label() { return tr("proceso máx. (MHz)"); }, get slotLabel() { return tr("zócalos cpu"); } },
+  { key: 'max_ram', slots: 'ram_slots', get label() { return tr("memoria máx. (MB)"); }, get slotLabel() { return tr("zócalos ram"); } },
+  { key: 'max_hdd', slots: 'hdd_slots', get label() { return tr("espacio máx. (MB)"); }, get slotLabel() { return tr("bahías disco"); } },
+  { key: 'max_net', slots: 'net_slots', get label() { return tr("red máx. (Mbit)"); }, get slotLabel() { return tr("puertos red"); } },
 ] as const;
 
 const EMPTY: PartInput = {
@@ -69,6 +70,7 @@ export function PartForm({
   onCancel,
   onChipsetCreated,
 }: PartFormProps) {
+  useIdioma();
   const [draft, setDraft] = useState<PartInput>(EMPTY);
 
   useEffect(() => {
@@ -122,7 +124,7 @@ export function PartForm({
     <AdminCard
       prefix="Hard"
       brand="Craft"
-      note={editing ? `editando · ${editing.name}` : 'alta de pieza'}
+      note={editing ? tr("editando · {0}", editing.name) : tr("alta de pieza")}
     >
       <div className="partcard__kinds">
         {KINDS.map((option) => (
@@ -141,12 +143,11 @@ export function PartForm({
       <div className="partcard__split">
         <form className="partform" onSubmit={submit}>
           <fieldset className="partform__group">
-            <legend>Identidad</legend>
+            <legend>{tr("Identidad")}</legend>
 
             <div className="partform__grid partform__grid--identity">
               <label className="partform__wide">
-                nombre
-                <input
+                {tr("nombre")} <input
                   value={draft.name}
                   placeholder="Cross 1G"
                   onChange={(event) => set('name', event.target.value)}
@@ -155,8 +156,7 @@ export function PartForm({
               </label>
 
               <label>
-                gama
-                <select
+                {tr("gama")} <select
                   value={draft.tier}
                   onChange={(event) => set('tier', event.target.value as Tier)}
                 >
@@ -169,8 +169,7 @@ export function PartForm({
               </label>
 
               <label>
-                precio
-                <input
+                {tr("precio")} <input
                   inputMode="numeric"
                   value={draft.price}
                   onChange={(event) => set('price', number(event.target.value))}
@@ -181,7 +180,7 @@ export function PartForm({
           </fieldset>
 
           <fieldset className="partform__group">
-            <legend>{usesChipset ? 'Plataforma' : 'Especificación'}</legend>
+            <legend>{usesChipset ? tr("Plataforma") : tr("Especificación")}</legend>
 
             <div className="partform__grid">
               {!isBoard && (
@@ -198,7 +197,7 @@ export function PartForm({
 
               {(isBoard || draft.kind === 'ram') && (
                 <label>
-                  {isBoard ? 'ddr que acepta' : 'generación ddr'}
+                  {isBoard ? tr("ddr que acepta") : tr("generación ddr")}
                   <select
                     value={draft.generation}
                     onChange={(event) => set('generation', number(event.target.value))}
@@ -218,8 +217,8 @@ export function PartForm({
                   value={draft.chipset_id}
                   onChange={(id) => set('chipset_id', id)}
                   onCreated={onChipsetCreated}
-                  label={isBoard ? 'chipset que monta' : 'chipset que exige'}
-                  emptyLabel={isBoard ? 'sin chipset' : 'compatible con cualquiera'}
+                  label={isBoard ? tr("chipset que monta") : tr("chipset que exige")}
+                  emptyLabel={isBoard ? tr("sin chipset") : tr("compatible con cualquiera")}
                 />
               )}
 
@@ -229,14 +228,13 @@ export function PartForm({
                   checked={draft.listed}
                   onChange={(event) => set('listed', event.target.checked)}
                 />
-                a la venta
-              </label>
+                {tr("a la venta")} </label>
             </div>
           </fieldset>
 
           {isBoard && (
             <fieldset className="partform__group">
-              <legend>Compatibilidad</legend>
+              <legend>{tr("Compatibilidad")}</legend>
 
               <div className="partform__grid partform__grid--limits">
                 {CEILINGS.map((row) => (
@@ -263,20 +261,17 @@ export function PartForm({
               </div>
 
               <p className="partform__hint">
-                Los zócalos limitan cuántas piezas caben. El máximo limita cuánto pueden sumar
-                entre todas. Son dos cosas distintas y las dos se comprueban al instalar.
-              </p>
+                {tr("Los zócalos limitan cuántas piezas caben. El máximo limita cuánto pueden sumar entre todas. Son dos cosas distintas y las dos se comprueban al instalar.")} </p>
             </fieldset>
           )}
 
           <div className="partform__actions">
             {editing && (
               <button type="button" onClick={onCancel} disabled={busy}>
-                cancelar
-              </button>
+                {tr("cancelar")} </button>
             )}
             <button className="is-primary" disabled={busy}>
-              {editing ? 'guardar cambios' : 'crear pieza'}
+              {editing ? tr("guardar cambios") : tr("crear pieza")}
             </button>
           </div>
         </form>

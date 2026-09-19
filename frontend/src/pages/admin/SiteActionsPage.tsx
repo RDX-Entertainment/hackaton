@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { AdminCard } from '../../components/admin/AdminCard';
@@ -7,22 +8,22 @@ import { adminApi, type ActionInfo, type Organization, type SiteGrant } from '..
 import { useStatusMessage } from '../../utils/useStatusMessage';
 
 const SCOPES = [
-  { value: 'all_sites', label: 'Todas las webs', needs: 'nada' },
-  { value: 'all_organizations', label: 'Todas las corporaciones', needs: 'nada' },
-  { value: 'organization', label: 'Una corporación', needs: 'organization' },
-  { value: 'site', label: 'Una web', needs: 'site' },
+  { value: 'all_sites', get label() { return tr("Todas las webs"); }, needs: 'nada' },
+  { value: 'all_organizations', get label() { return tr("Todas las corporaciones"); }, needs: 'nada' },
+  { value: 'organization', get label() { return tr("Una corporación"); }, needs: 'organization' },
+  { value: 'site', get label() { return tr("Una web"); }, needs: 'site' },
 ];
 
 const FAMILIES = [
   {
     value: 'normal',
-    label: 'Normales',
-    hint: 'Enlazar, navegar y cobrar. El diálogo de pago lo pinta el juego, fuera de la página.',
+    get label() { return tr("Normales"); },
+    get hint() { return tr("Enlazar, navegar y cobrar. El diálogo de pago lo pinta el juego, fuera de la página."); },
   },
   {
     value: 'integrated',
-    label: 'Integradas',
-    hint: 'La interfaz vive dentro del HTML del sitio: sus campos, su CSS, sus huecos.',
+    get label() { return tr("Integradas"); },
+    get hint() { return tr("La interfaz vive dentro del HTML del sitio: sus campos, su CSS, sus huecos."); },
   },
 ];
 
@@ -34,6 +35,7 @@ const FAMILIES = [
  * tabla, no una regla del código, y se cambia desde aquí.
  */
 export function SiteActionsPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [actions, setActions] = useState<ActionInfo[]>();
@@ -97,23 +99,21 @@ export function SiteActionsPage() {
         npc_id: needs === 'site' ? target : null,
       });
 
-      return 'Concesión creada.';
+      return tr("Concesión creada.");
     });
   };
 
   const drop = (id: number) =>
     void run(async () => {
       await adminApi.removeSiteGrant(id);
-      return 'Concesión retirada.';
+      return tr("Concesión retirada.");
     });
 
   return (
     <>
-      <h2>Acciones de sitio</h2>
+      <h2>{tr("Acciones de sitio")}</h2>
       <p className="muted">
-        Lo que puede usar la web de una máquina. Una concesión con acción <code>*</code> abre la
-        familia entera.
-      </p>
+        {tr("Lo que puede usar la web de una máquina. Una concesión con acción")} <code>*</code> {tr("abre la familia entera.")} </p>
       <StatusMessage text={status.message} as="block" />
 
       <div className="grants">
@@ -122,7 +122,7 @@ export function SiteActionsPage() {
             key={one.value}
             prefix={one.value === 'normal' ? '01/' : '02/'}
             brand={one.label.toLowerCase()}
-            note={`${grants.filter((row) => row.family === one.value).length} concesiones`}
+            note={tr("{0} concesiones", grants.filter((row) => row.family === one.value).length)}
             accent={one.value === 'integrated' ? 'lime' : undefined}
           >
             <p className="org-infra__intro">{one.hint}</p>
@@ -145,13 +145,12 @@ export function SiteActionsPage() {
                   <span>{SCOPES.find((s) => s.value === row.scope)?.label ?? row.scope}</span>
                   <em>{row.target_name ?? '—'}</em>
                   <button type="button" disabled={busy} onClick={() => drop(row.id)}>
-                    quitar
-                  </button>
+                    {tr("quitar")} </button>
                 </div>
               ))}
 
             {!grants.some((row) => row.family === one.value) && (
-              <p className="org-empty">Nadie puede usar estas órdenes.</p>
+              <p className="org-empty">{tr("Nadie puede usar estas órdenes.")}</p>
             )}
           </AdminCard>
         ))}
@@ -160,8 +159,7 @@ export function SiteActionsPage() {
       <AdminCard prefix="03/" brand="conceder" note="nueva">
         <form className="grants__form" onSubmit={grant}>
           <label>
-            Familia
-            <select
+            {tr("Familia")} <select
               value={family}
               onChange={(event) => {
                 setFamily(event.target.value);
@@ -177,9 +175,8 @@ export function SiteActionsPage() {
           </label>
 
           <label>
-            Acción
-            <select value={action} onChange={(event) => setAction(event.target.value)}>
-              <option value="*">todas (*)</option>
+            {tr("Acción")} <select value={action} onChange={(event) => setAction(event.target.value)}>
+              <option value="*">{tr("todas (*)")}</option>
               {actions
                 .filter((one) => one.family === family)
                 .map((one) => (
@@ -191,8 +188,7 @@ export function SiteActionsPage() {
           </label>
 
           <label>
-            A quién
-            <select
+            {tr("A quién")} <select
               value={scope}
               onChange={(event) => {
                 setScope(event.target.value);
@@ -209,9 +205,8 @@ export function SiteActionsPage() {
 
           {needs === 'organization' && (
             <label>
-              Corporación
-              <select value={target} onChange={(event) => setTarget(Number(event.target.value))}>
-                <option value={0}>Elige una</option>
+              {tr("Corporación")} <select value={target} onChange={(event) => setTarget(Number(event.target.value))}>
+                <option value={0}>{tr("Elige una")}</option>
                 {organizations.map((one) => (
                   <option key={one.id} value={one.id}>
                     {one.name}
@@ -225,7 +220,7 @@ export function SiteActionsPage() {
             <label>
               Web
               <select value={target} onChange={(event) => setTarget(Number(event.target.value))}>
-                <option value={0}>Elige una</option>
+                <option value={0}>{tr("Elige una")}</option>
                 {nodes.map(({ npc, organization }) => (
                   <option key={npc.id} value={npc.id}>
                     {npc.name} · {organization.name}
@@ -236,8 +231,7 @@ export function SiteActionsPage() {
           )}
 
           <button className="is-primary" disabled={busy || (needs !== 'nada' && !target)}>
-            Conceder
-          </button>
+            {tr("Conceder")} </button>
         </form>
       </AdminCard>
     </>

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -25,6 +26,7 @@ const REFRESCO_MS = 20_000;
  * tareas corriendo, se ven desde cualquier pantalla.
  */
 export function TopBar() {
+  useIdioma();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const [admin, setAdmin] = useState(false);
@@ -83,12 +85,12 @@ export function TopBar() {
             </span>
             <span className="hud__lectura">
               <span className="micro">
-                <Icono nombre="tiempo" tamano={12} /> {t('shell.running') ?? 'en marcha'}
+                <Icono nombre="tiempo" tamano={12} /> {t('shell.running') ?? tr("en marcha")}
               </span>
               <span className={tareas ? 'dato dato--tiempo' : 'dato'}>{tareas}</span>
             </span>
             <span className="hud__lectura">
-              <span className="micro">{t('shell.mail') ?? 'correo'}</span>
+              <span className="micro">{t('shell.mail') ?? tr("correo")}</span>
               <span className="dato">{dashboard.unread_mail}</span>
             </span>
           </>
@@ -113,13 +115,13 @@ export function TopBar() {
               aria-pressed={revelada}
               aria-label={
                 revelada
-                  ? (t('shell.hideIp') ?? 'Ocultar tu dirección')
-                  : (t('shell.showIp') ?? 'Mostrar tu dirección')
+                  ? (t('shell.hideIp') ?? tr("Ocultar tu dirección"))
+                  : (t('shell.showIp') ?? tr("Mostrar tu dirección"))
               }
               title={
                 revelada
-                  ? (t('shell.hideIp') ?? 'Ocultar tu dirección')
-                  : (t('shell.showIp') ?? 'Mostrar tu dirección')
+                  ? (t('shell.hideIp') ?? tr("Ocultar tu dirección"))
+                  : (t('shell.showIp') ?? tr("Mostrar tu dirección"))
               }
               onClick={() => setRevelada((actual) => !actual)}
             >

@@ -3,6 +3,7 @@
  * It used to be the same ternary copied into two dozen catch blocks.
  */
 import { t } from '../i18n';
+import { tr } from '../i18n/text';
 import { HttpError } from './api/client';
 
 const FALLBACK_MESSAGE = 'Algo ha fallado.';
@@ -38,5 +39,5 @@ export function messageFrom(error: unknown): string {
     return error;
   }
 
-  return FALLBACK_MESSAGE;
+  return tr(FALLBACK_MESSAGE);
 }

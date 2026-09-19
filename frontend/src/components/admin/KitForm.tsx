@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import type { Kit, KitClan, KitInput, KitScope, Part } from '../../utils/api';
@@ -8,10 +9,10 @@ import { KitBuilder, type BuildLine } from './KitBuilder';
 import { KitPreview } from './KitPreview';
 
 const SCOPES: { value: KitScope; label: string; hint: string }[] = [
-  { value: 'shop', label: 'tienda', hint: 'cualquiera lo ve y lo compra' },
-  { value: 'clan', label: 'corporación', hint: 'solo los miembros de las que elijas' },
-  { value: 'marketplace', label: 'mercado', hint: 'reservado a los equipos de NPC' },
-  { value: 'hidden', label: 'oculto', hint: 'no se ofrece; existe para aplicarlo a mano' },
+  { value: 'shop', label: 'tienda', get hint() { return tr("cualquiera lo ve y lo compra"); } },
+  { value: 'clan', get label() { return tr("corporación"); }, get hint() { return tr("solo los miembros de las que elijas"); } },
+  { value: 'marketplace', label: 'mercado', get hint() { return tr("reservado a los equipos de NPC"); } },
+  { value: 'hidden', get label() { return tr("oculto"); }, get hint() { return tr("no se ofrece; existe para aplicarlo a mano"); } },
 ];
 
 const EMPTY = {
@@ -36,6 +37,7 @@ type KitFormProps = {
 };
 
 export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: KitFormProps) {
+  useIdioma();
   const [draft, setDraft] = useState<Draft>(EMPTY);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
-  const byId = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
+  const byId = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts, idiomaActual()]);
 
   const preview = useMemo(
     () =>
@@ -67,7 +69,7 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
           .map((line) => ({ part: byId.get(line.part), amount: line.amount }))
           .filter((item): item is { part: Part; amount: number } => Boolean(item.part)),
       ),
-    [draft.lines, byId],
+    [draft.lines, byId, idiomaActual()],
   );
 
   const price = Number(draft.price) || 0;
@@ -102,17 +104,16 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
     <AdminCard
       prefix="Hard"
       brand="Kit"
-      note={editing ? `editando ${editing.name}` : 'equipos montados'}
+      note={editing ? tr("editando {0}", editing.name) : tr("equipos montados")}
     >
       <div className="partcard__split">
         <form className="partform" onSubmit={send}>
           <fieldset className="partform__group">
-            <legend>Identidad</legend>
+            <legend>{tr("Identidad")}</legend>
 
             <div className="partform__grid partform__grid--identity">
               <label>
-                nombre
-                <input
+                {tr("nombre")} <input
                   value={draft.name}
                   maxLength={40}
                   onChange={(event) => set('name', event.target.value)}
@@ -121,8 +122,7 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
               </label>
 
               <label>
-                precio del kit
-                <input
+                {tr("precio del kit")} <input
                   inputMode="numeric"
                   value={draft.price}
                   onChange={(event) => set('price', event.target.value)}
@@ -131,19 +131,18 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
             </div>
 
             <label className="kitform__desc">
-              descripción
-              <textarea
+              {tr("descripción")} <textarea
                 value={draft.description}
                 rows={2}
                 maxLength={240}
-                placeholder="qué es este equipo y para quién"
+                placeholder={tr("qué es este equipo y para quién")}
                 onChange={(event) => set('description', event.target.value)}
               />
             </label>
           </fieldset>
 
           <fieldset className="partform__group">
-            <legend>Dónde se ofrece</legend>
+            <legend>{tr("Dónde se ofrece")}</legend>
 
             <div className="chips">
               {SCOPES.map((scope) => (
@@ -174,12 +173,11 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
                 checked={draft.listed}
                 onChange={(event) => set('listed', event.target.checked)}
               />
-              a la venta
-            </label>
+              {tr("a la venta")} </label>
           </fieldset>
 
           <fieldset className="partform__group">
-            <legend>Contenido</legend>
+            <legend>{tr("Contenido")}</legend>
 
             <KitBuilder
               parts={parts}
@@ -191,11 +189,10 @@ export function KitForm({ editing, parts, clans, busy, onSubmit, onCancel }: Kit
           <div className="partform__actions">
             {editing && (
               <button type="button" onClick={onCancel} disabled={busy}>
-                cancelar
-              </button>
+                {tr("cancelar")} </button>
             )}
             <button className="is-primary" disabled={busy || !ready}>
-              {editing ? 'guardar cambios' : 'crear kit'}
+              {editing ? tr("guardar cambios") : tr("crear kit")}
             </button>
           </div>
         </form>

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState, type FormEvent } from 'react';
 
 import { accountApi } from '../../utils/api';
@@ -17,6 +18,7 @@ type BiographyCardProps = {
  * reads as a profile and not as a form.
  */
 export function BiographyCard({ biography, onSaved }: BiographyCardProps) {
+  useIdioma();
   const status = useStatusMessage();
 
   const [editing, setEditing] = useState(false);
@@ -57,8 +59,7 @@ export function BiographyCard({ biography, onSaved }: BiographyCardProps) {
 
         {!editing && (
           <button type="button" className="panel__action" onClick={open}>
-            editar
-          </button>
+            {tr("editar")} </button>
         )}
       </header>
 
@@ -74,15 +75,13 @@ export function BiographyCard({ biography, onSaved }: BiographyCardProps) {
 
           <div className="panel__foot">
             <span className="panel__count">
-              {formatCount(MAX_LENGTH - draft.length)} restantes
-            </span>
+              {formatCount(MAX_LENGTH - draft.length)} {tr("restantes")} </span>
 
             <span className="panel__buttons">
               <button type="button" onClick={cancel} disabled={busy}>
-                cancelar
-              </button>
+                {tr("cancelar")} </button>
               <button className="is-primary" disabled={busy}>
-                {busy ? 'guardando…' : 'guardar'}
+                {busy ? tr("guardando…") : tr("guardar")}
               </button>
             </span>
           </div>
@@ -95,8 +94,7 @@ export function BiographyCard({ biography, onSaved }: BiographyCardProps) {
             <pre className="panel__text">{biography}</pre>
           ) : (
             <p className="panel__empty">
-              <span aria-hidden="true">$ </span>cat ~/.profile: fichero vacío
-            </p>
+              <span aria-hidden="true">$ </span>{tr("cat ~/.profile: fichero vacío")} </p>
           )}
         </div>
       )}

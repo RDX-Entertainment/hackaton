@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 import { formatIp } from '../../utils/ip';
 import { SystemFetch } from '../SystemFetch';
 import { cowsay, fortune, HACK_THE_PLANET, matrixRain, TEAPOT } from './asciiArt';
@@ -35,13 +36,13 @@ const FAKE_FILES: Record<string, string> = {
     '[ ] storyline',
     '[ ] que alguien juegue de una vez',
   ].join('\n'),
-  '.secret': 'No hay nada aquí. Bueno, sí: prueba `fortune`.',
+  get '.secret'() { return tr("No hay nada aquí. Bueno, sí: prueba `fortune`."); },
 };
 
 function helpCommand(context: CommandContext, registry: Command[]): void {
   const groups: Command['group'][] = ['sesión', 'sistema', 'extras'];
 
-  context.print('Comandos disponibles. Escribe el nombre y pulsa Enter.', 'hint');
+  context.print(tr("Comandos disponibles. Escribe el nombre y pulsa Enter."), 'hint');
 
   for (const group of groups) {
     const inGroup = registry.filter((command) => command.group === group);
@@ -54,17 +55,17 @@ function helpCommand(context: CommandContext, registry: Command[]): void {
       return `  ${usage.padEnd(16)} ${command.summary}`;
     });
 
-    context.print(`\n${group.toUpperCase()}\n${lines.join('\n')}`);
+    context.print(`\n${tr(group).toUpperCase()}\n${lines.join('\n')}`);
   }
 
-  context.print('\n↑ y ↓ recorren el historial · Ctrl+L limpia la pantalla', 'hint');
+  context.print(tr("↑ y ↓ recorren el historial · Ctrl+L limpia la pantalla"), 'hint');
 }
 
 const sessionCommands: Command[] = [
   {
     name: 'login',
     group: 'sesión',
-    summary: 'Entrar con una cuenta existente.',
+    get summary() { return tr("Entrar con una cuenta existente."); },
     usage: 'login',
     run: (context) => {
       context.ask(
@@ -82,7 +83,7 @@ const sessionCommands: Command[] = [
     name: 'useradd',
     group: 'sesión',
     aliases: ['register', 'adduser'],
-    summary: 'Crear una cuenta nueva.',
+    get summary() { return tr("Crear una cuenta nueva."); },
     usage: 'useradd',
     run: (context) => {
       context.ask(
@@ -101,14 +102,14 @@ const sessionCommands: Command[] = [
     name: 'systemctl',
     group: 'sesión',
     usage: 'systemctl start UI',
-    summary: 'Arrancar la interfaz gráfica.',
+    get summary() { return tr("Arrancar la interfaz gráfica."); },
     run: (context) => {
       const [verb, unit] = context.args;
 
       // Sólo hay una unidad que arrancar, pero se comprueba igual: `systemctl`
       // a secas no debería sacarte del shell por accidente.
       if (verb?.toLowerCase() !== 'start' || unit?.toLowerCase() !== 'ui') {
-        context.print('Uso: systemctl start UI', 'error');
+        context.print(tr("Uso: systemctl start UI"), 'error');
         return;
       }
 
@@ -119,7 +120,7 @@ const sessionCommands: Command[] = [
     name: 'start-ui',
     group: 'sesión',
     aliases: ['startui'],
-    summary: 'Atajo de `systemctl start UI`.',
+    get summary() { return tr("Atajo de `systemctl start UI`."); },
     run: (context) => {
       context.session.startUi();
     },
@@ -127,12 +128,12 @@ const sessionCommands: Command[] = [
   {
     name: 'whoami',
     group: 'sesión',
-    summary: 'Quién eres ahora mismo.',
+    get summary() { return tr("Quién eres ahora mismo."); },
     run: (context) => {
       const me = context.session.identity();
 
       if (!me) {
-        context.print('guest · sin autenticar. Prueba `login` o `useradd`.');
+        context.print(tr("guest · sin autenticar. Prueba `login` o `useradd`."));
         return;
       }
 
@@ -145,7 +146,7 @@ const systemCommands: Command[] = [
   {
     name: 'neofetch',
     group: 'sistema',
-    summary: 'Datos de tu equipo, del navegador.',
+    get summary() { return tr("Datos de tu equipo, del navegador."); },
     run: (context) => {
       context.printNode(<SystemFetch />);
     },
@@ -154,7 +155,7 @@ const systemCommands: Command[] = [
     name: 'clear',
     group: 'sistema',
     aliases: ['cls'],
-    summary: 'Limpiar la pantalla.',
+    get summary() { return tr("Limpiar la pantalla."); },
     run: (context) => {
       context.clear();
     },
@@ -162,7 +163,7 @@ const systemCommands: Command[] = [
   {
     name: 'ls',
     group: 'sistema',
-    summary: 'Listar el directorio.',
+    get summary() { return tr("Listar el directorio."); },
     run: (context) => {
       const names = Object.keys(FAKE_FILES);
       context.print(names.join('   '));
@@ -171,19 +172,19 @@ const systemCommands: Command[] = [
   {
     name: 'cat',
     group: 'sistema',
-    summary: 'Leer un fichero.',
-    usage: 'cat <fichero>',
+    get summary() { return tr("Leer un fichero."); },
+    get usage() { return tr("cat <fichero>"); },
     run: (context) => {
       const name = context.args[0];
 
       if (!name) {
-        context.print('cat: falta el nombre del fichero', 'error');
+        context.print(tr("cat: falta el nombre del fichero"), 'error');
         return;
       }
 
-      const contents = FAKE_FILES[name];
+      const contents = FAKE_FILES[name]?.split('\n').map((line) => tr(line)).join('\n');
       if (contents === undefined) {
-        context.print(`cat: ${name}: No existe el fichero`, 'error');
+        context.print(tr("cat: {0}: No existe el fichero", name), 'error');
         return;
       }
 
@@ -193,8 +194,8 @@ const systemCommands: Command[] = [
   {
     name: 'echo',
     group: 'sistema',
-    summary: 'Repetir lo que escribas.',
-    usage: 'echo <texto>',
+    get summary() { return tr("Repetir lo que escribas."); },
+    get usage() { return tr("echo <texto>"); },
     run: (context) => {
       context.print(context.rest);
     },
@@ -202,7 +203,7 @@ const systemCommands: Command[] = [
   {
     name: 'date',
     group: 'sistema',
-    summary: 'Fecha y hora locales.',
+    get summary() { return tr("Fecha y hora locales."); },
     run: (context) => {
       context.print(new Date().toString());
     },
@@ -210,18 +211,18 @@ const systemCommands: Command[] = [
   {
     name: 'uname',
     group: 'sistema',
-    summary: 'Identificar el sistema.',
+    get summary() { return tr("Identificar el sistema."); },
     run: (context) => {
-      context.print('HackerOS 0.1.0 hackaton x86_64 GNU/Ficción');
+      context.print(tr("HackerOS 0.1.0 hackaton x86_64 GNU/Ficción"));
     },
   },
   {
     name: 'history',
     group: 'sistema',
-    summary: 'Comandos que has escrito.',
+    get summary() { return tr("Comandos que has escrito."); },
     run: (context) => {
       if (!context.history.length) {
-        context.print('Todavía nada.', 'hint');
+        context.print(tr("Todavía nada."), 'hint');
         return;
       }
 
@@ -237,8 +238,8 @@ const easterEggs: Command[] = [
   {
     name: 'sudo',
     group: 'extras',
-    summary: 'Pedir permisos que no tienes.',
-    usage: 'sudo <lo que sea>',
+    get summary() { return tr("Pedir permisos que no tienes."); },
+    get usage() { return tr("sudo <lo que sea>"); },
     run: (context) => {
       context.print('[sudo] password for guest: ');
       context.print(
@@ -250,7 +251,7 @@ const easterEggs: Command[] = [
   {
     name: 'hack',
     group: 'extras',
-    summary: 'Hackear el planeta.',
+    get summary() { return tr("Hackear el planeta."); },
     run: (context) => {
       context.print(HACK_THE_PLANET, 'success');
       context.print('Mess with the best, die like the rest.', 'hint');
@@ -259,7 +260,7 @@ const easterEggs: Command[] = [
   {
     name: 'matrix',
     group: 'extras',
-    summary: 'Ver la lluvia.',
+    get summary() { return tr("Ver la lluvia."); },
     run: (context) => {
       context.print(matrixRain(), 'success');
       context.print('Wake up...', 'hint');
@@ -268,8 +269,8 @@ const easterEggs: Command[] = [
   {
     name: 'cowsay',
     group: 'extras',
-    summary: 'Que lo diga una vaca.',
-    usage: 'cowsay <texto>',
+    get summary() { return tr("Que lo diga una vaca."); },
+    get usage() { return tr("cowsay <texto>"); },
     run: (context) => {
       context.print(cowsay(context.rest));
     },
@@ -277,7 +278,7 @@ const easterEggs: Command[] = [
   {
     name: 'fortune',
     group: 'extras',
-    summary: 'Una verdad incómoda al azar.',
+    get summary() { return tr("Una verdad incómoda al azar."); },
     run: (context) => {
       context.print(fortune(), 'hint');
     },
@@ -286,7 +287,7 @@ const easterEggs: Command[] = [
     name: 'coffee',
     group: 'extras',
     aliases: ['brew'],
-    summary: 'Pedir un café.',
+    get summary() { return tr("Pedir un café."); },
     run: (context) => {
       context.print(TEAPOT);
     },
@@ -294,35 +295,35 @@ const easterEggs: Command[] = [
   {
     name: 'rm',
     group: 'extras',
-    summary: 'Borrar cosas. Con cuidado.',
+    get summary() { return tr("Borrar cosas. Con cuidado."); },
     usage: 'rm -rf /',
     run: (context) => {
       const flags = context.rest.trim();
 
       if (flags.includes('-rf') && flags.includes('/')) {
-        context.print('rm: se niega a borrar «/»', 'error');
-        context.print('Buen intento. Aquí ya se borró todo una vez.', 'hint');
+        context.print(tr("rm: se niega a borrar «/»"), 'error');
+        context.print(tr("Buen intento. Aquí ya se borró todo una vez."), 'hint');
         return;
       }
 
-      context.print('rm: usa `rm -rf /` si de verdad tienes prisa', 'hint');
+      context.print(tr("rm: usa `rm -rf /` si de verdad tienes prisa"), 'hint');
     },
   },
   {
     name: 'exit',
     group: 'extras',
     aliases: ['logout', 'quit'],
-    summary: 'Salir. En teoría.',
+    get summary() { return tr("Salir. En teoría."); },
     run: (context) => {
-      context.print('No hay salida. Solo `login`.', 'hint');
+      context.print(tr("No hay salida. Solo `login`."), 'hint');
     },
   },
   {
     name: '42',
     group: 'extras',
-    summary: 'La respuesta.',
+    get summary() { return tr("La respuesta."); },
     run: (context) => {
-      context.print('42. La pregunta sigue siendo el problema.', 'hint');
+      context.print(tr("42. La pregunta sigue siendo el problema."), 'hint');
     },
   },
 ];
@@ -335,7 +336,7 @@ export const COMMANDS: Command[] = (() => {
     name: 'help',
     group: 'sistema',
     aliases: ['?', 'man'],
-    summary: 'Esta lista.',
+    get summary() { return tr("Esta lista."); },
     run: (context) => helpCommand(context, [...base, help]),
   };
 

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState } from 'react';
 
 import type { Remote, SiteAction } from '../../utils/api';
@@ -18,6 +19,7 @@ type PublicTabProps = {
  * Nada de esto exige haber entrado, y por eso es la pestaña que siempre carga.
  */
 export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps) {
+  useIdioma();
   const [paying, setPaying] = useState<SiteAction | null>(null);
   const { holder: client, handle: onBank, restore: onRestore } = useBankSession(remote.bank, remote.ip);
 
@@ -28,19 +30,19 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
   }, [remote.ip]);
 
   const rows = [
-    { key: 'dirección', value: formatIp(remote.ip) },
-    { key: 'titular', value: remote.kind === 'npc' ? `servidor NPC · tipo ${remote.type}` : 'jugador' },
-    { key: 'estado', value: remote.down ? 'caído' : 'responde' },
-    { key: 'puertos', value: remote.scanned ? 'escaneados' : 'sin escanear' },
+    { key: tr("dirección"), value: formatIp(remote.ip) },
+    { key: 'titular', value: remote.kind === 'npc' ? tr("servidor NPC · tipo {0}", remote.type) : 'jugador' },
+    { key: 'estado', value: remote.down ? tr("caído") : 'responde' },
+    { key: 'puertos', value: remote.scanned ? 'escaneados' : tr("sin escanear") },
     {
       key: 'acceso',
       // Entrar en el banco no es entrar en la máquina: una cosa es ser cliente y otra tener
       // una sesión en el servidor. Se dicen las dos porque no son la misma.
       value: client
-        ? `cliente · ${client}`
+        ? tr("cliente · {0}", client)
         : remote.access
-          ? `atacante · ${remote.access_as ?? 'root'}`
-          : 'sin sesión',
+          ? tr("atacante · {0}", remote.access_as ?? 'root')
+          : tr("sin sesión"),
     },
   ];
 
@@ -55,9 +57,9 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
         </pre>
 
         <div className="page__id">
-          <h3>{remote.name || 'máquina sin nombre'}</h3>
+          <h3>{remote.name || tr("máquina sin nombre")}</h3>
           <p className={remote.down ? 'page__state is-down' : 'page__state'}>
-            {remote.down ? 'no responde' : 'en línea'}
+            {remote.down ? tr("no responde") : tr("en línea")}
           </p>
         </div>
 
@@ -68,7 +70,7 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
           onClick={onToggleBookmark}
         >
           <span aria-hidden="true">★</span>
-          {remote.bookmarked ? 'guardada' : 'guardar'}
+          {remote.bookmarked ? 'guardada' : tr("guardar")}
         </button>
       </div>
 
@@ -98,17 +100,17 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
 
       {remote.analysis ? (
         <div className="page__analysis">
-          <h4>Lo que devolvió el análisis</h4>
+          <h4>{tr("Lo que devolvió el análisis")}</h4>
 
           <dl>
             <div>
-              <dt>proceso</dt>
+              <dt>{tr("proceso")}</dt>
               <dd>
                 {formatCount(remote.analysis.cpu_min)} – {formatCount(remote.analysis.cpu_max)} MHz
               </dd>
             </div>
             <div>
-              <dt>memoria</dt>
+              <dt>{tr("memoria")}</dt>
               <dd>
                 {formatCount(remote.analysis.ram_min)} – {formatCount(remote.analysis.ram_max)} MB
               </dd>
@@ -116,14 +118,11 @@ export function PublicTab({ remote, onToggleBookmark, onVisit }: PublicTabProps)
           </dl>
 
           <p className="page__note">
-            Es una horquilla, no una medida: cuanto mejor tu analizador, más estrecha.
-          </p>
+            {tr("Es una horquilla, no una medida: cuanto mejor tu analizador, más estrecha.")} </p>
         </div>
       ) : (
         <p className="page__note">
-          Nadie ha analizado esta máquina todavía. Lánzalo desde <b>force</b> y el resultado
-          aparecerá aquí.
-        </p>
+          {tr("Nadie ha analizado esta máquina todavía. Lánzalo desde")} <b>force</b> {tr("y el resultado aparecerá aquí.")} </p>
       )}
     </div>
   );

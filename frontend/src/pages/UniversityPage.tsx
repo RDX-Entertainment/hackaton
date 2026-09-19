@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { AccountSelect } from '../components/AccountSelect';
@@ -28,6 +29,7 @@ import { useStatusMessage } from '../utils/useStatusMessage';
  * puedes hacer es la única viva de la pantalla.
  */
 export function UniversityPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [certificaciones, setCertificaciones] = useState<Certifications>();
@@ -55,7 +57,7 @@ export function UniversityPage() {
         );
       }
 
-      status.report('Academia al día.');
+      status.report(tr("Academia al día."));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -72,7 +74,7 @@ export function UniversityPage() {
 
   return (
     <>
-      <h2>Academia</h2>
+      <h2>{tr("Academia")}</h2>
       <StatusMessage text={status.message} as="block" />
 
       {hacenFaltaCuentas && (
@@ -80,7 +82,7 @@ export function UniversityPage() {
           accounts={cuentas}
           value={cuenta}
           onChange={setCuenta}
-          label="Cuenta con la que pagas"
+          label={tr("Cuenta con la que pagas")}
         />
       )}
 
@@ -107,40 +109,39 @@ export function UniversityPage() {
 
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div className="tarjeta__cabecera">
-                  <span className="tarjeta__titulo">{item.name}</span>
+                  <span className="tarjeta__titulo">{tr(item.name)}</span>
                   <span className="micro">
                     {item.price ? (
                       <>
                         <Icono nombre="dinero" tamano={11} /> {formatMoney(item.price)}
                       </>
                     ) : (
-                      'gratis'
+                      tr("gratis")
                     )}
                   </span>
                 </div>
 
-                <p className="tarjeta__texto">{item.description}</p>
+                <p className="tarjeta__texto">{tr(item.description)}</p>
 
                 <div className="tarjeta__acciones">
-                  {item.completed && <Tag estado="memoria">hecho</Tag>}
-                  {enMarcha && <Tag estado="obra">en marcha</Tag>}
-                  {abierto && <Tag estado="plano">te toca</Tag>}
-                  {seHace && <Tag estado="obra">{t('tutorial.earned') ?? 'se aprueba haciendo'}</Tag>}
-                  {bloqueado && <Tag estado="off">bloqueado</Tag>}
+                  {item.completed && <Tag estado="memoria">{tr("hecho")}</Tag>}
+                  {enMarcha && <Tag estado="obra">{tr("en marcha")}</Tag>}
+                  {abierto && <Tag estado="plano">{tr("te toca")}</Tag>}
+                  {seHace && <Tag estado="obra">{t('tutorial.earned') ?? tr("se aprueba haciendo")}</Tag>}
+                  {bloqueado && <Tag estado="off">{tr("bloqueado")}</Tag>}
 
-                  {enMarcha && <button onClick={() => void actuar(item)}>Terminar</button>}
+                  {enMarcha && <button onClick={() => void actuar(item)}>{tr("Terminar")}</button>}
                   {abierto && (
                     <button
                       disabled={item.price > 0 && !cuenta}
                       onClick={() => void actuar(item)}
                     >
-                      Empezar
-                    </button>
+                      {tr("Empezar")} </button>
                   )}
                   {seHace && item.earned_by && (
                     <span className="micro">{t(`onboarding.${item.earned_by}.title`)}</span>
                   )}
-                  {bloqueado && <span className="micro">termina el anterior</span>}
+                  {bloqueado && <span className="micro">{tr("termina el anterior")}</span>}
                 </div>
               </div>
             </article>

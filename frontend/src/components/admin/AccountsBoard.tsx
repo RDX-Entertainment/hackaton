@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { financesApi, type Bank, type BankAccount } from '../../utils/api';
@@ -21,6 +22,7 @@ const PIN_LENGTH = 6;
  * El importe se teclea una vez y los dos botones deciden el signo: son el mismo gesto.
  */
 export function AccountsBoard({ accounts, busy, emptyMessage, onOpen, onAdjust }: Props) {
+  useIdioma();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [bankId, setBankId] = useState(0);
   const [pin, setPin] = useState('');
@@ -69,16 +71,14 @@ export function AccountsBoard({ accounts, busy, emptyMessage, onOpen, onAdjust }
               onChange={(event) => setAmounts((current) => ({ ...current, [account.id]: event.target.value }))}
             />
             <button type="button" disabled={busy || !ready} onClick={() => move(account, 1)}>
-              Ingresar
-            </button>
+              {tr("Ingresar")} </button>
             <button
               type="button"
               className="account__take"
               disabled={busy || !ready || typed > account.cash}
               onClick={() => move(account, -1)}
             >
-              Retirar
-            </button>
+              {tr("Retirar")} </button>
           </div>
         );
       })}
@@ -86,7 +86,7 @@ export function AccountsBoard({ accounts, busy, emptyMessage, onOpen, onAdjust }
       {!accounts.length && <p className="org-empty">{emptyMessage}</p>}
 
       <form className="account-create" onSubmit={open}>
-        <b>Abrir cuenta</b>
+        <b>{tr("Abrir cuenta")}</b>
         <select value={bankId} disabled={!banks.length} onChange={(event) => setBankId(Number(event.target.value))}>
           {banks.length ? (
             banks.map((bank) => (
@@ -95,7 +95,7 @@ export function AccountsBoard({ accounts, busy, emptyMessage, onOpen, onAdjust }
               </option>
             ))
           ) : (
-            <option value={0}>Sin bancos</option>
+            <option value={0}>{tr("Sin bancos")}</option>
           )}
         </select>
         <input
@@ -103,13 +103,12 @@ export function AccountsBoard({ accounts, busy, emptyMessage, onOpen, onAdjust }
           value={pin}
           minLength={PIN_LENGTH}
           maxLength={PIN_LENGTH}
-          placeholder={`PIN de ${PIN_LENGTH}`}
+          placeholder={tr("PIN de {0}", PIN_LENGTH)}
           onChange={(event) => setPin(event.target.value)}
         />
         <button className="is-primary" disabled={busy || !bankId || pin.length !== PIN_LENGTH}>
-          Abrir
-        </button>
-        {!banks.length && <small>Marca «Ofrece cuentas bancarias» en alguna organización para tener dónde abrirla.</small>}
+          {tr("Abrir")} </button>
+        {!banks.length && <small>{tr("Marca «Ofrece cuentas bancarias» en alguna organización para tener dónde abrirla.")}</small>}
       </form>
     </div>
   );

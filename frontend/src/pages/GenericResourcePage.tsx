@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -21,14 +22,15 @@ type GenericResourcePageProps = {
 };
 
 export function GenericResourcePage({ page, label }: GenericResourcePageProps) {
+  useIdioma();
   const location = useLocation();
 
   const [rows, setRows] = useState<UnknownRow[] | null>(null);
-  const [status, setStatus] = useState('Loading...');
+  const [status, setStatus] = useState(tr("Loading..."));
 
   const load = useCallback(() => {
     setRows(null);
-    setStatus('Loading...');
+    setStatus(tr("Loading..."));
 
     const resourcePath = RESOURCE_PATHS[page];
     const request = resourcePath
@@ -58,7 +60,7 @@ export function GenericResourcePage({ page, label }: GenericResourcePageProps) {
         <DataTable rows={rows} />
       ) : (
         <p className="muted">
-          {status} · {location.search || 'default view'}
+          {status} · {location.search || tr("default view")}
         </p>
       )}
     </>

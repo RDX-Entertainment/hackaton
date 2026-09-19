@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo, useState, type FormEvent } from 'react';
 
 import type { AdminUser, Part } from '../../utils/api';
@@ -16,7 +17,7 @@ const UNIT: Record<string, string> = {
 
 function specOf(part: Part): string {
   if (part.kind === 'mobo') {
-    return `${part.chipset ?? 'sin chipset'} · DDR${part.generation}`;
+    return `${part.chipset ?? tr("sin chipset")} · DDR${part.generation}`;
   }
 
   return `${formatCount(part.power)} ${UNIT[part.kind] ?? ''}`;
@@ -30,6 +31,7 @@ type DeliveryCardProps = {
 };
 
 export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProps) {
+  useIdioma();
   const [part, setPart] = useState<number | null>(null);
   const [user, setUser] = useState<number | null>(null);
   const [amount, setAmount] = useState('1');
@@ -47,7 +49,7 @@ export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProp
         icon: <PartIcon kind={option.kind} className="ssel__icon" />,
         badge: <span className={`tier tier--${option.tier}`}>{option.tier}</span>,
       })),
-    [parts],
+    [parts, idiomaActual()],
   );
 
   const userOptions: SearchOption[] = useMemo(
@@ -55,11 +57,11 @@ export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProp
       users.map((option) => ({
         id: option.id,
         label: option.login,
-        hint: `${option.components} piezas · ${formatIp(option.game_ip)}`,
+        hint: tr("{0} piezas · {1}", option.components, formatIp(option.game_ip)),
         terms: `${option.email} ${option.is_admin ? 'admin' : 'jugador'} ${option.id}`,
         badge: option.is_admin ? <span className="role role--admin">admin</span> : undefined,
       })),
-    [users],
+    [users, idiomaActual()],
   );
 
   const ready = Boolean(chosen && target);
@@ -79,17 +81,17 @@ export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProp
       prefix="Hard"
       brand="Delivery"
       accent="lime"
-      note={ready ? `${amount} × ${chosen?.name} → ${target?.login}` : 'entrega directa'}
+      note={ready ? `${amount} × ${chosen?.name} → ${target?.login}` : tr("entrega directa")}
     >
       <form className="delivery" onSubmit={send}>
         <div className="delivery__fields">
           <SearchSelect
-            label="pieza"
+            label={tr("pieza")}
             options={partOptions}
             value={part}
             onChange={setPart}
-            placeholder="nombre, gama, chipset, DDR…"
-            emptyLabel="elige una pieza"
+            placeholder={tr("nombre, gama, chipset, DDR…")}
+            emptyLabel={tr("elige una pieza")}
             noResults="ninguna pieza encaja"
           />
 
@@ -98,14 +100,13 @@ export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProp
             options={userOptions}
             value={user}
             onChange={setUser}
-            placeholder="login, email, id…"
-            emptyLabel="elige un jugador"
+            placeholder={tr("login, email, id…")}
+            emptyLabel={tr("elige un jugador")}
             noResults="ningún jugador encaja"
           />
 
           <label className="delivery__amount">
-            cantidad
-            <input
+            {tr("cantidad")} <input
               inputMode="numeric"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
@@ -114,8 +115,7 @@ export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProp
           </label>
 
           <button className="is-primary" disabled={busy || !ready}>
-            entregar
-          </button>
+            {tr("entregar")} </button>
         </div>
 
         <div className={ready ? 'delivery__slip is-ready' : 'delivery__slip'}>
@@ -133,13 +133,12 @@ export function DeliveryCard({ parts, users, busy, onDeliver }: DeliveryCardProp
               <span className={`tier tier--${chosen.tier}`}>{chosen.tier}</span>
             </>
           ) : (
-            <p className="delivery__idle">Sin pieza seleccionada.</p>
+            <p className="delivery__idle">{tr("Sin pieza seleccionada.")}</p>
           )}
         </div>
 
         <p className="delivery__hint">
-          Las piezas entregadas van al cajón del jugador sin instalar y sin cobrarle nada.
-        </p>
+          {tr("Las piezas entregadas van al cajón del jugador sin instalar y sin cobrarle nada.")} </p>
       </form>
     </AdminCard>
   );

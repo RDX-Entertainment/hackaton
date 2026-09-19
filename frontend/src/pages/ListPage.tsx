@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { Icono } from '../components/iconos/Icono';
@@ -7,6 +8,7 @@ import { formatIp, parseIp } from '../utils/ip';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
 export function ListPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [entries, setEntries] = useState<ListEntry[]>([]);
@@ -28,7 +30,7 @@ export function ListPage() {
     try {
       const packed = parseIp(ip);
       if (packed === null) {
-        status.report(`«${ip}» no es una dirección válida.`);
+        status.report(tr("«{0}» no es una dirección válida.", ip));
         return;
       }
 
@@ -36,7 +38,7 @@ export function ListPage() {
       setIp('');
       setLogin('');
       setPassword('');
-      status.report('Account added.');
+      status.report(tr("Account added."));
       load();
     } catch (error) {
       status.reportError(error);
@@ -46,7 +48,7 @@ export function ListPage() {
   const remove = async (id: number) => {
     try {
       await listsApi.removeCompromised(id);
-      status.report('Account removed.');
+      status.report(tr("Account removed."));
       load();
     } catch (error) {
       status.reportError(error);
@@ -55,7 +57,7 @@ export function ListPage() {
 
   return (
     <>
-      <h2>Cuentas que tienes</h2>
+      <h2>{tr("Cuentas que tienes")}</h2>
 
       <form className="compose" onSubmit={add}>
         <label>
@@ -70,20 +72,18 @@ export function ListPage() {
         </label>
 
         <label>
-          Usuario
-          <input value={login} onChange={(event) => setLogin(event.target.value)} required />
+          {tr("Usuario")} <input value={login} onChange={(event) => setLogin(event.target.value)} required />
         </label>
 
         <label>
-          Contraseña
-          <input
+          {tr("Contraseña")} <input
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
           />
         </label>
 
-        <button>Apuntar cuenta</button>
+        <button>{tr("Apuntar cuenta")}</button>
         <StatusMessage text={status.message} />
       </form>
 
@@ -100,24 +100,22 @@ export function ListPage() {
               </div>
 
               <p className="tarjeta__texto">
-                {entry.virus_id ? `La dejó tu virus #${entry.virus_id}. ` : ''}
+                {entry.virus_id ? tr("La dejó tu virus #{0}. ", entry.virus_id) : ''}
                 {entry.hacked_at}
               </p>
 
               <div className="tarjeta__acciones">
-                <span className="micro">cuenta ajena</span>
-                <button onClick={() => void remove(entry.id)}>Olvidar</button>
+                <span className="micro">{tr("cuenta ajena")}</span>
+                <button onClick={() => void remove(entry.id)}>{tr("Olvidar")}</button>
               </div>
             </article>
           ))}
         </div>
       ) : (
         <div className="vacio">
-          <div className="vacio__titulo">No has apuntado ninguna cuenta</div>
+          <div className="vacio__titulo">{tr("No has apuntado ninguna cuenta")}</div>
           <p className="vacio__texto">
-            Aquí se guardan los usuarios y contraseñas de máquinas ajenas: los que consigas
-            entrando, y los que te traiga un virus plantado.
-          </p>
+            {tr("Aquí se guardan los usuarios y contraseñas de máquinas ajenas: los que consigas entrando, y los que te traiga un virus plantado.")} </p>
         </div>
       )}
     </>

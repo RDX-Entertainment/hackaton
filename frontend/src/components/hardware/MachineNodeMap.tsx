@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useRef, useState } from 'react';
 
 import type { MachineDetail, MachineLink } from '../../utils/api';
@@ -63,6 +64,7 @@ export function MachineNodeMap({
   onLink,
   onUnlink,
 }: MachineNodeMapProps) {
+  useIdioma();
   const lienzo = useRef<HTMLDivElement>(null);
 
   const [arrastre, setArrastre] = useState<Arrastre | null>(null);
@@ -99,7 +101,7 @@ export function MachineNodeMap({
   const expuestos = machines.filter(tieneSalida);
 
   const nombreDe = (id: number) =>
-    machines.find(({ machine }) => machine.id === id)?.machine.name ?? 'Equipo desconocido';
+    machines.find(({ machine }) => machine.id === id)?.machine.name ?? tr("Equipo desconocido");
 
   /**
    * Qué ocupa cada boca del equipo, en orden.
@@ -222,8 +224,8 @@ export function MachineNodeMap({
     >
       <span className="nodemap__legend">
         {cableando === null
-          ? 'Arrastra para colocar · pulsa una boca libre y luego otro equipo para cablear'
-          : 'Pulsa el equipo con el que conectar · pulsa otra vez la boca para cancelar'}
+          ? tr("Arrastra para colocar · pulsa una boca libre y luego otro equipo para cablear")
+          : tr("Pulsa el equipo con el que conectar · pulsa otra vez la boca para cancelar")}
       </span>
 
       <svg className="nodemap__cables" aria-hidden="true">
@@ -258,7 +260,7 @@ export function MachineNodeMap({
               y2={b.y}
               onClick={() => !busy && onUnlink(link)}
             >
-              <title>Quitar este cable</title>
+              <title>{tr("Quitar este cable")}</title>
             </line>
           );
         })}
@@ -291,7 +293,7 @@ export function MachineNodeMap({
             es por la que te conocen el perfil y el ranking hasta que la fase 3 la derive del
             gateway.
           */}
-          <small>cuenta · {formatIp(gameIp)}</small>
+          <small>{tr("cuenta ·")} {formatIp(gameIp)}</small>
         </div>
       )}
 
@@ -327,7 +329,7 @@ export function MachineNodeMap({
             <small className="nodemap__ip">
               {salida ? formatIp(machine.public_ip) : `lan ${formatIp(machine.lan_ip)}`}
             </small>
-            <small className="nodemap__board">{board?.name ?? 'sin placa'}</small>
+            <small className="nodemap__board">{board?.name ?? tr("sin placa")}</small>
 
             <span className="nodemap__ports">
               {Array.from({ length: Math.max(0, bocas) }).map((_, indice) => {
@@ -343,7 +345,7 @@ export function MachineNodeMap({
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    title={ocupada ? `Ocupada: ${ocupante}` : 'Boca libre: pulsa para cablear'}
+                    title={ocupada ? tr("Ocupada: {0}", ocupante) : tr("Boca libre: pulsa para cablear")}
                     onPointerDown={(event) => {
                       // Sin esto el gesto lo captura el nodo y empieza un arrastre.
                       event.stopPropagation();
@@ -360,7 +362,7 @@ export function MachineNodeMap({
                   />
                 );
               })}
-              {bocas === 0 && <i className="nodemap__noports">sin bocas</i>}
+              {bocas === 0 && <i className="nodemap__noports">{tr("sin bocas")}</i>}
             </span>
           </div>
         );

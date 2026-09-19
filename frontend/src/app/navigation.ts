@@ -1,3 +1,4 @@
+import { tr } from '../i18n/text';
 /**
  * Los cinco destinos del juego.
  *
@@ -30,52 +31,52 @@ export type Destino = {
 export const DESTINOS: Destino[] = [
   {
     tecla: '1',
-    nombre: 'Equipo',
+    get nombre() { return tr("Equipo"); },
     items: [
-      { path: 'hardware', label: 'Piezas' },
-      { path: 'software', label: 'Discos' },
+      { path: 'hardware', get label() { return tr("Piezas"); } },
+      { path: 'software', get label() { return tr("Discos"); } },
       { path: 'lab', label: 'Lab' },
-      { path: 'processes', label: 'Tareas' },
+      { path: 'processes', get label() { return tr("Tareas"); } },
     ],
   },
   {
     tecla: '2',
-    nombre: 'Red',
+    get nombre() { return tr("Red"); },
     items: [
       { path: 'internet', label: 'Internet' },
-      { path: 'accesses', label: 'Accesos' },
+      { path: 'accesses', get label() { return tr("Accesos"); } },
     ],
   },
   {
     tecla: '3',
-    nombre: 'Trabajo',
+    get nombre() { return tr("Trabajo"); },
     items: [
-      { path: 'missions', label: 'Encargos' },
-      { path: 'university', label: 'Academia' },
-      { path: 'finances', label: 'Banco' },
+      { path: 'missions', get label() { return tr("Encargos"); } },
+      { path: 'university', get label() { return tr("Academia"); } },
+      { path: 'finances', get label() { return tr("Banco"); } },
       { path: 'bitcoin', label: 'Bitcoin' },
     ],
   },
   {
     tecla: '4',
-    nombre: 'Gente',
+    get nombre() { return tr("Gente"); },
     items: [
-      { path: 'mail', label: 'Correo' },
+      { path: 'mail', get label() { return tr("Correo"); } },
       { path: 'clan', label: 'Clan' },
-      { path: 'forum', label: 'Foro' },
+      { path: 'forum', get label() { return tr("Foro"); } },
       { path: 'wiki', label: 'Wiki' },
       { path: 'ranking', label: 'Ranking' },
     ],
   },
   {
     tecla: '5',
-    nombre: 'Cuenta',
+    get nombre() { return tr("Cuenta"); },
     items: [
-      { path: 'profile', label: 'Perfil' },
-      { path: 'settings', label: 'Ajustes' },
-      { path: 'log', label: 'Registro' },
-      { path: 'list', label: 'Listas' },
-      { path: 'stats', label: 'Números' },
+      { path: 'profile', get label() { return tr("Perfil"); } },
+      { path: 'settings', get label() { return tr("Ajustes"); } },
+      { path: 'log', get label() { return tr("Registro"); } },
+      { path: 'list', get label() { return tr("Listas"); } },
+      { path: 'stats', get label() { return tr("Números"); } },
     ],
   },
 ];

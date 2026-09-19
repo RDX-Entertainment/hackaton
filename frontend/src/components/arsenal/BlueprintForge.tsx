@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { useAccion } from '../../app/tutorial';
@@ -21,6 +22,7 @@ type BlueprintForgeProps = {
  * La previsión viene del servidor: elegir módulos y compilar usa la misma regla.
  */
 export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForgeProps) {
+  useIdioma();
   // El tutorial decide si este es el paso de disenar; el servidor lo comprueba igual.
   const disenar = useAccion('lab.disenar');
 
@@ -41,7 +43,7 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
     if (capacidad) {
       arsenalApi.previewBlueprint(capacidad, piezas)
         .then((stats) => { if (current) setPreview(stats); })
-        .catch(() => { if (current) setPreviewError('No se pudo calcular la vista previa.'); });
+        .catch(() => { if (current) setPreviewError(tr("No se pudo calcular la vista previa.")); });
     }
     return () => { current = false; };
   }, [capacidad, piezas]);
@@ -49,14 +51,14 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
   // Los dominios, en el orden en que llegan, para agrupar el selector sin inventar un orden.
   const dominios = useMemo(
     () => [...new Set(capacidades.map((una) => una.domain))],
-    [capacidades],
+    [capacidades, idiomaActual()],
   );
 
   // El servidor solo acepta módulos de la capacidad elegida —o universales—, así que la lista
   // se recorta aquí en vez de dejar que el intento termine en un 400.
   const encajan = useMemo(
     () => modulos.filter((pieza) => !pieza.capability || pieza.capability === capacidad),
-    [modulos, capacidad],
+    [modulos, capacidad, idiomaActual()],
   );
 
   const cambiarCapacidad = (code: string) => {
@@ -74,7 +76,7 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
       }
 
       if (actuales.length >= MAX_MODULOS) {
-        status.report(`Un diseño admite ${MAX_MODULOS} módulos como mucho.`);
+        status.report(tr("Un diseño admite {0} módulos como mucho.", MAX_MODULOS));
         return actuales;
       }
 
@@ -91,7 +93,7 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
       const creado = await arsenalApi.createBlueprint(nombre.trim(), capacidad, piezas);
       setNombre('');
       setPiezas([]);
-      status.report(`Diseño «${creado.name}» guardado. Compílalo para tener el fichero.`);
+      status.report(tr("Diseño «{0}» guardado. Compílalo para tener el fichero.", creado.name));
       onCreado();
     } catch (error) {
       status.reportError(error);
@@ -107,8 +109,7 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
   return (
     <form className="compose" onSubmit={crear}>
       <label>
-        Nombre
-        <input
+        {tr("Nombre")} <input
           value={nombre}
           maxLength={LARGO_NOMBRE}
           onChange={(event) => setNombre(event.target.value)}
@@ -117,15 +118,14 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
       </label>
 
       <label>
-        Capacidad
-        <select value={capacidad} onChange={(event) => cambiarCapacidad(event.target.value)}>
+        {tr("Capacidad")} <select value={capacidad} onChange={(event) => cambiarCapacidad(event.target.value)}>
           {dominios.map((dominio) => (
-            <optgroup key={dominio} label={dominio}>
+            <optgroup key={dominio} label={tr(dominio)}>
               {capacidades
                 .filter((una) => una.domain === dominio)
                 .map((una) => (
                   <option key={una.code} value={una.code}>
-                    {una.name} · {una.role === 'defender' ? 'defensa' : 'ataque'}
+                    {tr(una.name)} · {una.role === 'defender' ? tr("defensa") : tr("ataque")}
                   </option>
                 ))}
             </optgroup>
@@ -135,7 +135,7 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
 
       <fieldset className="aforge__modules">
         <legend>
-          Módulos <small>{piezas.length}/{MAX_MODULOS}</small>
+          {tr("Módulos")} <small>{piezas.length}/{MAX_MODULOS}</small>
         </legend>
 
         {encajan.length ? (
@@ -146,18 +146,18 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
                 checked={piezas.includes(pieza.id)}
                 onChange={() => alternar(pieza.id)}
               />
-              <span>{pieza.name}</span>
+              <span>{tr(pieza.name)}</span>
               <small>{resumir(pieza)}</small>
             </label>
           ))
         ) : (
-          <p className="muted">Ninguna pieza investigada encaja en esta capacidad.</p>
+          <p className="muted">{tr("Ninguna pieza investigada encaja en esta capacidad.")}</p>
         )}
       </fieldset>
 
       <div className="aforge__preview" aria-live="polite">
-        <h4>Resultado del diseño</h4>
-        {preview ? <StatSheet stats={preview} /> : <p>{previewError || 'Calculando atributos…'}</p>}
+        <h4>{tr("Resultado del diseño")}</h4>
+        {preview ? <StatSheet stats={preview} /> : <p>{previewError || tr("Calculando atributos…")}</p>}
       </div>
       <button
         data-foco="lab.disenar"
@@ -165,7 +165,7 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
         disabled={saving || !nombre.trim() || !preview || !disenar.permitida}
         title={disenar.motivo ?? undefined}
       >
-        {saving ? 'Guardando…' : 'Guardar el diseño'}
+        {saving ? tr("Guardando…") : tr("Guardar el diseño")}
       </button>
       <StatusMessage text={status.message} />
     </form>
@@ -180,7 +180,7 @@ function resumir(pieza: ResearchModule): string {
     ['efic', deltas.effectiveness],
     ['resistencia', deltas.resistance],
     ['blindaje', deltas.hardening],
-    ['manipulación', deltas.manipulation],
+    [tr("manipulación"), deltas.manipulation],
     ['integridad', deltas.integrity],
     ['anti-forense', deltas.anti_forensics],
     ['forense', deltas.forensics],

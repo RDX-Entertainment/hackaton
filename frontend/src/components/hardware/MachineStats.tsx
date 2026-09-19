@@ -1,12 +1,13 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { Slots } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import { PartIcon } from '../admin/PartIcon';
 
 const ROWS = [
-  { kind: 'cpu', label: 'proceso', unit: 'MHz' },
-  { kind: 'ram', label: 'memoria', unit: 'MB' },
-  { kind: 'hdd', label: 'disco', unit: 'MB' },
-  { kind: 'net', label: 'red', unit: 'Mbit' },
+  { kind: 'cpu', get label() { return tr("proceso"); }, unit: 'MHz' },
+  { kind: 'ram', get label() { return tr("memoria"); }, unit: 'MB' },
+  { kind: 'hdd', get label() { return tr("disco"); }, unit: 'MB' },
+  { kind: 'net', get label() { return tr("red"); }, unit: 'Mbit' },
 ] as const;
 
 type MachineStatsProps = {
@@ -15,9 +16,10 @@ type MachineStatsProps = {
 };
 
 export function MachineStats({ slots, hasBoard }: MachineStatsProps) {
+  useIdioma();
   return (
     <aside className="mstats">
-      <h4 className="mstats__title">capacidad</h4>
+      <h4 className="mstats__title">{tr("capacidad")}</h4>
 
       {ROWS.map((row) => {
         const power = slots[`${row.kind}_power`];
@@ -55,9 +57,7 @@ export function MachineStats({ slots, hasBoard }: MachineStatsProps) {
 
       {!hasBoard && (
         <p className="mstats__note">
-          Sin placa no hay capacidad: todo lo que suma un equipo son las piezas que lleva
-          puestas.
-        </p>
+          {tr("Sin placa no hay capacidad: todo lo que suma un equipo son las piezas que lleva puestas.")} </p>
       )}
     </aside>
   );

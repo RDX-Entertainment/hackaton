@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo } from 'react';
 
 import { Icono } from '../iconos/Icono';
@@ -21,6 +22,7 @@ type ExploradorProps = {
 
 /** Las migas: dónde estás y cómo se vuelve. */
 export function Migas({ sitio, maquinas, ficheros, onIr }: ExploradorProps) {
+  useIdioma();
   const camino = useMemo(() => {
     if (!sitio) {
       return [];
@@ -28,7 +30,7 @@ export function Migas({ sitio, maquinas, ficheros, onIr }: ExploradorProps) {
 
     const maquina = maquinas.find((una) => una.id === sitio.volumen);
     const pasos: { id: number | null; nombre: string }[] = [
-      { id: null, nombre: maquina?.name ?? `Equipo #${sitio.volumen}` },
+      { id: null, nombre: maquina?.name ?? tr("Equipo #{0}", sitio.volumen) },
     ];
 
     // Se sube por los padres y se le da la vuelta: la carpeta de la que cuelga
@@ -50,13 +52,12 @@ export function Migas({ sitio, maquinas, ficheros, onIr }: ExploradorProps) {
     }
 
     return pasos;
-  }, [sitio, maquinas, ficheros]);
+  }, [sitio, maquinas, ficheros, idiomaActual()]);
 
   return (
-    <nav className="explorador__migas" aria-label="Dónde estás">
+    <nav className="explorador__migas" aria-label={tr("Dónde estás")}>
       <button type="button" onClick={() => onIr(null)}>
-        <Icono nombre="red" tamano={13} /> raíz
-      </button>
+        <Icono nombre="red" tamano={13} /> {tr("raíz")} </button>
 
       {camino.map((paso, indice) => (
         <span key={paso.id ?? 'volumen'}>
@@ -93,6 +94,7 @@ export function Volumenes({
   ficheros: OwnedFile[];
   onEntrar: (id: number) => void;
 }) {
+  useIdioma();
   return (
     <div className="explorador__volumenes">
       {maquinas.map((maquina) => {
@@ -135,8 +137,8 @@ export function Volumenes({
         <span className="explorador__icono">
           <Icono nombre="red" tamano={26} />
         </span>
-        <span className="explorador__nombre">Nube</span>
-        <span className="micro">todavía no existe</span>
+        <span className="explorador__nombre">{tr("Nube")}</span>
+        <span className="micro">{tr("todavía no existe")}</span>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 /**
  * Lo mínimo que necesita para pintar: un id y un nombre. Así sirve igual en Hardware, donde
  * lo que hay son fichas completas, y en Software, donde solo hacen falta los equipos.
@@ -27,6 +28,7 @@ type MachineSelectorProps = {
  * el jugador pueda perder.
  */
 export function MachineSelector({ machines, selected, onSelect }: MachineSelectorProps) {
+  useIdioma();
   const index = machines.findIndex((equipo) => equipo.id === selected);
   const actual = index < 0 ? 0 : index;
   const machine = machines[actual];
@@ -49,7 +51,7 @@ export function MachineSelector({ machines, selected, onSelect }: MachineSelecto
         className="mchooser__arrow"
         disabled={solo}
         onClick={() => mover(-1)}
-        aria-label="Equipo anterior"
+        aria-label={tr("Equipo anterior")}
       >
         ‹
       </button>
@@ -68,7 +70,7 @@ export function MachineSelector({ machines, selected, onSelect }: MachineSelecto
         className="mchooser__arrow"
         disabled={solo}
         onClick={() => mover(1)}
-        aria-label="Equipo siguiente"
+        aria-label={tr("Equipo siguiente")}
       >
         ›
       </button>

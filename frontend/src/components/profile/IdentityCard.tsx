@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState } from 'react';
 
 import type { Clan, Profile } from '../../utils/api';
@@ -15,6 +16,7 @@ type IdentityCardProps = {
  * in a screenshot, and revealing it is one click.
  */
 export function IdentityCard({ profile, clan }: IdentityCardProps) {
+  useIdioma();
   const [revealed, setRevealed] = useState(false);
   const days = daysSince(profile.date_joined);
 
@@ -37,9 +39,9 @@ export function IdentityCard({ profile, clan }: IdentityCardProps) {
                 [{clan.nick}] {clan.name}
               </span>
             ) : (
-              <span className="identity__nobody">sin clan</span>
+              <span className="identity__nobody">{tr("sin clan")}</span>
             )}
-            {days !== null && <span className="identity__days"> · {days} días dentro</span>}
+            {days !== null && <span className="identity__days"> · {days} {tr("días dentro")}</span>}
           </p>
         </div>
 
@@ -51,10 +53,10 @@ export function IdentityCard({ profile, clan }: IdentityCardProps) {
             type="button"
             className="identity__reveal"
             aria-pressed={revealed}
-            aria-label={revealed ? 'Ocultar la dirección' : 'Mostrar la dirección'}
+            aria-label={revealed ? tr("Ocultar la dirección") : tr("Mostrar la dirección")}
             onClick={() => setRevealed((current) => !current)}
           >
-            {revealed ? 'ocultar' : 'mostrar'}
+            {revealed ? tr("ocultar") : tr("mostrar")}
           </button>
         </span>
       </div>

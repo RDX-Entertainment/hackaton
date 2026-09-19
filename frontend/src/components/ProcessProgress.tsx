@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useEffect, useRef, useState } from 'react';
 
 import { processesApi, type ProcessSnapshot } from '../utils/api';
@@ -9,6 +10,7 @@ type ProcessProgressProps = {
 
 /** Una sola tarea se consulta por id cada segundo; no hace falta mantener un WebSocket. */
 export function ProcessProgress({ processId, onFinished }: ProcessProgressProps) {
+  useIdioma();
   const [process, setProcess] = useState<ProcessSnapshot>();
   const [sampledAt, setSampledAt] = useState<number>();
   const [now, setNow] = useState(() => Date.now());
@@ -69,13 +71,13 @@ export function ProcessProgress({ processId, onFinished }: ProcessProgressProps)
       ? Math.min(100, (worked / ideal) * 100)
       : 0;
   const state = process?.completed
-    ? process.status === 'succeeded' ? 'completado' : process.status
-    : process?.paused ? 'en pausa' : 'en curso';
+    ? tr(process.status === 'succeeded' ? 'completado' : process.status)
+    : process?.paused ? tr("en pausa") : tr("en curso");
 
   return (
     <div className="process-progress" aria-live="polite">
       <p>
-        <b>Tarea #{processId}</b> · {state}
+        <b>{tr("Tarea #")}{processId}</b> · {state}
         {ideal > 0 && ` · ${worked}/${ideal} s`}
       </p>
       <div

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { AccountsBoard } from '../../components/admin/AccountsBoard';
@@ -10,6 +11,7 @@ import { formatIp } from '../../utils/ip';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 
 export function UsersPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [users, setUsers] = useState<AdminUser[]>();
@@ -40,7 +42,7 @@ export function UsersPage() {
   const toggleAdmin = (user: AdminUser) =>
     void run(async () => {
       await adminApi.setAdminFlag(user.id, !user.is_admin);
-      return user.is_admin ? `${user.login} deja de ser admin.` : `${user.login} ahora es admin.`;
+      return user.is_admin ? tr("{0} deja de ser admin.", user.login) : tr("{0} ahora es admin.", user.login);
     });
 
   const selected = users?.find((user) => user.id === selectedId) ?? null;
@@ -51,7 +53,7 @@ export function UsersPage() {
 
   return (
     <>
-      <h2>Usuarios</h2>
+      <h2>{tr("Usuarios")}</h2>
       <StatusMessage text={status.message} as="block" />
       <UserCreator onCreated={load} />
 
@@ -63,9 +65,9 @@ export function UsersPage() {
               <th>login</th>
               <th>email</th>
               <th>ip</th>
-              <th>piezas</th>
-              <th>último acceso</th>
-              <th>rol</th>
+              <th>{tr("piezas")}</th>
+              <th>{tr("último acceso")}</th>
+              <th>{tr("rol")}</th>
               <th />
             </tr>
           </thead>
@@ -96,7 +98,7 @@ export function UsersPage() {
                       toggleAdmin(user);
                     }}
                   >
-                    {user.is_admin ? 'quitar admin' : 'hacer admin'}
+                    {user.is_admin ? tr("quitar admin") : tr("hacer admin")}
                   </button>
                 </td>
               </tr>
@@ -111,6 +113,7 @@ export function UsersPage() {
 }
 
 function UserCreator({ onCreated }: { onCreated: () => Promise<void> }) {
+  useIdioma();
   const status = useStatusMessage();
   const [kits, setKits] = useState<Kit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -124,20 +127,20 @@ function UserCreator({ onCreated }: { onCreated: () => Promise<void> }) {
     try {
       await adminApi.createUser({ ...draft, email: draft.email || undefined, kit_id: draft.kit_id || undefined });
       setDraft({ username: '', email: '', password: '', kit_id: undefined, admin: false });
-      status.report('Cuenta creada.');
+      status.report(tr("Cuenta creada."));
       await onCreated();
     } catch (error) { status.reportError(error); } finally { setBusy(false); }
   };
 
   return (
     <form className="compose" onSubmit={submit}>
-      <h3>Crear cuenta</h3>
-      <label>Usuario<input required maxLength={15} value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })} /></label>
-      <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
-      <label>Contraseña<input required minLength={8} type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} /></label>
-      <label>Kit inicial<select value={draft.kit_id ?? ''} onChange={(event) => setDraft({ ...draft, kit_id: event.target.value ? Number(event.target.value) : undefined })}><option value="">kit por defecto</option>{kits.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>)}</select></label>
-      <label><input type="checkbox" checked={draft.admin} onChange={(event) => setDraft({ ...draft, admin: event.target.checked })} /> Administrador</label>
-      <button disabled={busy}>crear usuario</button>
+      <h3>{tr("Crear cuenta")}</h3>
+      <label>{tr("Usuario")}<input required maxLength={15} value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })} /></label>
+      <label>{tr("Email")}<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
+      <label>{tr("Contraseña")}<input required minLength={8} type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} /></label>
+      <label>{tr("Kit inicial")}<select value={draft.kit_id ?? ''} onChange={(event) => setDraft({ ...draft, kit_id: event.target.value ? Number(event.target.value) : undefined })}><option value="">{tr("kit por defecto")}</option>{kits.map((kit) => <option key={kit.id} value={kit.id}>{kit.name}</option>)}</select></label>
+      <label><input type="checkbox" checked={draft.admin} onChange={(event) => setDraft({ ...draft, admin: event.target.checked })} /> {tr("Administrador")}</label>
+      <button disabled={busy}>{tr("crear usuario")}</button>
       <StatusMessage text={status.message} />
     </form>
   );
@@ -145,6 +148,7 @@ function UserCreator({ onCreated }: { onCreated: () => Promise<void> }) {
 
 /** Las cuentas del jugador elegido: abrir una, ingresarle dinero y quitárselo. */
 function UserAccounts({ user, busy, onRun }: { user: AdminUser; busy: boolean; onRun: (work: () => Promise<string>) => Promise<void> }) {
+  useIdioma();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
 
   const load = useCallback(() => {
@@ -156,24 +160,24 @@ function UserAccounts({ user, busy, onRun }: { user: AdminUser; busy: boolean; o
   }, [load]);
 
   return (
-    <AdminCard prefix="03/" brand="cuentas" note={`${user.login} · ${accounts.length} abiertas`} accent="lime">
+    <AdminCard prefix="03/" brand="cuentas" note={tr("{0} · {1} abiertas", user.login, accounts.length)} accent="lime">
       <AccountsBoard
         accounts={accounts}
         busy={busy}
-        emptyMessage={`${user.login} no tiene ninguna cuenta abierta.`}
+        emptyMessage={tr("{0} no tiene ninguna cuenta abierta.", user.login)}
         onOpen={(bankId, pin) =>
           void onRun(async () => {
             const opened = await adminApi.openUserAccount(user.id, { bank_id: bankId, password: pin });
             load();
-            return `Cuenta ${opened.account} abierta a nombre de ${user.login}.`;
+            return tr("Cuenta {0} abierta a nombre de {1}.", opened.account, user.login);
           })
         }
         onAdjust={(account, amount) =>
           void onRun(async () => {
             const { cash } = await adminApi.adjustAccountCash(account.id, amount);
             load();
-            const verbo = amount > 0 ? 'Ingresados' : 'Retirados';
-            return `${verbo} ${formatMoney(Math.abs(amount))} en ${account.account}. Saldo: ${formatMoney(cash)}.`;
+            const verbo = amount > 0 ? tr("Ingresados") : tr("Retirados");
+            return tr("{0} {1} en {2}. Saldo: {3}.", verbo, formatMoney(Math.abs(amount)), account.account, formatMoney(cash));
           })
         }
       />

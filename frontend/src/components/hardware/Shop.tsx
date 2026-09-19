@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState } from 'react';
 
 import type { ComponentKind, Part } from '../../utils/api';
@@ -12,12 +13,13 @@ type ShopProps = {
 const TABS: { kind: ComponentKind; label: string }[] = [
   { kind: 'mobo', label: 'placas' },
   { kind: 'cpu', label: 'cpu' },
-  { kind: 'ram', label: 'memoria' },
-  { kind: 'hdd', label: 'disco' },
-  { kind: 'net', label: 'red' },
+  { kind: 'ram', get label() { return tr("memoria"); } },
+  { kind: 'hdd', get label() { return tr("disco"); } },
+  { kind: 'net', get label() { return tr("red"); } },
 ];
 
 export function Shop({ parts, busy, onBuy }: ShopProps) {
+  useIdioma();
   const [kind, setKind] = useState<ComponentKind>('mobo');
   const shown = parts.filter((part) => part.kind === kind);
 
@@ -42,16 +44,16 @@ export function Shop({ parts, busy, onBuy }: ShopProps) {
 
       <div className="panel__body">
         {shown.length === 0 ? (
-          <p className="panel__empty">Nada a la venta de este tipo.</p>
+          <p className="panel__empty">{tr("Nada a la venta de este tipo.")}</p>
         ) : (
           <table className="shop">
             <thead>
               <tr>
-                <th>pieza</th>
-                <th>gama</th>
-                <th>{kind === 'mobo' ? 'zócalos' : 'capacidad'}</th>
-                <th>{kind === 'mobo' ? 'máximos' : 'ddr'}</th>
-                <th>precio</th>
+                <th>{tr("pieza")}</th>
+                <th>{tr("gama")}</th>
+                <th>{kind === 'mobo' ? tr("zócalos") : tr("capacidad")}</th>
+                <th>{kind === 'mobo' ? tr("máximos") : 'ddr'}</th>
+                <th>{tr("precio")}</th>
                 <th />
               </tr>
             </thead>
@@ -80,8 +82,7 @@ export function Shop({ parts, busy, onBuy }: ShopProps) {
                   <td>{formatMoney(part.price)}</td>
                   <td>
                     <button type="button" disabled={busy} onClick={() => onBuy(part)}>
-                      comprar
-                    </button>
+                      {tr("comprar")} </button>
                   </td>
                 </tr>
               ))}

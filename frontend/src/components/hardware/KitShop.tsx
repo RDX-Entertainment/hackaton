@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState } from 'react';
 
 import type { Kit } from '../../utils/api';
@@ -10,6 +11,7 @@ type KitShopProps = {
 };
 
 export function KitShop({ kits, busy, onBuy }: KitShopProps) {
+  useIdioma();
   const [open, setOpen] = useState<number | null>(null);
 
   if (kits.length === 0) {
@@ -20,7 +22,7 @@ export function KitShop({ kits, busy, onBuy }: KitShopProps) {
     <section className="panel">
       <header className="panel__head">
         <span className="panel__path">~/tienda/equipos</span>
-        <span className="panel__hint">montados y listos, en una máquina nueva</span>
+        <span className="panel__hint">{tr("montados y listos, en una máquina nueva")}</span>
       </header>
 
       <div className="panel__body">
@@ -48,7 +50,7 @@ export function KitShop({ kits, busy, onBuy }: KitShopProps) {
 
                   {board && <span className={`tier tier--${board.tier}`}>{board.tier}</span>}
 
-                  {kit.scope === 'clan' && <span className="kitoffer__clan">corporación</span>}
+                  {kit.scope === 'clan' && <span className="kitoffer__clan">{tr("corporación")}</span>}
 
                   <span className="kitoffer__specs">
                     {formatCount(kit.totals.cpu)} MHz · {formatCount(kit.totals.ram)} MB ·{' '}
@@ -70,7 +72,7 @@ export function KitShop({ kits, busy, onBuy }: KitShopProps) {
                           {item.amount > 1 && <b>{item.amount}×</b>} {item.name}
                           <small>
                             {item.kind === 'mobo'
-                              ? `${item.chipset ?? 'sin chipset'} · DDR${item.generation}`
+                              ? `${item.chipset ?? tr("sin chipset")} · DDR${item.generation}`
                               : formatCount(item.power)}
                           </small>
                         </li>
@@ -78,7 +80,7 @@ export function KitShop({ kits, busy, onBuy }: KitShopProps) {
                     </ul>
 
                     <p className="kitoffer__foot">
-                      <span>{formatMoney(kit.totals.parts_price)} comprando suelto</span>
+                      <span>{formatMoney(kit.totals.parts_price)} {tr("comprando suelto")}</span>
 
                       <button
                         type="button"
@@ -86,8 +88,7 @@ export function KitShop({ kits, busy, onBuy }: KitShopProps) {
                         disabled={busy}
                         onClick={() => onBuy(kit)}
                       >
-                        comprar montado
-                      </button>
+                        {tr("comprar montado")} </button>
                     </p>
                   </div>
                 )}

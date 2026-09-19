@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { arsenalApi, type Program, type RankedPlayer, type Machine } from '../../utils/api';
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzada }: Props) {
+  useIdioma();
   const status = useStatusMessage();
   const [selected, setSelected] = useState('');
   const [target, setTarget] = useState('');
@@ -23,7 +25,7 @@ export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzad
   const [pending, setPending] = useState(false);
   const weapons = useMemo(() => programas.filter((program) => program.running
     && program.role === 'attacker' && program.capability
-    && ['intrude', 'infect'].includes(program.action_kind ?? '')), [programas]);
+    && ['intrude', 'infect'].includes(program.action_kind ?? '')), [programas, idiomaActual()]);
   const rivals = jugadores.filter((player) => player.user_id !== yo);
   const weapon = weapons.find((program) => String(program.software_id) === selected) ?? weapons[0];
   const opponent = rivals.find((player) => String(player.user_id) === target) ?? rivals[0];
@@ -39,7 +41,7 @@ export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzad
     try {
       const started = await arsenalApi.startOperation(weapon.capability, opponent.user_id, weapon.software_id);
       setProcessId(started.process_id);
-      status.report(`Operación #${started.process_id} en curso · ${started.seconds} s · probabilidad ${started.estimated_chance}.`);
+      status.report(tr("Operación #{0} en curso · {1} s · probabilidad {2}.", started.process_id, started.seconds, tr(started.estimated_chance)));
       onLanzada();
     } catch (error) {
       status.reportError(error);
@@ -48,27 +50,25 @@ export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzad
     }
   };
 
-  if (!weapons.length) return <EmptyNotice>Necesitas un programa de intrusión o infección en memoria. Compila un diseño e <Link to="/software">instálalo en Software</Link>.</EmptyNotice>;
-  if (!opponent) return <EmptyNotice>No hay otro jugador contra el que operar todavía.</EmptyNotice>;
+  if (!weapons.length) return <EmptyNotice>{tr("Necesitas un programa de intrusión o infección en memoria. Compila un diseño e")} <Link to="/software">{tr("instálalo en Software")}</Link>.</EmptyNotice>;
+  if (!opponent) return <EmptyNotice>{tr("No hay otro jugador contra el que operar todavía.")}</EmptyNotice>;
 
   return <form className="compose arsenal__operation" onSubmit={launch}>
-    <label>Programa y origen
-      <select value={weapon.software_id} onChange={(event) => setSelected(event.target.value)}>
+    <label>{tr("Programa y origen")} <select value={weapon.software_id} onChange={(event) => setSelected(event.target.value)}>
         {weapons.map((program) => <option key={program.software_id} value={program.software_id}>
-          {program.name} · {program.capability_name} · {maquinas.find((item) => item.id === program.server_id)?.name ?? `Equipo #${program.server_id}`}
+          {program.name} · {tr(program.capability_name ?? '')} · {maquinas.find((item) => item.id === program.server_id)?.name ?? tr("Equipo #{0}", program.server_id)}
         </option>)}
       </select>
     </label>
-    <label>Objetivo · máquina principal
-      <select value={opponent.user_id} onChange={(event) => setTarget(event.target.value)}>
+    <label>{tr("Objetivo · máquina principal")} <select value={opponent.user_id} onChange={(event) => setTarget(event.target.value)}>
         {rivals.map((player) => <option key={player.user_id} value={player.user_id}>{player.login}</option>)}
       </select>
     </label>
-    <p className="muted">Sale de {machine?.name ?? `equipo #${weapon.server_id}`}. Los recursos incluyen su cluster, si pertenece a uno.</p>
+    <p className="muted">{tr("Sale de")} {machine?.name ?? tr("equipo #{0}", weapon.server_id)}{tr(". Los recursos incluyen su cluster, si pertenece a uno.")}</p>
     <StatSheet stats={weapon.stats} capacidad={resources ?? undefined} />
-    {!fits && <p role="status">El equipo no dispone de recursos suficientes para ejecutar este programa.</p>}
-    {weapon.action_kind === 'infect' && <p className="muted">Requiere acceso previo a la máquina objetivo y espacio en su disco.</p>}
-    <button disabled={pending || !fits}>{pending ? 'Lanzando…' : 'Lanzar operación'}</button>
+    {!fits && <p role="status">{tr("El equipo no dispone de recursos suficientes para ejecutar este programa.")}</p>}
+    {weapon.action_kind === 'infect' && <p className="muted">{tr("Requiere acceso previo a la máquina objetivo y espacio en su disco.")}</p>}
+    <button disabled={pending || !fits}>{pending ? tr("Lanzando…") : tr("Lanzar operación")}</button>
     <StatusMessage text={status.message} />
     {processId && <ProcessProgress processId={processId} onFinished={onLanzada} />}
   </form>;

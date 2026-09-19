@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { ComponentKind, Part, Tier } from '../../utils/api';
 import { PartIcon } from './PartIcon';
 
@@ -16,7 +17,7 @@ export const EMPTY_QUERY: CatalogQuery = {
 };
 
 export const KIND_LABEL: Record<ComponentKind, string> = {
-  mobo: 'placas base',
+  get mobo() { return tr("placas base"); },
   cpu: 'procesadores',
   ram: 'memorias',
   hdd: 'almacenamiento',
@@ -68,6 +69,7 @@ type CatalogFiltersProps = {
 };
 
 export function CatalogFilters({ query, parts, shown, onChange }: CatalogFiltersProps) {
+  useIdioma();
   const set = <K extends keyof CatalogQuery>(key: K, value: CatalogQuery[K]) =>
     onChange({ ...query, [key]: value });
 
@@ -85,18 +87,18 @@ export function CatalogFilters({ query, parts, shown, onChange }: CatalogFilters
         </span>
         <input
           value={query.text}
-          placeholder="buscar por nombre, chipset, gama, DDR…"
+          placeholder={tr("buscar por nombre, chipset, gama, DDR…")}
           onChange={(event) => set('text', event.target.value)}
         />
         {query.text && (
-          <button type="button" aria-label="Limpiar búsqueda" onClick={() => set('text', '')}>
+          <button type="button" aria-label={tr("Limpiar búsqueda")} onClick={() => set('text', '')}>
             ×
           </button>
         )}
       </div>
 
       <div className="filters__group">
-        <span className="filters__legend">categoría</span>
+        <span className="filters__legend">{tr("categoría")}</span>
 
         <div className="chips">
           <button
@@ -104,7 +106,7 @@ export function CatalogFilters({ query, parts, shown, onChange }: CatalogFilters
             className={query.kind === 'all' ? 'chip is-active' : 'chip'}
             onClick={() => set('kind', 'all')}
           >
-            todas <b>{parts.length}</b>
+            {tr("todas")} <b>{parts.length}</b>
           </button>
 
           {KINDS.map((kind) => (
@@ -122,7 +124,7 @@ export function CatalogFilters({ query, parts, shown, onChange }: CatalogFilters
       </div>
 
       <div className="filters__group">
-        <span className="filters__legend">dominio</span>
+        <span className="filters__legend">{tr("dominio")}</span>
 
         <div className="chips">
           <button
@@ -130,8 +132,7 @@ export function CatalogFilters({ query, parts, shown, onChange }: CatalogFilters
             className={query.tier === 'all' ? 'chip is-active' : 'chip'}
             onClick={() => set('tier', 'all')}
           >
-            todos
-          </button>
+            {tr("todos")} </button>
 
           {TIERS.map((tier) => (
             <button
@@ -153,17 +154,15 @@ export function CatalogFilters({ query, parts, shown, onChange }: CatalogFilters
             checked={query.onlyListed}
             onChange={(event) => set('onlyListed', event.target.checked)}
           />
-          solo a la venta
-        </label>
+          {tr("solo a la venta")} </label>
 
         <span className="filters__count">
-          {shown} de {parts.length}
+          {shown} {tr("de")} {parts.length}
         </span>
 
         {dirty && (
           <button type="button" className="filters__reset" onClick={() => onChange(EMPTY_QUERY)}>
-            limpiar
-          </button>
+            {tr("limpiar")} </button>
         )}
       </div>
     </div>

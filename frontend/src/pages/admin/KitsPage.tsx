@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { KitBrowser } from '../../components/admin/KitBrowser';
@@ -14,6 +15,7 @@ import {
 import { useStatusMessage } from '../../utils/useStatusMessage';
 
 export function KitsPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [kits, setKits] = useState<Kit[]>();
@@ -55,23 +57,23 @@ export function KitsPage() {
       if (editing) {
         await adminApi.editKit(editing.id, input);
         setEditing(null);
-        return `${input.name} actualizado.`;
+        return tr("{0} actualizado.", input.name);
       }
 
       await adminApi.createKit(input);
-      return `${input.name} creado.`;
+      return tr("{0} creado.", input.name);
     });
 
   const remove = (kit: Kit) =>
     void run(async () => {
       await adminApi.removeKit(kit.id);
-      return `${kit.name} borrado.`;
+      return tr("{0} borrado.", kit.name);
     });
 
   const makeDefault = (kit: Kit) =>
     void run(async () => {
       await adminApi.setDefaultKit(kit.id, true);
-      return `${kit.name} es ahora el equipo con el que nace un jugador.`;
+      return tr("{0} es ahora el equipo con el que nace un jugador.", kit.name);
     });
 
   if (denied) {
@@ -79,9 +81,7 @@ export function KitsPage() {
       <>
         <h2>Kits</h2>
         <p className="muted">
-          Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es
-          administrador, igual que a una ruta inventada.
-        </p>
+          {tr("Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es administrador, igual que a una ruta inventada.")} </p>
       </>
     );
   }

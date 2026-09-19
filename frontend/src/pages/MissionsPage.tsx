@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Icono } from '../components/iconos/Icono';
@@ -21,6 +22,7 @@ const ACEPTADO = 2;
  * la que toca.
  */
 export function MissionsPage() {
+  useIdioma();
   const status = useStatusMessage();
   const [encargos, setEncargos] = useState<UnknownRow[]>([]);
 
@@ -35,7 +37,7 @@ export function MissionsPage() {
   const ordenar = async (id: number, accion: MissionCommand) => {
     try {
       await missionsApi.commandMission(id, accion);
-      status.report(accion === 'accept' ? 'Encargo aceptado.' : 'Encargo abandonado.');
+      status.report(accion === 'accept' ? tr("Encargo aceptado.") : tr("Encargo abandonado."));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -44,7 +46,7 @@ export function MissionsPage() {
 
   return (
     <>
-      <h2>Encargos</h2>
+      <h2>{tr("Encargos")}</h2>
       <StatusMessage text={status.message} as="block" />
 
       {encargos.length ? (
@@ -58,30 +60,29 @@ export function MissionsPage() {
             return (
               <article className={aceptado ? 'tarjeta tarjeta--viva' : 'tarjeta'} key={id}>
                 <div className="tarjeta__cabecera">
-                  <span className="tarjeta__titulo">Encargo #{id}</span>
-                  <span className="micro">nivel {String(encargo.level ?? '—')}</span>
+                  <span className="tarjeta__titulo">{tr("Encargo #")}{id}</span>
+                  <span className="micro">{tr("nivel")} {String(encargo.level ?? '—')}</span>
                 </div>
 
                 <span className="tarjeta__rotulo" style={{ marginTop: '0.75rem' }}>
-                  <Icono nombre="dinero" tamano={12} /> paga
-                </span>
+                  <Icono nombre="dinero" tamano={12} /> {tr("paga")} </span>
                 <b className="tarjeta__cifra">{formatMoney(premio)}</b>
                 <div className="tarjeta__regla" />
 
                 <div className="tarjeta__acciones">
                   {aceptado ? (
-                    <Tag estado="obra">aceptado</Tag>
+                    <Tag estado="obra">{tr("aceptado")}</Tag>
                   ) : estado === OFRECIDO ? (
-                    <Tag estado="plano">libre</Tag>
+                    <Tag estado="plano">{tr("libre")}</Tag>
                   ) : (
-                    <Tag estado="off">cerrado</Tag>
+                    <Tag estado="off">{tr("cerrado")}</Tag>
                   )}
 
                   {estado === OFRECIDO && (
-                    <button onClick={() => void ordenar(id, 'accept')}>Aceptar</button>
+                    <button onClick={() => void ordenar(id, 'accept')}>{tr("Aceptar")}</button>
                   )}
                   {aceptado && (
-                    <button onClick={() => void ordenar(id, 'abort')}>Abandonar</button>
+                    <button onClick={() => void ordenar(id, 'abort')}>{tr("Abandonar")}</button>
                   )}
                 </div>
               </article>
@@ -90,11 +91,9 @@ export function MissionsPage() {
         </div>
       ) : (
         <div className="vacio">
-          <div className="vacio__titulo">No hay encargos en el tablón</div>
+          <div className="vacio__titulo">{tr("No hay encargos en el tablón")}</div>
           <p className="vacio__texto">
-            El tablón se repone solo cada cierto tiempo. Mientras tanto, el dinero también
-            entra por la Academia y por lo que consigas por tu cuenta.
-          </p>
+            {tr("El tablón se repone solo cada cierto tiempo. Mientras tanto, el dinero también entra por la Academia y por lo que consigas por tu cuenta.")} </p>
         </div>
       )}
     </>

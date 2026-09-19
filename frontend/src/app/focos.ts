@@ -1,3 +1,4 @@
+import { tr } from '../i18n/text';
 import { DESTINOS } from './navigation';
 
 /**
@@ -22,22 +23,22 @@ export type Foco = {
 };
 
 export const FOCOS: Foco[] = [
-  { code: 'lab.investigar', label: 'Lab · botón de investigar', view: 'lab' },
-  { code: 'lab.disenar', label: 'Lab · guardar el diseño', view: 'lab' },
-  { code: 'lab.compilar', label: 'Lab · compilar un diseño', view: 'lab' },
-  { code: 'discos.cargar', label: 'Discos · cargar en memoria', view: 'software' },
-  { code: 'discos.descargar', label: 'Discos · sacar de memoria', view: 'software' },
-  { code: 'discos.ocultar', label: 'Discos · ocultar o revelar', view: 'software' },
-  { code: 'red.entrar', label: 'Internet · entrar en la máquina', view: 'internet' },
-  { code: 'red.hackear', label: 'Internet · romper la contraseña', view: 'internet' },
+  { code: 'lab.investigar', get label() { return tr("Lab · botón de investigar"); }, view: 'lab' },
+  { code: 'lab.disenar', get label() { return tr("Lab · guardar el diseño"); }, view: 'lab' },
+  { code: 'lab.compilar', get label() { return tr("Lab · compilar un diseño"); }, view: 'lab' },
+  { code: 'discos.cargar', get label() { return tr("Discos · cargar en memoria"); }, view: 'software' },
+  { code: 'discos.descargar', get label() { return tr("Discos · sacar de memoria"); }, view: 'software' },
+  { code: 'discos.ocultar', get label() { return tr("Discos · ocultar o revelar"); }, view: 'software' },
+  { code: 'red.entrar', get label() { return tr("Internet · entrar en la máquina"); }, view: 'internet' },
+  { code: 'red.hackear', get label() { return tr("Internet · romper la contraseña"); }, view: 'internet' },
 ];
 
 /** Todas las pantallas del juego, con el nombre que lee el jugador y su destino. */
 export const VISTAS = DESTINOS.flatMap((destino) =>
   destino.items.map((item) => ({
     path: item.path,
-    label: item.label,
-    destino: destino.nombre,
+    get label() { return item.label; },
+    get destino() { return destino.nombre; },
   })),
 );
 

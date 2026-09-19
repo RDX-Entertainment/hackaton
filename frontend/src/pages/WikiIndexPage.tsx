@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -5,6 +6,7 @@ import { DataTable } from '../components/DataTable';
 import { wikiApi, type WikiSummary } from '../utils/api';
 
 export function WikiIndexPage() {
+  useIdioma();
   const [pages, setPages] = useState<WikiSummary[]>([]);
 
   useEffect(() => {
@@ -14,9 +16,9 @@ export function WikiIndexPage() {
   return (
     <>
       <h2>Wiki</h2>
-      <p className="muted">Documentación colaborativa del juego.</p>
+      <p className="muted">{tr("Documentación colaborativa del juego.")}</p>
       <p>
-        <Link to="/wiki/start">Create or edit the start page</Link>
+        <Link to="/wiki/start">{tr("Create or edit the start page")}</Link>
       </p>
       <DataTable rows={pages} />
     </>

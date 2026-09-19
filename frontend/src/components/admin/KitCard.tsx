@@ -1,10 +1,11 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { Kit, KitScope } from '../../utils/api';
 import { formatCount, formatMoney } from '../../utils/format';
 import { PartIcon } from './PartIcon';
 
 const SCOPE_LABEL: Record<KitScope, string> = {
   shop: 'tienda',
-  clan: 'corporación',
+  get clan() { return tr("corporación"); },
   marketplace: 'mercado',
   hidden: 'oculto',
 };
@@ -18,6 +19,7 @@ type KitCardProps = {
 };
 
 export function KitCard({ kit, busy, onEdit, onRemove, onDefault }: KitCardProps) {
+  useIdioma();
   const board = kit.items.find((item) => item.kind === 'mobo');
   const rest = kit.items.filter((item) => item.kind !== 'mobo');
 
@@ -34,7 +36,7 @@ export function KitCard({ kit, busy, onEdit, onRemove, onDefault }: KitCardProps
 
         <span className={`scope scope--${kit.scope}`}>{SCOPE_LABEL[kit.scope]}</span>
 
-        {kit.is_default && <span className="kititem__default">arranque</span>}
+        {kit.is_default && <span className="kititem__default">{tr("arranque")}</span>}
       </header>
 
       {kit.description && <p className="kititem__desc">{kit.description}</p>}
@@ -43,10 +45,10 @@ export function KitCard({ kit, busy, onEdit, onRemove, onDefault }: KitCardProps
         <PartIcon kind="mobo" className="kititem__icon" />
         {board ? (
           <span>
-            {board.name} <small>{board.chipset ?? 'sin chipset'} · DDR{board.generation}</small>
+            {board.name} <small>{board.chipset ?? tr("sin chipset")} · DDR{board.generation}</small>
           </span>
         ) : (
-          <span className="kititem__nofboard">sin placa</span>
+          <span className="kititem__nofboard">{tr("sin placa")}</span>
         )}
 
         {board && <span className={`tier tier--${board.tier}`}>{board.tier}</span>}
@@ -94,7 +96,7 @@ export function KitCard({ kit, busy, onEdit, onRemove, onDefault }: KitCardProps
 
         {saving > 0 && <span className="kititem__saving">−{saving}%</span>}
 
-        {!kit.listed && <span className="kititem__retired">retirado</span>}
+        {!kit.listed && <span className="kititem__retired">{tr("retirado")}</span>}
 
         <span className="kititem__actions">
           <button
@@ -102,14 +104,12 @@ export function KitCard({ kit, busy, onEdit, onRemove, onDefault }: KitCardProps
             disabled={busy || kit.is_default}
             onClick={() => onDefault(kit)}
           >
-            {kit.is_default ? 'es el de arranque' : 'usar al registrarse'}
+            {kit.is_default ? tr("es el de arranque") : tr("usar al registrarse")}
           </button>
           <button type="button" disabled={busy} onClick={() => onEdit(kit)}>
-            editar
-          </button>
+            {tr("editar")} </button>
           <button type="button" disabled={busy} onClick={() => onRemove(kit)}>
-            borrar
-          </button>
+            {tr("borrar")} </button>
         </span>
       </footer>
     </article>

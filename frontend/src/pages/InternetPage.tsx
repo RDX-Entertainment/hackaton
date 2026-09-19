@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../i18n/text';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AddressBar, suggestionsFrom } from '../components/internet/AddressBar';
@@ -28,6 +29,7 @@ const EXPLOIT_ACTION = 16;
 type Queued = { process_id?: number; id?: number };
 
 export function InternetPage() {
+  useIdioma();
   const status = useStatusMessage();
   const trail = useBrowserHistory();
 
@@ -135,7 +137,7 @@ export function InternetPage() {
         setProcessId(id);
         if (seeksAccess) setAccessProcessId(id);
       }
-      status.report(`${label} encolado como tarea #${id}. Ocurre cuando pase el worker.`);
+      status.report(tr("{0} encolado como tarea #{1}. Ocurre cuando pase el worker.", label, id));
     } catch (error) {
       status.reportError(error);
     }
@@ -148,7 +150,7 @@ export function InternetPage() {
 
     try {
       await internetApi.login(remote.ip, user, password);
-      status.report('Acceso concedido.');
+      status.report(tr("Acceso concedido."));
       await open(remote.ip, false);
       return true;
     } catch (error) {
@@ -167,8 +169,8 @@ export function InternetPage() {
       setProcessId(result.process_id);
       setAccessProcessId(result.process_id);
       status.report(
-        `Tarea #${result.process_id} · tu v${result.attacker_version} contra su ` +
-          `v${result.defender_version}. Pasa el worker y vuelve a conectar.`,
+        tr("Tarea #{0} · tu v{1} contra su ", result.process_id, result.attacker_version) +
+          tr("v{0}. Pasa el worker y vuelve a conectar.", result.defender_version),
       );
     } catch (error) {
       status.reportError(error);
@@ -209,7 +211,7 @@ export function InternetPage() {
 
   const known = useMemo(
     () => suggestionsFrom(bookmarks, history, targets),
-    [bookmarks, history, targets],
+    [bookmarks, history, targets, idiomaActual()],
   );
 
   return (
@@ -256,9 +258,9 @@ export function InternetPage() {
 
                   if (refreshed?.access) {
                     setTab('files');
-                    status.report('Acceso conseguido. El software de la máquina está en Files.');
+                    status.report(tr("Acceso conseguido. El software de la máquina está en Files."));
                   } else {
-                    status.report('El proceso terminó, pero no consiguió acceso a esta máquina.');
+                    status.report(tr("El proceso terminó, pero no consiguió acceso a esta máquina."));
                   }
                 })();
               }}
@@ -282,20 +284,20 @@ export function InternetPage() {
                   true,
                 )
               }
-              onAnalyze={() => void announce(internetApi.analyze(remote.ip), 'Análisis')}
+              onAnalyze={() => void announce(internetApi.analyze(remote.ip), tr("Análisis"))}
               onToggleBookmark={() => void toggleBookmark()}
               onVisit={(target) => void open(target)}
               onDownload={(file) =>
-                void announce(internetApi.transferFile(remote.ip, file.id, 'download'), 'Descarga')
+                void announce(internetApi.transferFile(remote.ip, file.id, 'download'), tr("Descarga"))
               }
               onDelete={(file) =>
-                void announce(internetApi.removeFile(remote.ip, file.id), 'Borrado')
+                void announce(internetApi.removeFile(remote.ip, file.id), tr("Borrado"))
               }
               onRewriteLog={(text) =>
-                void announce(internetApi.editLog(remote.ip, text), 'Reescritura del registro')
+                void announce(internetApi.editLog(remote.ip, text), tr("Reescritura del registro"))
               }
               onWipeLog={() =>
-                void announce(internetApi.editLog(remote.ip, ''), 'Borrado del registro')
+                void announce(internetApi.editLog(remote.ip, ''), tr("Borrado del registro"))
               }
             />
           ) : (

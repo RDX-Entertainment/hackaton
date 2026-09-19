@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 /* Text art for the terminal. Kept apart so the command table stays readable. */
 
 export const HACK_THE_PLANET = String.raw`
@@ -71,5 +72,5 @@ const FORTUNES = [
 ];
 
 export function fortune(): string {
-  return FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+  return tr(FORTUNES[Math.floor(Math.random() * FORTUNES.length)]);
 }

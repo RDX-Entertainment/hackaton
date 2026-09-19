@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { Icono } from '../components/iconos/Icono';
@@ -17,6 +18,7 @@ import { useStatusMessage } from '../utils/useStatusMessage';
  * idioma quería evitar.
  */
 export function BitcoinPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [monederos, setMonederos] = useState<Wallet[]>([]);
@@ -35,7 +37,7 @@ export function BitcoinPage() {
   const crear = async () => {
     try {
       await bitcoinApi.createWallet();
-      status.report('Monedero creado.');
+      status.report(tr("Monedero creado."));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -48,14 +50,14 @@ export function BitcoinPage() {
     const satoshis = parseBitcoin(cantidad);
 
     if (satoshis === null || satoshis <= 0) {
-      status.report('Cantidad no válida. Hasta siete decimales, por ejemplo 1,0000001.');
+      status.report(tr("Cantidad no válida. Hasta siete decimales, por ejemplo 1,0000001."));
       return;
     }
 
     try {
       await bitcoinApi.transferBitcoin(desde, hacia, satoshis);
       setCantidad('');
-      status.report('Transferencia completada.');
+      status.report(tr("Transferencia completada."));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -71,38 +73,34 @@ export function BitcoinPage() {
           {monederos.map((monedero) => (
             <article className="tarjeta" key={monedero.address}>
               <span className="tarjeta__rotulo">
-                <Icono nombre="llave" tamano={12} /> monedero
-              </span>
+                <Icono nombre="llave" tamano={12} /> {tr("monedero")} </span>
               <p className="tarjeta__texto" style={{ marginTop: '0.25rem' }}>
                 {monedero.address}
               </p>
 
               <b className="tarjeta__cifra">{formatBitcoin(monedero.amount)}</b>
               <div className="tarjeta__regla" />
-              <p className="tarjeta__pie">BTC disponibles</p>
+              <p className="tarjeta__pie">{tr("BTC disponibles")}</p>
             </article>
           ))}
         </div>
       ) : (
         <div className="vacio">
-          <div className="vacio__titulo">Todavía no tienes monederos</div>
+          <div className="vacio__titulo">{tr("Todavía no tienes monederos")}</div>
           <p className="vacio__texto">
-            Un monedero no es una cuenta de banco: nadie sabe de quién es. Por eso lo que se
-            roba acaba pasando por aquí.
-          </p>
-          <button onClick={() => void crear()}>Crear el primero</button>
+            {tr("Un monedero no es una cuenta de banco: nadie sabe de quién es. Por eso lo que se roba acaba pasando por aquí.")} </p>
+          <button onClick={() => void crear()}>{tr("Crear el primero")}</button>
         </div>
       )}
 
-      {monederos.length > 0 && <button onClick={() => void crear()}>Crear otro monedero</button>}
+      {monederos.length > 0 && <button onClick={() => void crear()}>{tr("Crear otro monedero")}</button>}
 
-      <h3>Transferir</h3>
+      <h3>{tr("Transferir")}</h3>
 
       <form className="compose" onSubmit={transferir}>
         <label>
-          Desde
-          <select value={desde} onChange={(event) => setDesde(event.target.value)} required>
-            <option value="">Elige un monedero</option>
+          {tr("Desde")} <select value={desde} onChange={(event) => setDesde(event.target.value)} required>
+            <option value="">{tr("Elige un monedero")}</option>
             {monederos.map((monedero) => (
               <option key={monedero.address} value={monedero.address}>
                 {monedero.address}
@@ -112,13 +110,11 @@ export function BitcoinPage() {
         </label>
 
         <label>
-          Hacia
-          <input value={hacia} onChange={(event) => setHacia(event.target.value)} required />
+          {tr("Hacia")} <input value={hacia} onChange={(event) => setHacia(event.target.value)} required />
         </label>
 
         <label>
-          Cantidad
-          <input
+          {tr("Cantidad")} <input
             value={cantidad}
             inputMode="decimal"
             onChange={(event) => setCantidad(event.target.value)}
@@ -126,7 +122,7 @@ export function BitcoinPage() {
           />
         </label>
 
-        <button>Transferir</button>
+        <button>{tr("Transferir")}</button>
       </form>
 
       <StatusMessage text={status.message} as="block" />

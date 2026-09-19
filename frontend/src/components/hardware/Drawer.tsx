@@ -1,14 +1,15 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo, useState } from 'react';
 
 import type { Component, ComponentKind, MachineDetail, Tier } from '../../utils/api';
 import { DrawerFolder } from './DrawerFolder';
 
 const FOLDERS: { kind: ComponentKind; label: string }[] = [
-  { kind: 'mobo', label: 'placas base' },
+  { kind: 'mobo', get label() { return tr("placas base"); } },
   { kind: 'cpu', label: 'procesadores' },
   { kind: 'ram', label: 'memorias' },
   { kind: 'hdd', label: 'almacenamiento' },
-  { kind: 'net', label: 'red' },
+  { kind: 'net', get label() { return tr("red"); } },
 ];
 
 const TIERS: Tier[] = ['domestica', 'gaming', 'server', 'industrial'];
@@ -34,6 +35,7 @@ type DrawerProps = {
 };
 
 export function Drawer({ components, machines, busy, onInstall }: DrawerProps) {
+  useIdioma();
   const [text, setText] = useState('');
   const [tier, setTier] = useState<Tier | 'all'>('all');
   const [opened, setOpened] = useState<ComponentKind[]>(['mobo']);
@@ -54,7 +56,7 @@ export function Drawer({ components, machines, busy, onInstall }: DrawerProps) {
 
       return terms.every((term) => words.includes(term));
     });
-  }, [components, text, tier]);
+  }, [components, text, tier, idiomaActual()]);
 
   const searching = text.trim().length > 0 || tier !== 'all';
 
@@ -70,15 +72,14 @@ export function Drawer({ components, machines, busy, onInstall }: DrawerProps) {
       <header className="panel__head">
         <span className="panel__path">~/piezas</span>
         <span className="drawer__count">
-          {searching ? `${shown.length} de ${components.length}` : components.length}
+          {searching ? tr("{0} de {1}", shown.length, components.length) : components.length}
         </span>
       </header>
 
       <div className="panel__body">
         {components.length === 0 ? (
           <p className="panel__empty">
-            <span aria-hidden="true">$ </span>ls ~/piezas: el cajón está vacío
-          </p>
+            <span aria-hidden="true">$ </span>{tr("ls ~/piezas: el cajón está vacío")} </p>
         ) : (
           <>
             <div className="drawer__tools">
@@ -88,11 +89,11 @@ export function Drawer({ components, machines, busy, onInstall }: DrawerProps) {
                 </span>
                 <input
                   value={text}
-                  placeholder="buscar por nombre, chipset, DDR, capacidad…"
+                  placeholder={tr("buscar por nombre, chipset, DDR, capacidad…")}
                   onChange={(event) => setText(event.target.value)}
                 />
                 {text && (
-                  <button type="button" aria-label="Limpiar búsqueda" onClick={() => setText('')}>
+                  <button type="button" aria-label={tr("Limpiar búsqueda")} onClick={() => setText('')}>
                     ×
                   </button>
                 )}
@@ -104,8 +105,7 @@ export function Drawer({ components, machines, busy, onInstall }: DrawerProps) {
                   className={tier === 'all' ? 'drawer__tier is-active' : 'drawer__tier'}
                   onClick={() => setTier('all')}
                 >
-                  todas
-                </button>
+                  {tr("todas")} </button>
 
                 {TIERS.filter((value) => countTier(value) > 0).map((value) => (
                   <button
@@ -121,7 +121,7 @@ export function Drawer({ components, machines, busy, onInstall }: DrawerProps) {
             </div>
 
             {shown.length === 0 ? (
-              <p className="panel__empty">Ninguna pieza del cajón encaja con eso.</p>
+              <p className="panel__empty">{tr("Ninguna pieza del cajón encaja con eso.")}</p>
             ) : (
               <ul className="folders">
                 {FOLDERS.map((folder) => {

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState, type FormEvent } from 'react';
 
 type RemoteLogEditorProps = {
@@ -8,6 +9,7 @@ type RemoteLogEditorProps = {
 
 /** Reescribir el rastro que dejas es trabajo encolado, no una edición inmediata. */
 export function RemoteLogEditor({ log, onRewrite, onWipe }: RemoteLogEditorProps) {
+  useIdioma();
   const [draft, setDraft] = useState(log);
   const [editing, setEditing] = useState(false);
 
@@ -25,13 +27,12 @@ export function RemoteLogEditor({ log, onRewrite, onWipe }: RemoteLogEditorProps
 
   return (
     <div className="rlog">
-      <pre className="rlog__text">{log || '(el registro está vacío)'}</pre>
+      <pre className="rlog__text">{log || tr("(el registro está vacío)")}</pre>
 
       {editing ? (
         <form className="rlog__form" onSubmit={submit}>
           <label>
-            reemplazar el registro por
-            <textarea
+            {tr("reemplazar el registro por")} <textarea
               value={draft}
               rows={5}
               spellCheck={false}
@@ -40,7 +41,7 @@ export function RemoteLogEditor({ log, onRewrite, onWipe }: RemoteLogEditorProps
           </label>
 
           <div className="rlog__actions">
-            <button className="is-primary">reescribir</button>
+            <button className="is-primary">{tr("reescribir")}</button>
             <button
               type="button"
               onClick={() => {
@@ -48,18 +49,15 @@ export function RemoteLogEditor({ log, onRewrite, onWipe }: RemoteLogEditorProps
                 setEditing(false);
               }}
             >
-              cancelar
-            </button>
+              {tr("cancelar")} </button>
           </div>
         </form>
       ) : (
         <div className="rlog__actions">
           <button type="button" onClick={() => setEditing(true)}>
-            reescribir
-          </button>
+            {tr("reescribir")} </button>
           <button type="button" className="rlog__wipe" onClick={onWipe}>
-            borrarlo entero
-          </button>
+            {tr("borrarlo entero")} </button>
         </div>
       )}
     </div>

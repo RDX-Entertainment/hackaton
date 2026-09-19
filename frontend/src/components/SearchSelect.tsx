@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../i18n/text';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 export type SearchOption = {
@@ -25,9 +26,10 @@ export function SearchSelect({
   value,
   onChange,
   placeholder = 'buscar…',
-  emptyLabel = 'sin elegir',
-  noResults = 'nada encaja',
+  emptyLabel = tr("sin elegir"),
+  noResults = tr("nada encaja"),
 }: SearchSelectProps) {
+  useIdioma();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
 
@@ -62,7 +64,7 @@ export function SearchSelect({
       const haystack = `${option.label} ${option.hint ?? ''} ${option.terms ?? ''}`.toLowerCase();
       return terms.every((term) => haystack.includes(term));
     });
-  }, [options, text]);
+  }, [options, text, idiomaActual()]);
 
   const pick = (id: number) => {
     onChange(id);

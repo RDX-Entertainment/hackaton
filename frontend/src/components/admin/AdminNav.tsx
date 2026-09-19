@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 import { Link, NavLink } from 'react-router-dom';
 
 import { signedOut } from '../../app/authSlice';
@@ -21,7 +22,7 @@ export function AdminNav() {
         </span>
       </Link>
 
-      <nav className="adminnav" aria-label={t('admin.sections') ?? 'Secciones del panel'}>
+      <nav className="adminnav" aria-label={t('admin.sections') ?? tr("Secciones del panel")}>
         {ADMIN_SECTIONS.map((section) => (
           <NavLink
             key={section.path}
@@ -42,7 +43,7 @@ export function AdminNav() {
 
       <div className="topbar__session">
         <Link className="topbar__back" to="/">
-          {t('admin.back') ?? 'volver al juego'}
+          {t('admin.back') ?? tr("volver al juego")}
         </Link>
 
         <LanguageSelect />

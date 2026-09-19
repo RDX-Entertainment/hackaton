@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { Component, ComponentKind, Slots } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 import { PartIcon } from '../admin/PartIcon';
@@ -32,6 +33,7 @@ type BoardLayoutProps = {
 };
 
 export function BoardLayout({ board, components, slots, busy, onUninstall }: BoardLayoutProps) {
+  useIdioma();
   const total = (kind: ComponentKind) =>
     kind === 'cpu'
       ? slots.cpu_total
@@ -49,13 +51,12 @@ export function BoardLayout({ board, components, slots, busy, onUninstall }: Boa
         <span className="board__text">
           <span className="board__name">{board.name}</span>
           <span className="board__spec">
-            {board.chipset ?? 'sin chipset'} · DDR{slots.generation}
+            {board.chipset ?? tr("sin chipset")} · DDR{slots.generation}
           </span>
         </span>
 
         <button type="button" disabled={busy} onClick={() => onUninstall(board)}>
-          sacar placa
-        </button>
+          {tr("sacar placa")} </button>
       </header>
 
       <div className="board__deck">
@@ -80,7 +81,7 @@ export function BoardLayout({ board, components, slots, busy, onUninstall }: Boa
                         <span className="mount__label">
                           {zone.empty} {index + 1}
                         </span>
-                        <span className="mount__free">libre</span>
+                        <span className="mount__free">{tr("libre")}</span>
                       </article>
                     );
                   }
@@ -95,7 +96,7 @@ export function BoardLayout({ board, components, slots, busy, onUninstall }: Boa
                       <button
                         type="button"
                         className="mount__pull"
-                        aria-label={`Sacar ${part.name}`}
+                        aria-label={tr("Sacar {0}", part.name)}
                         disabled={busy}
                         onClick={() => onUninstall(part)}
                       >
@@ -105,7 +106,7 @@ export function BoardLayout({ board, components, slots, busy, onUninstall }: Boa
                   );
                 })}
 
-                {count === 0 && <p className="zone__none">esta placa no tiene</p>}
+                {count === 0 && <p className="zone__none">{tr("esta placa no tiene")}</p>}
               </div>
             </section>
           );

@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import {
   useCallback,
   useEffect,
@@ -33,6 +34,7 @@ type TerminalProps = {
 };
 
 export function Terminal({ initialCommand }: TerminalProps) {
+  useIdioma();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const token = useAppSelector((state) => state.auth.token);
@@ -91,11 +93,11 @@ export function Terminal({ initialCommand }: TerminalProps) {
     /** `systemctl start UI` and its shortcut both land here. */
     startUi: () => {
       if (!account.current.token) {
-        printRef.current('No hay sesión. Autentícate antes con `login`.', 'error');
+        printRef.current(tr("No hay sesión. Autentícate antes con `login`."), 'error');
         return;
       }
 
-      printRef.current('Starting hacker-experience-ui.service …', 'success');
+      printRef.current(tr("Starting hacker-experience-ui.service …"), 'success');
       navigate('/');
     },
     identity: () => {
@@ -110,9 +112,9 @@ export function Terminal({ initialCommand }: TerminalProps) {
   printRef.current = print;
 
   const announceSession = useRef((login: string, ip: number) => {
-    printRef.current(`Autenticado como ${login} · ip ${formatIp(ip)}`, 'success');
+    printRef.current(tr("Autenticado como {0} · ip {1}", login, formatIp(ip)), 'success');
     printRef.current(
-      'La interfaz no está levantada. Arráncala con `systemctl start UI`, o `start-ui`.',
+      tr("La interfaz no está levantada. Arráncala con `systemctl start UI`, o `start-ui`."),
       'hint',
     );
   });
@@ -132,7 +134,7 @@ export function Terminal({ initialCommand }: TerminalProps) {
       const command = findCommand(name);
 
       if (!command) {
-        print(`${name}: orden no encontrada. Escribe \`help\`.`, 'error');
+        print(tr("{0}: orden no encontrada. Escribe `help`.", name), 'error');
         return;
       }
 
@@ -258,8 +260,8 @@ export function Terminal({ initialCommand }: TerminalProps) {
     }
     started.current = true;
 
-    print('HackerOS 0.1.0 · sesión de invitado', 'success');
-    print('Escribe `help` para ver qué se puede hacer aquí.', 'hint');
+    print(tr("HackerOS 0.1.0 · sesión de invitado"), 'success');
+    print(tr("Escribe `help` para ver qué se puede hacer aquí."), 'hint');
 
     const boot = async () => {
       append({ kind: 'input', text: `${prompt} neofetch` });

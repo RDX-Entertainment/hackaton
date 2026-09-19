@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useEffect, useState } from 'react';
 
 import { Icono } from '../components/iconos/Icono';
@@ -18,6 +19,7 @@ import { formatMoney } from '../utils/format';
  * guardada— y el estado baja al segundo lugar, que es donde estaba su sitio.
  */
 export function HomePage() {
+  useIdioma();
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [news, setNews] = useState<News[]>([]);
   const [error, setError] = useState('');
@@ -38,7 +40,7 @@ export function HomePage() {
 
   return (
     <>
-      <h2>Inicio</h2>
+      <h2>{tr("Inicio")}</h2>
 
       {onboarding && (
         <>
@@ -50,17 +52,15 @@ export function HomePage() {
       <section className="estado">
         <article className="tarjeta">
           <span className="tarjeta__rotulo">
-            <Icono nombre="dinero" tamano={12} /> en el banco
-          </span>
+            <Icono nombre="dinero" tamano={12} /> {tr("en el banco")} </span>
           <b className="tarjeta__cifra">{formatMoney(dashboard.money)}</b>
           <div className="tarjeta__regla" />
-          <p className="tarjeta__pie">Lo que puedes gastar ahora mismo.</p>
+          <p className="tarjeta__pie">{tr("Lo que puedes gastar ahora mismo.")}</p>
         </article>
 
         <article className="tarjeta">
           <span className="tarjeta__rotulo">
-            <Icono nombre="tiempo" tamano={12} /> en marcha
-          </span>
+            <Icono nombre="tiempo" tamano={12} /> {tr("en marcha")} </span>
           <b
             className={
               dashboard.processes
@@ -73,15 +73,14 @@ export function HomePage() {
           <div className="tarjeta__regla" />
           <p className="tarjeta__pie">
             {dashboard.processes
-              ? 'Tareas que termina el worker por su cuenta.'
-              : 'Nada corriendo. Lo que empieces aparece aquí.'}
+              ? tr("Tareas que termina el worker por su cuenta.")
+              : tr("Nada corriendo. Lo que empieces aparece aquí.")}
           </p>
         </article>
 
         <article className="tarjeta">
           <span className="tarjeta__rotulo">
-            <Icono nombre="aviso" tamano={12} /> correo
-          </span>
+            <Icono nombre="aviso" tamano={12} /> {tr("correo")} </span>
           <b
             className={
               dashboard.unread_mail
@@ -92,21 +91,21 @@ export function HomePage() {
             {dashboard.unread_mail}
           </b>
           <div className="tarjeta__regla" />
-          <p className="tarjeta__pie">Sin leer.</p>
+          <p className="tarjeta__pie">{tr("Sin leer.")}</p>
         </article>
       </section>
 
-      <h3>Noticias</h3>
+      <h3>{tr("Noticias")}</h3>
       {news.length ? (
         news.map((item) => (
           <article className="forum-post" key={item.id}>
             <b>{item.title}</b>
-            <small> por {item.author}</small>
+            <small> {tr("por")} {item.author}</small>
             <pre>{item.content}</pre>
           </article>
         ))
       ) : (
-        <EmptyNotice>Todavía no hay noticias.</EmptyNotice>
+        <EmptyNotice>{tr("Todavía no hay noticias.")}</EmptyNotice>
       )}
     </>
   );

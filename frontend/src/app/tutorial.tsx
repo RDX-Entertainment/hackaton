@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
 import { useOnboarding } from '../components/onboarding/useOnboarding';
-import { t } from '../i18n';
+import { t, useIdioma } from '../i18n';
 import type { Onboarding } from '../utils/api';
 
 /**
@@ -75,6 +75,7 @@ function motivoDe(onboarding?: Onboarding): string {
 }
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
+  const idioma = useIdioma();
   const { onboarding, reload } = useOnboarding();
 
   const valor = useMemo<Tutorial>(() => {
@@ -92,7 +93,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       onboarding,
       recargar: reload,
     };
-  }, [onboarding, reload]);
+  }, [onboarding, reload, idioma]);
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }

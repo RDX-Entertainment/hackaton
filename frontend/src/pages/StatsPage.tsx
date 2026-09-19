@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useEffect, useState } from 'react';
 
 import { dashboardApi, type UnknownRow } from '../utils/api';
@@ -20,18 +21,19 @@ const NOMBRES: Record<string, string> = {
   online: 'conectados',
   clans: 'clanes',
   total_clans: 'clanes',
-  servers: 'máquinas',
-  hardware: 'máquinas',
+  get servers() { return tr("máquinas"); },
+  get hardware() { return tr("máquinas"); },
   software: 'programas',
-  processes: 'tareas en marcha',
-  npc: 'máquinas del mundo',
-  money: 'dinero en juego',
-  bitcoin: 'bitcoin en juego',
+  get processes() { return tr("tareas en marcha"); },
+  get npc() { return tr("máquinas del mundo"); },
+  get money() { return tr("dinero en juego"); },
+  get bitcoin() { return tr("bitcoin en juego"); },
   updated_at: 'medido',
   created_at: 'medido',
 };
 
 export function StatsPage() {
+  useIdioma();
   const [numeros, setNumeros] = useState<UnknownRow>();
 
   useEffect(() => {
@@ -42,13 +44,11 @@ export function StatsPage() {
   if (!numeros) {
     return (
       <>
-        <h2>Números</h2>
+        <h2>{tr("Números")}</h2>
         <div className="vacio">
-          <div className="vacio__titulo">Todavía no hay instantánea</div>
+          <div className="vacio__titulo">{tr("Todavía no hay instantánea")}</div>
           <p className="vacio__texto">
-            La escribe el worker la primera vez que pasa. Si lleva un rato en marcha y sigue
-            vacía, es que el worker no está corriendo.
-          </p>
+            {tr("La escribe el worker la primera vez que pasa. Si lleva un rato en marcha y sigue vacía, es que el worker no está corriendo.")} </p>
         </div>
       </>
     );
@@ -56,8 +56,8 @@ export function StatsPage() {
 
   return (
     <>
-      <h2>Números</h2>
-      <p className="muted">Lo que el worker contó la última vez que pasó.</p>
+      <h2>{tr("Números")}</h2>
+      <p className="muted">{tr("Lo que el worker contó la última vez que pasó.")}</p>
 
       <div className="rejilla-tarjetas">
         {Object.entries(numeros).map(([clave, valor]) => (

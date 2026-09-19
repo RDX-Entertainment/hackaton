@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { CatalogBrowser } from '../../components/admin/CatalogBrowser';
@@ -16,6 +17,7 @@ import { useStatusMessage } from '../../utils/useStatusMessage';
 
 /** Alta de piezas, entrega directa y el catálogo, en ese orden. */
 export function CatalogPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [parts, setParts] = useState<Part[]>();
@@ -61,17 +63,17 @@ export function CatalogPage() {
       if (editing) {
         await adminApi.editPart(editing.id, input);
         setEditing(null);
-        return `${input.name} actualizado.`;
+        return tr("{0} actualizado.", input.name);
       }
 
       await adminApi.createPart(input);
-      return `${input.name} creado.`;
+      return tr("{0} creado.", input.name);
     });
 
   const remove = (part: Part) =>
     void run(async () => {
       await adminApi.removePart(part.id);
-      return `${part.name} borrado.`;
+      return tr("{0} borrado.", part.name);
     });
 
   const deliver = (part: number, user: number, amount: number) =>
@@ -79,17 +81,15 @@ export function CatalogPage() {
       const made = await adminApi.grantComponents(part, user, amount);
       const who = users.find((option) => option.id === user)?.login ?? user;
 
-      return `${made.components.length} piezas entregadas a ${who}.`;
+      return tr("{0} piezas entregadas a {1}.", made.components.length, who);
     });
 
   if (denied) {
     return (
       <>
-        <h2>Catálogo</h2>
+        <h2>{tr("Catálogo")}</h2>
         <p className="muted">
-          Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es
-          administrador, igual que a una ruta inventada.
-        </p>
+          {tr("Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es administrador, igual que a una ruta inventada.")} </p>
       </>
     );
   }
@@ -100,7 +100,7 @@ export function CatalogPage() {
 
   return (
     <>
-      <h2>Catálogo</h2>
+      <h2>{tr("Catálogo")}</h2>
       <StatusMessage text={status.message} as="block" />
 
       <PartForm

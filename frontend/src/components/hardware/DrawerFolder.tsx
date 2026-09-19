@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState } from 'react';
 
 import type { Component, ComponentKind, MachineDetail } from '../../utils/api';
@@ -14,7 +15,7 @@ const UNIT: Record<ComponentKind, string> = {
 
 function specOf(part: Component): string {
   if (part.kind === 'mobo') {
-    return `${part.chipset ?? 'sin chipset'} · DDR${part.generation} · ${part.cpu_slots}c ${part.ram_slots}r ${part.hdd_slots}d ${part.net_slots}n`;
+    return `${part.chipset ?? tr("sin chipset")} · DDR${part.generation} · ${part.cpu_slots}c ${part.ram_slots}r ${part.hdd_slots}d ${part.net_slots}n`;
   }
 
   const base = `${formatCount(part.power)} ${UNIT[part.kind]}`;
@@ -43,6 +44,7 @@ export function DrawerFolder({
   onToggle,
   onInstall,
 }: DrawerFolderProps) {
+  useIdioma();
   const [target, setTarget] = useState<number | null>(null);
 
   const empty = parts.length === 0;
@@ -91,8 +93,7 @@ export function DrawerFolder({
                     disabled={busy}
                     onClick={() => install(part, machines[0].machine.id)}
                   >
-                    poner
-                  </button>
+                    {tr("poner")} </button>
                 ) : (
                   <button
                     type="button"
@@ -101,7 +102,7 @@ export function DrawerFolder({
                     disabled={busy}
                     onClick={() => setTarget(target === part.id ? null : part.id)}
                   >
-                    poner en <span aria-hidden="true">▾</span>
+                    {tr("poner en")} <span aria-hidden="true">▾</span>
                   </button>
                 )}
               </span>
@@ -117,7 +118,7 @@ export function DrawerFolder({
                       >
                         <span className="piece__target">{machine.machine.name}</span>
                         <small>
-                          {machine.board ? machine.board.name : 'sin placa'}
+                          {machine.board ? machine.board.name : tr("sin placa")}
                         </small>
                       </button>
                     </li>

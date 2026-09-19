@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 type MeterProps = {
   label: string;
   usado: number;
@@ -18,6 +19,7 @@ const APRETADO = 85;
  * que el número tiene que estar a la vista antes de intentarlo.
  */
 export function Meter({ label, usado, total, unidad, nota }: MeterProps) {
+  useIdioma();
   const porcentaje = total > 0 ? Math.min(100, Math.round((usado / total) * 100)) : 0;
   const libre = Math.max(0, total - usado);
 
@@ -26,7 +28,7 @@ export function Meter({ label, usado, total, unidad, nota }: MeterProps) {
       <p className="meter__head">
         <span className="meter__label">{label}</span>
         <span className="meter__value">
-          {libre} {unidad} <small>libres de {total}</small>
+          {libre} {unidad} <small>{tr("libres de")} {total}</small>
         </span>
       </p>
 

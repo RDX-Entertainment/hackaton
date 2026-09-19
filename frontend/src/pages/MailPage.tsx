@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../i18n/text';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ComposeMail } from '../components/ComposeMail';
@@ -22,6 +23,7 @@ import { useStatusMessage } from '../utils/useStatusMessage';
  * que nada.
  */
 export function MailPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [mensajes, setMensajes] = useState<UnknownRow[]>([]);
@@ -42,7 +44,7 @@ export function MailPage() {
   const nombreDe = useMemo(() => {
     const porId = new Map(jugadores.map((jugador) => [jugador.user_id, jugador.login]));
     return (id: unknown) => porId.get(Number(id)) ?? `#${formatCell(id)}`;
-  }, [jugadores]);
+  }, [jugadores, idiomaActual()]);
 
   const abrir = async (id: number) => {
     setRedactando(false);
@@ -60,7 +62,7 @@ export function MailPage() {
     try {
       await mailApi.removeMail(id);
       setAbierto(undefined);
-      status.report('Mensaje borrado.');
+      status.report(tr("Mensaje borrado."));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -89,16 +91,16 @@ export function MailPage() {
 
   return (
     <>
-      <h2>Correo</h2>
+      <h2>{tr("Correo")}</h2>
       <StatusMessage text={status.message} as="block" />
 
       <div className={`correo${abierto || redactando ? ' correo--leyendo' : ''}`}>
         <div className="correo__lista">
           <div className="correo__barra">
             <span className="micro">
-              bandeja{sinLeer ? ` · ${sinLeer} sin leer` : ''}
+              {tr("bandeja")}{sinLeer ? tr(" · {0} sin leer", sinLeer) : ''}
             </span>
-            <button onClick={escribir}>Escribir</button>
+            <button onClick={escribir}>{tr("Escribir")}</button>
           </div>
 
           {mensajes.length ? (
@@ -129,7 +131,7 @@ export function MailPage() {
               })}
             </ul>
           ) : (
-            <p className="correo__nada">La bandeja está vacía.</p>
+            <p className="correo__nada">{tr("La bandeja está vacía.")}</p>
           )}
         </div>
 
@@ -137,7 +139,7 @@ export function MailPage() {
           {redactando ? (
             <>
               <div className="correo__cabecera">
-                <span className="micro">mensaje nuevo</span>
+                <span className="micro">{tr("mensaje nuevo")}</span>
               </div>
               <ComposeMail
                 onSent={cargar}
@@ -152,10 +154,10 @@ export function MailPage() {
                 <h3 className="correo__titulo">{formatCell(abierto.subject)}</h3>
                 <div className="correo__meta">
                   <span>
-                    <span className="micro">de</span> {nombreDe(abierto.from)}
+                    <span className="micro">{tr("de")}</span> {nombreDe(abierto.from)}
                   </span>
                   <span>
-                    <span className="micro">para</span> {nombreDe(abierto.to)}
+                    <span className="micro">{tr("para")}</span> {nombreDe(abierto.to)}
                   </span>
                 </div>
               </div>
@@ -164,23 +166,19 @@ export function MailPage() {
 
               <div className="correo__acciones">
                 <button type="button" onClick={() => setAbierto(undefined)}>
-                  Volver
-                </button>
+                  {tr("Volver")} </button>
                 <button type="button" onClick={responder}>
-                  Responder
-                </button>
+                  {tr("Responder")} </button>
                 <button type="button" onClick={() => void borrar(Number(abierto.id))}>
-                  Borrar
-                </button>
+                  {tr("Borrar")} </button>
               </div>
             </>
           ) : (
             <div className="correo__vacio">
               <Icono nombre="aviso" tamano={24} />
-              <p>Elige un mensaje de la izquierda.</p>
+              <p>{tr("Elige un mensaje de la izquierda.")}</p>
               <span className="micro">
-                aquí llegan los avisos del sistema y lo que te escriban otros jugadores
-              </span>
+                {tr("aquí llegan los avisos del sistema y lo que te escriban otros jugadores")} </span>
             </div>
           )}
         </div>

@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { FOCOS, VISTAS, nombreDeVista } from '../../app/focos';
@@ -46,6 +47,7 @@ const EN_BLANCO: TutorialStepInput = {
  *     alguien.
  */
 export function TutorialPage() {
+  useIdioma();
   const status = useStatusMessage();
 
   const [tutorial, setTutorial] = useState<Tutorial>();
@@ -84,8 +86,8 @@ export function TutorialPage() {
     void hacer(async () => {
       await adminApi.setTutorialEnforced(valor);
       return valor
-        ? 'El tutorial vuelve a mandar: bloquea lo que no toca.'
-        : 'El tutorial queda como guía: dice el paso y no bloquea nada.';
+        ? tr("El tutorial vuelve a mandar: bloquea lo que no toca.")
+        : tr("El tutorial queda como guía: dice el paso y no bloquea nada.");
     });
 
   const mover = (paso: TutorialStep, salto: number) =>
@@ -95,14 +97,14 @@ export function TutorialPage() {
         position: Math.max(1, paso.position + salto),
       });
 
-      return `«${paso.code}» ahora va ${salto < 0 ? 'antes' : 'después'}.`;
+      return tr("«{0}» ahora va {1}.", paso.code, salto < 0 ? 'antes' : tr("después"));
     });
 
   const borrar = (paso: TutorialStep) =>
     void hacer(async () => {
       await adminApi.removeTutorialStep(paso.id);
       setEditando(null);
-      return `Paso «${paso.code}» borrado.`;
+      return tr("Paso «{0}» borrado.", paso.code);
     });
 
   const guardar = (paso: TutorialStep | 'nuevo', valores: TutorialStepInput) =>
@@ -114,7 +116,7 @@ export function TutorialPage() {
       }
 
       setEditando(null);
-      return `Paso «${valores.code}» guardado.`;
+      return tr("Paso «{0}» guardado.", valores.code);
     });
 
   if (!tutorial || !vocabulario) {
@@ -126,9 +128,7 @@ export function TutorialPage() {
       <h2>Tutorial</h2>
 
       <p className="lead">
-        El circuito que recorre quien acaba de registrarse. El paso no se guarda en ninguna
-        parte: se deduce del mundo, así que llegar por otro camino también cuenta.
-      </p>
+        {tr("El circuito que recorre quien acaba de registrarse. El paso no se guarda en ninguna parte: se deduce del mundo, así que llegar por otro camino también cuenta.")} </p>
 
       <StatusMessage text={status.message} as="block" />
 
@@ -136,7 +136,7 @@ export function TutorialPage() {
         prefix="TUTOR"
         brand="IAL"
         accent="lime"
-        note={`${tutorial.steps.length} paso${tutorial.steps.length === 1 ? '' : 's'}`}
+        note={tr("{0} paso{1}", tutorial.steps.length, tutorial.steps.length === 1 ? '' : 's')}
       >
         <div className={tutorial.enforced ? 'tutmando' : 'tutmando is-off'}>
           <label className="tutmando__sw">
@@ -146,13 +146,13 @@ export function TutorialPage() {
               disabled={ocupado}
               onChange={(evento) => cambiarInterruptor(evento.target.checked)}
             />
-            <b>{tutorial.enforced ? 'El tutorial manda' : 'El tutorial es solo una guía'}</b>
+            <b>{tutorial.enforced ? tr("El tutorial manda") : tr("El tutorial es solo una guía")}</b>
           </label>
 
           <p>
             {tutorial.enforced
-              ? 'Bloquea lo que el paso no permite, en el servidor y en la pantalla.'
-              : 'Sigue diciendo qué toca y señalando dónde, pero no cierra nada.'}
+              ? tr("Bloquea lo que el paso no permite, en el servidor y en la pantalla.")
+              : tr("Sigue diciendo qué toca y señalando dónde, pero no cierra nada.")}
           </p>
         </div>
 
@@ -162,15 +162,14 @@ export function TutorialPage() {
               <header className="tutpaso__cab">
                 <span className="tutpaso__num">{String(paso.position).padStart(2, '0')}</span>
                 <b className="tutpaso__code">{paso.code}</b>
-                {!paso.active && <span className="tutpaso__apagado">apagado</span>}
+                {!paso.active && <span className="tutpaso__apagado">{tr("apagado")}</span>}
               </header>
 
               <p className="tutpaso__frase">{enCristiano(paso, vocabulario)}</p>
 
               <div className="tutpaso__acciones">
                 <button type="button" disabled={ocupado} onClick={() => setEditando(paso)}>
-                  editar
-                </button>
+                  {tr("editar")} </button>
                 <button
                   type="button"
                   disabled={ocupado || indice === 0}
@@ -186,8 +185,7 @@ export function TutorialPage() {
                   ▼
                 </button>
                 <button type="button" disabled={ocupado} onClick={() => borrar(paso)}>
-                  borrar
-                </button>
+                  {tr("borrar")} </button>
               </div>
             </li>
           ))}
@@ -195,15 +193,12 @@ export function TutorialPage() {
 
         {tutorial.steps.length === 0 && (
           <p className="tutlista__vacia">
-            Sin pasos, el juego no tiene tutorial: nadie ve un siguiente paso y nada se
-            bloquea.
-          </p>
+            {tr("Sin pasos, el juego no tiene tutorial: nadie ve un siguiente paso y nada se bloquea.")} </p>
         )}
 
         <div className="tutlista__pie">
           <button type="button" disabled={ocupado} onClick={() => setEditando('nuevo')}>
-            + Paso nuevo
-          </button>
+            {tr("+ Paso nuevo")} </button>
         </div>
       </AdminCard>
 
@@ -234,26 +229,26 @@ function enCristiano(paso: TutorialStep, vocabulario: TutorialVocabulary): strin
 
   const pantallas = paso.views
     ? paso.views.length
-      ? `solo abre ${paso.views.map(nombreDeVista).join(', ')}`
-      : 'no abre ninguna pantalla'
-    : 'puede abrir cualquier pantalla';
+      ? tr("solo abre {0}", paso.views.map(nombreDeVista).join(', '))
+      : tr("no abre ninguna pantalla")
+    : tr("puede abrir cualquier pantalla");
 
   const acciones = paso.actions
     ? paso.actions.length
-      ? `solo puede: ${paso.actions
+      ? tr("solo puede: {0}", paso.actions
           .map(
             (codigo) =>
               vocabulario.actions.find((entrada) => entrada.code === codigo)?.label ?? codigo,
           )
-          .join('; ')}`
-      : 'no puede hacer nada'
-    : 'puede hacer cualquier cosa';
+          .join('; '))
+      : tr("no puede hacer nada")
+    : tr("puede hacer cualquier cosa");
 
   const foco = paso.focus_anchor
-    ? ` Le parpadea ${FOCOS.find((uno) => uno.code === paso.focus_anchor)?.label ?? paso.focus_anchor}.`
+    ? tr(" Le parpadea {0}.", FOCOS.find((uno) => uno.code === paso.focus_anchor)?.label ?? paso.focus_anchor)
     : '';
 
-  return `Mientras no ${hecho.toLowerCase()}: ${pantallas}, y ${acciones}.${foco}`;
+  return tr("Mientras no {0}: {1}, y {2}.{3}", hecho.toLowerCase(), pantallas, acciones, foco);
 }
 
 type EditorProps = {
@@ -273,9 +268,10 @@ function EditorDePaso({
   onGuardar,
   onCancelar,
 }: EditorProps) {
+  useIdioma();
   const inicial = useMemo<TutorialStepInput>(
     () => (paso === 'nuevo' ? { ...EN_BLANCO, position: siguientePosicion } : { ...paso }),
-    [paso, siguientePosicion],
+    [paso, siguientePosicion, idiomaActual()],
   );
 
   const [valores, setValores] = useState<TutorialStepInput>(inicial);
@@ -308,35 +304,30 @@ function EditorDePaso({
     }
 
     return [...grupos.entries()];
-  }, []);
+  }, [idiomaActual()]);
 
   return (
     <AdminCard
       prefix="PASO"
       brand={paso === 'nuevo' ? 'NUEVO' : valores.code.toUpperCase()}
-      note={paso === 'nuevo' ? 'sin guardar' : `#${valores.position}`}
+      note={paso === 'nuevo' ? tr("sin guardar") : `#${valores.position}`}
     >
       <form className="tutform" onSubmit={enviar}>
         <div className="tutform__fila">
           <label>
-            Código del paso
-            <input
+            {tr("Código del paso")} <input
               value={valores.code}
               maxLength={32}
               required
               onChange={(evento) => cambiar({ code: evento.target.value })}
             />
             <small>
-              Lo que viaja al jugador. Si coincide con uno del catálogo de idiomas —
-              <code>modules</code>, <code>blueprint</code>, <code>compile</code>,{' '}
-              <code>install</code>, <code>intrusion</code>— habla en su lengua; si no, dice la
-              frase de aquí abajo.
-            </small>
+              {tr("Lo que viaja al jugador. Si coincide con uno del catálogo de idiomas —")} <code>modules</code>, <code>blueprint</code>, <code>compile</code>,{' '}
+              <code>install</code>, <code>intrusion</code>{tr("— habla en su lengua; si no, dice la frase de aquí abajo.")} </small>
           </label>
 
           <label>
-            Lo cierra
-            <select
+            {tr("Lo cierra")} <select
               value={valores.fact}
               onChange={(evento) => cambiar({ fact: evento.target.value })}
             >
@@ -347,14 +338,12 @@ function EditorDePaso({
               ))}
             </select>
             <small>
-              El hecho que da el paso por terminado. Se pregunta al mundo cada vez: no hay nada
-              guardado que pueda desincronizarse.
-            </small>
+              {tr("El hecho que da el paso por terminado. Se pregunta al mundo cada vez: no hay nada guardado que pueda desincronizarse.")} </small>
           </label>
         </div>
 
         <fieldset className="tutform__grupo">
-          <legend>Pantallas</legend>
+          <legend>{tr("Pantallas")}</legend>
 
           <div className="tutform__modo">
             <label>
@@ -363,8 +352,7 @@ function EditorDePaso({
                 checked={valores.views === null}
                 onChange={() => cambiar({ views: null })}
               />
-              Todas
-            </label>
+              {tr("Todas")} </label>
 
             <label>
               <input
@@ -372,8 +360,7 @@ function EditorDePaso({
                 checked={valores.views !== null}
                 onChange={() => cambiar({ views: [] })}
               />
-              Solo estas
-            </label>
+              {tr("Solo estas")} </label>
           </div>
 
           {valores.views !== null && (
@@ -399,7 +386,7 @@ function EditorDePaso({
         </fieldset>
 
         <fieldset className="tutform__grupo">
-          <legend>Acciones</legend>
+          <legend>{tr("Acciones")}</legend>
 
           <div className="tutform__modo">
             <label>
@@ -408,8 +395,7 @@ function EditorDePaso({
                 checked={valores.actions === null}
                 onChange={() => cambiar({ actions: null })}
               />
-              Todas
-            </label>
+              {tr("Todas")} </label>
 
             <label>
               <input
@@ -417,8 +403,7 @@ function EditorDePaso({
                 checked={valores.actions !== null}
                 onChange={() => cambiar({ actions: [] })}
               />
-              Solo estas
-            </label>
+              {tr("Solo estas")} </label>
           </div>
 
           {valores.actions !== null && (
@@ -439,8 +424,7 @@ function EditorDePaso({
 
         <div className="tutform__fila">
           <label>
-            Dónde mira
-            <select
+            {tr("Dónde mira")} <select
               value={valores.focus_anchor ?? ''}
               onChange={(evento) => {
                 const foco = FOCOS.find((uno) => uno.code === evento.target.value);
@@ -453,7 +437,7 @@ function EditorDePaso({
                 });
               }}
             >
-              <option value="">En ningún sitio</option>
+              <option value="">{tr("En ningún sitio")}</option>
               {FOCOS.map((foco) => (
                 <option key={foco.code} value={foco.code}>
                   {foco.label}
@@ -461,9 +445,7 @@ function EditorDePaso({
               ))}
             </select>
             <small>
-              Ese botón parpadea, y es lo único que parpadea en el juego. Si señalara tres
-              cosas no señalaría ninguna.
-            </small>
+              {tr("Ese botón parpadea, y es lo único que parpadea en el juego. Si señalara tres cosas no señalaría ninguna.")} </small>
           </label>
 
           <label className="tutform__activo">
@@ -472,31 +454,25 @@ function EditorDePaso({
               checked={valores.active}
               onChange={(evento) => cambiar({ active: evento.target.checked })}
             />
-            Activo
-            <small>
-              Un paso apagado sigue escrito y deja de gobernar: es como se prepara uno nuevo
-              sin soltarlo encima de quien está jugando.
-            </small>
+            {tr("Activo")} <small>
+              {tr("Un paso apagado sigue escrito y deja de gobernar: es como se prepara uno nuevo sin soltarlo encima de quien está jugando.")} </small>
           </label>
         </div>
 
         <label className="tutform__frase">
-          Frase del paso
-          <textarea
+          {tr("Frase del paso")} <textarea
             value={valores.hint ?? ''}
             rows={2}
-            placeholder="Solo hace falta si el código no está en los catálogos de idioma."
+            placeholder={tr("Solo hace falta si el código no está en los catálogos de idioma.")}
             onChange={(evento) => cambiar({ hint: evento.target.value || null })}
           />
         </label>
 
         <div className="tutform__pie">
           <button type="button" disabled={ocupado} onClick={onCancelar}>
-            cancelar
-          </button>
+            {tr("cancelar")} </button>
           <button className="is-primary" disabled={ocupado || !valores.code.trim()}>
-            guardar el paso
-          </button>
+            {tr("guardar el paso")} </button>
         </div>
       </form>
     </AdminCard>

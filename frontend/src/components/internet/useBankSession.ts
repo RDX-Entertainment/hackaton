@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { bankApi, financesApi, type BankAccess } from '../../utils/api';
@@ -77,7 +78,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
           session.current = null;
           setHolder(null);
           send({
-            values: { status: 'Sesión cerrada.', account: '', holder: '', balance: '—' },
+            values: { status: tr("Sesión cerrada."), account: '', holder: '', balance: '—' },
             clear: true,
           });
           return;
@@ -87,7 +88,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
           const opened = await financesApi.openAccount(bank.id, fields.pin ?? '');
           send({
             values: {
-              status: `Cuenta ${opened.account} abierta. Entra con ella y ese PIN.`,
+              status: tr("Cuenta {0} abierta. Entra con ella y ese PIN.", opened.account),
               account: String(opened.account),
             },
             clear: true,
@@ -104,7 +105,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
           session.current = { access, pin: fields.pin ?? '' };
           setHolder(access.holder);
           send({
-            values: { ...shown(access), status: `Hola, ${access.holder}.` },
+            values: { ...shown(access), status: tr("Hola, {0}.", access.holder) },
             clear: true,
           });
           return;
@@ -114,7 +115,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
         const open = session.current;
 
         if (!open) {
-          say('Entra en tu cuenta primero.');
+          say(tr("Entra en tu cuenta primero."));
           return;
         }
 
@@ -133,7 +134,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
           send({
             values: {
               ...shown(access),
-              status: `Enviados ${formatMoney(amount)} a ${fields.to_account}.`,
+              status: tr("Enviados {0} a {1}.", formatMoney(amount), fields.to_account),
             },
             clear: true,
           });
@@ -147,18 +148,18 @@ export function useBankSession(bank: Bank | null, ip: number) {
           });
 
           send({
-            values: { ...shown(open.access), status: `${rows.length} movimientos.` },
+            values: { ...shown(open.access), status: tr("{0} movimientos.", rows.length) },
             lists: {
               movements: rows.length
                 ? rows.map((one) => ({
                 amount: `${one.amount > 0 ? '+' : ''}${formatMoney(one.amount)}`,
-                concept: one.concept || 'sin concepto',
+                concept: one.concept || tr("sin concepto"),
                 balance: formatMoney(one.balance),
                 other_account: one.other_account ? String(one.other_account) : '—',
                   }))
                 : [{
                     amount: '-',
-                    concept: 'Sin movimientos todavia.',
+                    concept: tr("Sin movimientos todavia."),
                     balance: formatMoney(open.access.cash),
                     other_account: '-',
                   }],

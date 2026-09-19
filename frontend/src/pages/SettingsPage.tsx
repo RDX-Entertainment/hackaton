@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -13,6 +14,7 @@ import { formatDateTime } from '../utils/format';
 const MIN_PASSWORD_LENGTH = 8;
 
 export function SettingsPage() {
+  useIdioma();
   const status = useStatusMessage();
   const dispatch = useDispatch();
   const session = useSelector((state: RootState) => state.auth);
@@ -40,7 +42,7 @@ export function SettingsPage() {
       await accountApi.saveSettings(email, currentPassword, newPassword);
       setCurrentPassword('');
       setNewPassword('');
-      status.report('Ajustes guardados.');
+      status.report(tr("Ajustes guardados."));
       load();
     } catch (error) {
       status.reportError(error);
@@ -60,7 +62,7 @@ export function SettingsPage() {
     try {
       const user = await authApi.setLanguage(lang);
       dispatch(authenticated({ token: session.token, user }));
-      status.report('Idioma guardado.');
+      status.report(tr("Idioma guardado."));
     } catch (error) {
       status.reportError(error);
     }
@@ -72,29 +74,29 @@ export function SettingsPage() {
 
   return (
     <>
-      <h2>Ajustes</h2>
+      <h2>{tr("Ajustes")}</h2>
 
       <div className="ajustes">
         <section className="ajustes__grupo">
           <div className="ajustes__cabecera">
-            <span className="ajustes__titulo">Quién eres</span>
-            <span className="micro">no se cambia</span>
+            <span className="ajustes__titulo">{tr("Quién eres")}</span>
+            <span className="micro">{tr("no se cambia")}</span>
           </div>
           <div className="ajustes__cuerpo">
             <div className="clan__miembro" style={{ border: 0, padding: 0 }}>
               <span className="nombre">{settings.login}</span>
-              <span className="puesto">{settings.premium ? 'premium' : 'cuenta normal'}</span>
+              <span className="puesto">{settings.premium ? 'premium' : tr("cuenta normal")}</span>
             </div>
             <p className="ajustes__nota">
-              Última entrada: {formatDateTime(settings.last_login)}
+              {tr("Última entrada:")} {formatDateTime(settings.last_login)}
             </p>
           </div>
         </section>
 
         <section className="ajustes__grupo">
           <div className="ajustes__cabecera">
-            <span className="ajustes__titulo">Idioma</span>
-            <span className="micro">se guarda solo</span>
+            <span className="ajustes__titulo">{tr("Idioma")}</span>
+            <span className="micro">{tr("se guarda solo")}</span>
           </div>
           <div className="ajustes__cuerpo">
             <div className="idiomas">
@@ -110,21 +112,19 @@ export function SettingsPage() {
               ))}
             </div>
             <p className="ajustes__nota">
-              Viaja contigo: lo eliges aquí y lo tienes en cualquier navegador.
-            </p>
+              {tr("Viaja contigo: lo eliges aquí y lo tienes en cualquier navegador.")} </p>
           </div>
         </section>
 
         <section className="ajustes__grupo">
           <div className="ajustes__cabecera">
-            <span className="ajustes__titulo">Correo y contraseña</span>
-            <span className="micro">hace falta la de ahora</span>
+            <span className="ajustes__titulo">{tr("Correo y contraseña")}</span>
+            <span className="micro">{tr("hace falta la de ahora")}</span>
           </div>
           <div className="ajustes__cuerpo">
             <form className="compose" onSubmit={save}>
               <label>
-                Correo electrónico
-                <input
+                {tr("Correo electrónico")} <input
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -133,8 +133,7 @@ export function SettingsPage() {
               </label>
 
               <label>
-                Contraseña actual
-                <input
+                {tr("Contraseña actual")} <input
                   type="password"
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
@@ -143,8 +142,7 @@ export function SettingsPage() {
               </label>
 
               <label>
-                Contraseña nueva (solo si la cambias)
-                <input
+                {tr("Contraseña nueva (solo si la cambias)")} <input
                   type="password"
                   value={newPassword}
                   minLength={MIN_PASSWORD_LENGTH}
@@ -152,7 +150,7 @@ export function SettingsPage() {
                 />
               </label>
 
-              <button>Guardar</button>
+              <button>{tr("Guardar")}</button>
               <StatusMessage text={status.message} />
             </form>
           </div>

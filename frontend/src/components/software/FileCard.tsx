@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useTutorial } from '../../app/tutorial';
 import type { OwnedFile } from '../../utils/api';
 import {
@@ -60,27 +61,28 @@ type FileCardProps = {
  * botón menos donde buscar la respuesta.
  */
 export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, onMover }: FileCardProps) {
+  useIdioma();
   const verbos: Verbo[] = [
     fichero.running
-      ? { label: 'Sacar de memoria', accion: ACCION.descargar, motivo: noSePuedeDescargar(fichero) }
+      ? { label: tr("Sacar de memoria"), accion: ACCION.descargar, motivo: noSePuedeDescargar(fichero) }
       : {
-          label: 'Cargar en memoria',
+          label: tr("Cargar en memoria"),
           accion: ACCION.instalar,
           motivo: noSePuedeInstalar(fichero, ctx),
         },
     fichero.hidden
-      ? { label: 'Revelar', accion: ACCION.revelar, motivo: noSePuedeRevelar(fichero, ctx) }
+      ? { label: tr("Revelar"), accion: ACCION.revelar, motivo: noSePuedeRevelar(fichero, ctx) }
       : {
-          label: 'Ocultar',
+          label: tr("Ocultar"),
           accion: ACCION.ocultar,
           motivo: noSePuedeOcultar(fichero, ctx),
-          nota: ctx.hidder ? `Se esconderá con tu Hidder v${ctx.hidder}.` : undefined,
+          nota: ctx.hidder ? tr("Se esconderá con tu Hidder v{0}.", ctx.hidder) : undefined,
         },
     {
-      label: 'Aparcar fuera',
+      label: tr("Aparcar fuera"),
       accion: ACCION.aparcar,
       motivo: null,
-      nota: 'Al disco externo, donde sobrevive a formatear la máquina.',
+      nota: tr("Al disco externo, donde sobrevive a formatear la máquina."),
     },
   ];
 
@@ -115,15 +117,14 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
         <span className="swfile__ver">v{fichero.version}</span>
         <span className="swfile__type">{tipo}</span>
         {fichero.hidden && (
-          <span className="swfile__flag" title={`Escondido con un v${fichero.hidden_with}`}>
-            oculto
-          </span>
+          <span className="swfile__flag" title={tr("Escondido con un v{0}", fichero.hidden_with)}>
+            {tr("oculto")} </span>
         )}
       </div>
 
       <div className="swfile__nums">
-        <span title="Ocupa en disco">{fichero.size}▪</span>
-        <span title="Pide de RAM al cargarse">{fichero.ram}▫</span>
+        <span title={tr("Ocupa en disco")}>{fichero.size}▪</span>
+        <span title={tr("Pide de RAM al cargarse")}>{fichero.ram}▫</span>
       </div>
 
       <div className="swfile__actions">
@@ -140,9 +141,8 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
           </button>
         ))}
 
-        <button title={`Sube a la v${fichero.version + 1}.`} onClick={onInvestigar}>
-          Investigar
-        </button>
+        <button title={tr("Sube a la v{0}.", fichero.version + 1)} onClick={onInvestigar}>
+          {tr("Investigar")} </button>
 
         {/*
           Mover es un select y no un botón porque la pregunta no es «¿mover?» sino «¿a
@@ -155,8 +155,8 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
             disabled={fichero.running}
             title={
               fichero.running
-                ? 'Sácalo de memoria antes de moverlo.'
-                : 'Llevarlo a otro equipo. Hace falta cable entre los dos, o salida a Internet en ambos.'
+                ? tr("Sácalo de memoria antes de moverlo.")
+                : tr("Llevarlo a otro equipo. Hace falta cable entre los dos, o salida a Internet en ambos.")
             }
             onChange={(event) => {
               const destino = Number(event.target.value);
@@ -166,7 +166,7 @@ export function FileCard({ fichero, tipo, ctx, onTarea, onInvestigar, destinos, 
               }
             }}
           >
-            <option value="">Mover a…</option>
+            <option value="">{tr("Mover a…")}</option>
             {destinos.map((destino) => (
               <option key={destino.id} value={destino.id}>
                 {destino.name}

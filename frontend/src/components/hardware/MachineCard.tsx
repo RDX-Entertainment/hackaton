@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState, type FormEvent } from 'react';
 
 import type { Component, MachineDetail } from '../../utils/api';
@@ -21,6 +22,7 @@ export function MachineCard({
   onRename,
   onScrap,
 }: MachineCardProps) {
+  useIdioma();
   const { machine, board, components, slots } = detail;
 
   const [editing, setEditing] = useState(false);
@@ -60,8 +62,7 @@ export function MachineCard({
               }}
             />
             <button className="is-primary" disabled={busy}>
-              guardar
-            </button>
+              {tr("guardar")} </button>
             <button
               type="button"
               onClick={() => {
@@ -69,8 +70,7 @@ export function MachineCard({
                 setEditing(false);
               }}
             >
-              cancelar
-            </button>
+              {tr("cancelar")} </button>
           </form>
         ) : (
           <span className="panel__path">
@@ -89,8 +89,7 @@ export function MachineCard({
             )}
 
             <button type="button" className="machine__act" onClick={() => setEditing(true)}>
-              renombrar
-            </button>
+              {tr("renombrar")} </button>
 
             {!only && (
               <button
@@ -98,12 +97,11 @@ export function MachineCard({
                 className="machine__act machine__act--drop"
                 disabled={busy || inside > 0}
                 title={
-                  inside > 0 ? 'Saca antes las piezas que lleva dentro' : 'Deshacerse del equipo'
+                  inside > 0 ? tr("Saca antes las piezas que lleva dentro") : tr("Deshacerse del equipo")
                 }
                 onClick={() => onScrap(machine.id, machine.name)}
               >
-                dar de baja
-              </button>
+                {tr("dar de baja")} </button>
             )}
           </span>
         )}
@@ -121,10 +119,9 @@ export function MachineCard({
         ) : (
           <div className="board board--empty">
             <span className="board__hole" aria-hidden="true" />
-            <p className="board__missing">sin placa</p>
+            <p className="board__missing">{tr("sin placa")}</p>
             <p className="board__hint">
-              Instala una desde el cajón: es la que decide qué entra después.
-            </p>
+              {tr("Instala una desde el cajón: es la que decide qué entra después.")} </p>
           </div>
         )}
 

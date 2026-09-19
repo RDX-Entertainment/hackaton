@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import type { Target, Visited } from '../../utils/api';
@@ -54,6 +55,7 @@ export function AddressBar({
   onForward,
   onReload,
 }: AddressBarProps) {
+  useIdioma();
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
 
@@ -86,7 +88,7 @@ export function AddressBar({
     });
 
     return matches.slice(0, 8);
-  }, [known, address]);
+  }, [known, address, idiomaActual()]);
 
   const valid = isIp(address);
 
@@ -117,8 +119,8 @@ export function AddressBar({
         <button
           type="button"
           className="chrome__step"
-          aria-label="Atrás"
-          title="Atrás"
+          aria-label={tr("Atrás")}
+          title={tr("Atrás")}
           disabled={!canBack}
           onClick={onBack}
         >
@@ -127,8 +129,8 @@ export function AddressBar({
         <button
           type="button"
           className="chrome__step"
-          aria-label="Adelante"
-          title="Adelante"
+          aria-label={tr("Adelante")}
+          title={tr("Adelante")}
           disabled={!canForward}
           onClick={onForward}
         >
@@ -137,8 +139,8 @@ export function AddressBar({
         <button
           type="button"
           className={loading ? 'chrome__step is-busy' : 'chrome__step'}
-          aria-label="Recargar"
-          title="Recargar"
+          aria-label={tr("Recargar")}
+          title={tr("Recargar")}
           onClick={onReload}
         >
           ⟳
@@ -150,7 +152,7 @@ export function AddressBar({
 
         <input
           value={address}
-          placeholder="dirección o nombre de la máquina"
+          placeholder={tr("dirección o nombre de la máquina")}
           spellCheck={false}
           onFocus={() => setOpen(true)}
           onChange={(event) => {
@@ -177,8 +179,7 @@ export function AddressBar({
         />
 
         <button className="chrome__go" disabled={!valid && found.length === 0}>
-          conectar
-        </button>
+          {tr("conectar")} </button>
       </form>
 
       {open && found.length > 0 && (
@@ -191,7 +192,7 @@ export function AddressBar({
                 onMouseEnter={() => setCursor(index)}
                 onClick={() => go(one.ip)}
               >
-                <span className="chrome__hintname">{one.name || 'sin nombre'}</span>
+                <span className="chrome__hintname">{one.name || tr("sin nombre")}</span>
                 <span className="chrome__hintip">{formatIp(one.ip)}</span>
                 <span className={`chrome__origin chrome__origin--${one.origin}`}>
                   {one.origin}

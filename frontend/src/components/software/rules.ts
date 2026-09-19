@@ -1,3 +1,4 @@
+import { tr } from '../../i18n/text';
 import type { OwnedFile } from '../../utils/api';
 
 /**
@@ -36,40 +37,40 @@ export type Contexto = {
 };
 
 export function noSePuedeInstalar(fichero: OwnedFile, ctx: Contexto): string | null {
-  if (fichero.running) return 'Ya está cargado en memoria.';
-  if (fichero.hidden) return 'Está oculto: revélalo antes.';
+  if (fichero.running) return tr("Ya está cargado en memoria.");
+  if (fichero.hidden) return tr("Está oculto: revélalo antes.");
   if (VIRUS.has(fichero.type) || SIN_EJECUCION.has(fichero.type)) {
-    return 'No es un programa que se pueda ejecutar.';
+    return tr("No es un programa que se pueda ejecutar.");
   }
   if (ctx.ramLibre < fichero.ram) {
-    return `No cabe: te faltan ${fichero.ram - ctx.ramLibre} de RAM.`;
+    return tr("No cabe: te faltan {0} de RAM.", fichero.ram - ctx.ramLibre);
   }
 
   return null;
 }
 
 export function noSePuedeDescargar(fichero: OwnedFile): string | null {
-  if (!fichero.running) return 'No está en memoria.';
-  if (VIRUS.has(fichero.type)) return 'Un virus no se deja sacar de memoria.';
+  if (!fichero.running) return tr("No está en memoria.");
+  if (VIRUS.has(fichero.type)) return tr("Un virus no se deja sacar de memoria.");
 
   return null;
 }
 
 export function noSePuedeOcultar(fichero: OwnedFile, ctx: Contexto): string | null {
-  if (fichero.hidden) return 'Ya está oculto.';
-  if (fichero.type === CARPETA) return 'Una carpeta no se oculta.';
-  if (fichero.type === DOOM) return 'Esto no se oculta.';
-  if (fichero.running) return 'Sácalo de memoria antes de esconderlo.';
-  if (ctx.hidder === null) return 'Necesitas un Hidder cargado en memoria.';
+  if (fichero.hidden) return tr("Ya está oculto.");
+  if (fichero.type === CARPETA) return tr("Una carpeta no se oculta.");
+  if (fichero.type === DOOM) return tr("Esto no se oculta.");
+  if (fichero.running) return tr("Sácalo de memoria antes de esconderlo.");
+  if (ctx.hidder === null) return tr("Necesitas un Hidder cargado en memoria.");
 
   return null;
 }
 
 export function noSePuedeRevelar(fichero: OwnedFile, ctx: Contexto): string | null {
-  if (!fichero.hidden) return 'No está oculto.';
-  if (ctx.seeker === null) return 'Necesitas un Seeker cargado en memoria.';
+  if (!fichero.hidden) return tr("No está oculto.");
+  if (ctx.seeker === null) return tr("Necesitas un Seeker cargado en memoria.");
   if (ctx.seeker < fichero.hidden_with) {
-    return `Tu Seeker v${ctx.seeker} no llega: esto se escondió con un v${fichero.hidden_with}.`;
+    return tr("Tu Seeker v{0} no llega: esto se escondió con un v{1}.", ctx.seeker, fichero.hidden_with);
   }
 
   return null;

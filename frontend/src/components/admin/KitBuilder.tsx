@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo } from 'react';
 
 import type { ComponentKind, Part } from '../../utils/api';
@@ -15,7 +16,7 @@ const ORDER: ComponentKind[] = ['mobo', 'cpu', 'ram', 'hdd', 'net'];
 
 function specOf(part: Part): string {
   if (part.kind === 'mobo') {
-    return `${part.chipset ?? 'sin chipset'} · DDR${part.generation} · ${part.cpu_slots}c ${part.ram_slots}r ${part.hdd_slots}d ${part.net_slots}n`;
+    return `${part.chipset ?? tr("sin chipset")} · DDR${part.generation} · ${part.cpu_slots}c ${part.ram_slots}r ${part.hdd_slots}d ${part.net_slots}n`;
   }
 
   return `${formatCount(part.power)} ${KIND_UNIT[part.kind]}${part.kind === 'ram' ? ` · DDR${part.generation}` : ''}${part.kind === 'cpu' && part.chipset ? ` · ${part.chipset}` : ''}`;
@@ -28,7 +29,8 @@ type KitBuilderProps = {
 };
 
 export function KitBuilder({ parts, lines, onChange }: KitBuilderProps) {
-  const byId = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
+  useIdioma();
+  const byId = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts, idiomaActual()]);
 
   const taken = new Set(lines.map((line) => line.part));
 
@@ -44,7 +46,7 @@ export function KitBuilder({ parts, lines, onChange }: KitBuilderProps) {
           icon: <PartIcon kind={part.kind} className="ssel__icon" />,
           badge: <span className={`tier tier--${part.tier}`}>{part.tier}</span>,
         })),
-    [parts, lines],
+    [parts, lines, idiomaActual()],
   );
 
   const add = (id: number | null) => {
@@ -74,19 +76,18 @@ export function KitBuilder({ parts, lines, onChange }: KitBuilderProps) {
   return (
     <div className="kitbuild">
       <SearchSelect
-        label="añadir pieza"
+        label={tr("añadir pieza")}
         options={options}
         value={null}
         onChange={add}
-        placeholder="nombre, gama, chipset, DDR…"
-        emptyLabel="elige del catálogo"
+        placeholder={tr("nombre, gama, chipset, DDR…")}
+        emptyLabel={tr("elige del catálogo")}
         noResults="ninguna pieza encaja"
       />
 
       {sorted.length === 0 ? (
         <p className="kitbuild__empty">
-          Todavía no hay piezas. Empieza por la placa: es la que decide qué entra después.
-        </p>
+          {tr("Todavía no hay piezas. Empieza por la placa: es la que decide qué entra después.")} </p>
       ) : (
         <ul className="kitbuild__list">
           {sorted.map((line) => {
@@ -117,7 +118,7 @@ export function KitBuilder({ parts, lines, onChange }: KitBuilderProps) {
                   <span className="kitline__amount">
                     <button
                       type="button"
-                      aria-label={`Una menos de ${part.name}`}
+                      aria-label={tr("Una menos de {0}", part.name)}
                       disabled={line.amount <= 1}
                       onClick={() => setAmount(line.part, line.amount - 1)}
                     >
@@ -126,7 +127,7 @@ export function KitBuilder({ parts, lines, onChange }: KitBuilderProps) {
                     <b>{line.amount}</b>
                     <button
                       type="button"
-                      aria-label={`Una más de ${part.name}`}
+                      aria-label={tr("Una más de {0}", part.name)}
                       disabled={line.amount >= 32}
                       onClick={() => setAmount(line.part, line.amount + 1)}
                     >
@@ -138,7 +139,7 @@ export function KitBuilder({ parts, lines, onChange }: KitBuilderProps) {
                 <button
                   type="button"
                   className="kitline__drop"
-                  aria-label={`Quitar ${part.name}`}
+                  aria-label={tr("Quitar {0}", part.name)}
                   onClick={() => drop(line.part)}
                 >
                   ×

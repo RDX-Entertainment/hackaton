@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { HackKind, Remote, RemoteFile } from '../../utils/api';
 import { formatIp } from '../../utils/ip';
 import { AccessTab } from './AccessTab';
@@ -8,10 +9,10 @@ import { RemoteFileList } from './RemoteFileList';
 export type RemoteTab = 'public' | 'access' | 'files' | 'force';
 
 const TABS: { key: RemoteTab; label: string; hint: string }[] = [
-  { key: 'public', label: 'public', hint: 'lo que enseña a cualquiera' },
-  { key: 'access', label: 'acceso', hint: 'ssh: entrar y lo que hay dentro' },
-  { key: 'files', label: 'files', hint: 'software y ficheros de la máquina' },
-  { key: 'force', label: 'force', hint: 'romperla por la fuerza' },
+  { key: 'public', label: 'public', get hint() { return tr("lo que enseña a cualquiera"); } },
+  { key: 'access', get label() { return tr("acceso"); }, get hint() { return tr("ssh: entrar y lo que hay dentro"); } },
+  { key: 'files', label: 'files', get hint() { return tr("software y ficheros de la máquina"); } },
+  { key: 'force', label: 'force', get hint() { return tr("romperla por la fuerza"); } },
 ];
 
 type RemotePageProps = {
@@ -52,17 +53,18 @@ export function RemotePage({
   onWipeLog,
   onVisit,
 }: RemotePageProps) {
+  useIdioma();
   return (
     <section className="viewport">
       <header className="viewport__head">
         <span className={remote.down ? 'viewport__dot is-down' : 'viewport__dot'} aria-hidden="true" />
 
         <span className="viewport__title">
-          {remote.name || 'máquina sin nombre'}
+          {remote.name || tr("máquina sin nombre")}
           <small>{formatIp(remote.ip)}</small>
         </span>
 
-        <nav className="viewport__tabs" aria-label="Secciones de la máquina">
+        <nav className="viewport__tabs" aria-label={tr("Secciones de la máquina")}>
           {TABS.filter((one) => one.key !== 'files' || remote.access).map((one) => (
             <button
               type="button"
@@ -102,11 +104,11 @@ export function RemotePage({
           <div className="page">
             {remote.access ? (
               <section className="page__block page__block--first">
-                <h4>Software encontrado</h4>
+                <h4>{tr("Software encontrado")}</h4>
                 <RemoteFileList files={files} onDownload={onDownload} onDelete={onDelete} />
               </section>
             ) : (
-              <p className="page__note">Necesitas acceso a la máquina para inspeccionar sus ficheros.</p>
+              <p className="page__note">{tr("Necesitas acceso a la máquina para inspeccionar sus ficheros.")}</p>
             )}
           </div>
         )}

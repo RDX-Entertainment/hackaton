@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import type { UnknownRow } from '../utils/api';
 import { formatCell } from '../utils/format';
 
@@ -16,13 +17,14 @@ export function AccountSelect({
   accounts,
   value,
   onChange,
-  label = 'Paying account',
+  label = tr("Paying account"),
 }: AccountSelectProps) {
+  useIdioma();
   return (
     <label>
       {label}
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Select an account</option>
+        <option value="">{tr("Select an account")}</option>
         {accounts.map((account) => {
           const number = formatCell(account.account);
           return (

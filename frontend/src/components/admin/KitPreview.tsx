@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { formatCount, formatMoney } from '../../utils/format';
 import { KIND_UNIT, TIER_LABEL, type Build } from '../../utils/kitBuild';
 import { PartIcon } from './PartIcon';
@@ -13,7 +14,7 @@ const SLOT_LABEL: Record<string, string> = {
   cpu: 'proceso',
   ram: 'memoria',
   hdd: 'disco',
-  net: 'interfaz Internet',
+  get net() { return tr("interfaz Internet"); },
 };
 
 function bar(used: number, total: number): string {
@@ -27,6 +28,7 @@ function bar(used: number, total: number): string {
 }
 
 export function KitPreview({ build, price, lanLinks = 0 }: KitPreviewProps) {
+  useIdioma();
   const { board, slots, problems } = build;
 
   const saving = build.price > 0 ? Math.round((1 - price / build.price) * 100) : 0;
@@ -42,15 +44,15 @@ export function KitPreview({ build, price, lanLinks = 0 }: KitPreviewProps) {
             <PartIcon kind="mobo" className="kitprev__icon" />
             <p className="kitprev__name">{board.name}</p>
             <p className="kitprev__spec">
-              {board.chipset ?? 'sin chipset'} · DDR{board.generation}
+              {board.chipset ?? tr("sin chipset")} · DDR{board.generation}
             </p>
             <span className={`tier tier--${board.tier}`}>{TIER_LABEL[board.tier]}</span>
           </>
         ) : (
           <>
             <span className="kitprev__hole" aria-hidden="true" />
-            <p className="kitprev__idle">sin placa</p>
-            <p className="kitprev__spec">elige una y el resto encajará sobre ella</p>
+            <p className="kitprev__idle">{tr("sin placa")}</p>
+            <p className="kitprev__spec">{tr("elige una y el resto encajará sobre ella")}</p>
           </>
         )}
       </div>
@@ -90,13 +92,13 @@ export function KitPreview({ build, price, lanLinks = 0 }: KitPreviewProps) {
         })}
       </dl>
 
-      {board && <p className="kitprev__lan">LAN de placa: <b>{lanLinks}/{board.net_slots}</b> ocupados · <b>{Math.max(0, board.net_slots - lanLinks)}</b> libres</p>}
+      {board && <p className="kitprev__lan">{tr("LAN de placa:")} <b>{lanLinks}/{board.net_slots}</b> {tr("ocupados ·")} <b>{Math.max(0, board.net_slots - lanLinks)}</b> {tr("libres")}</p>}
 
-      {build.networkInterfaces.length > 0 && <section className="kitprev__internet"><small>Interfaz a Internet</small>{build.networkInterfaces.map((network) => <span key={network.name}>{network.amount > 1 ? `${network.amount}× ` : ''}{network.name} · {formatCount(network.power)} Mbit</span>)}</section>}
+      {build.networkInterfaces.length > 0 && <section className="kitprev__internet"><small>{tr("Interfaz a Internet")}</small>{build.networkInterfaces.map((network) => <span key={network.name}>{network.amount > 1 ? `${network.amount}× ` : ''}{network.name} · {formatCount(network.power)} Mbit</span>)}</section>}
 
       <div className="kitprev__money">
-        <span className="kitprev__pieces">{build.pieces} piezas</span>
-        <span className="kitprev__loose">{formatMoney(build.price)} sueltas</span>
+        <span className="kitprev__pieces">{build.pieces} {tr("piezas")}</span>
+        <span className="kitprev__loose">{formatMoney(build.price)} {tr("sueltas")}</span>
         <span className="kitprev__price">{formatMoney(price)}</span>
         {saving > 0 && <span className="kitprev__saving">−{saving}%</span>}
         {saving < 0 && <span className="kitprev__saving is-up">+{Math.abs(saving)}%</span>}

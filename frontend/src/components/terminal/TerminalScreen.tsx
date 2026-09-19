@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState } from 'react';
 
 import { useAppSelector } from '../../app/hooks';
@@ -47,6 +48,7 @@ type TerminalScreenProps = {
  * than unmounting, so it animates out instead of blinking out of existence.
  */
 export function TerminalScreen({ initialCommand, startRegistering }: TerminalScreenProps) {
+  useIdioma();
   const [mode, setMode] = useState<AuthMode>(readMode);
   // Authenticating inside the shell ends the choice: from then on there is a
   // session, and the only way onwards is `systemctl start UI`.
@@ -58,7 +60,7 @@ export function TerminalScreen({ initialCommand, startRegistering }: TerminalScr
   };
 
   const isConsole = mode === 'console';
-  const title = isConsole ? 'guest@hackaton: ~ — bash' : 'hacker experience — entrar';
+  const title = isConsole ? 'guest@hackaton: ~ — bash' : tr("hacker experience — entrar");
 
   return (
     <main className={`auth auth--${mode}`}>

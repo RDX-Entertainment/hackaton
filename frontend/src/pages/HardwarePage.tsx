@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAppSelector } from '../app/hooks';
@@ -26,6 +27,7 @@ import { formatMoney } from '../utils/format';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
 export function HardwarePage() {
+  useIdioma();
   const status = useStatusMessage();
   // La direccion que se ve desde fuera. La pinta el nodo de Internet del mapa.
   const gameIp = useAppSelector((state) => state.auth.user?.game_ip);
@@ -92,38 +94,38 @@ export function HardwarePage() {
   const install = (component: Component, machine: number) =>
     void run(async () => {
       await hardwareApi.installComponent(component.id, machine);
-      return `${component.name} instalada.`;
+      return tr("{0} instalada.", component.name);
     });
 
   const uninstall = (component: Component) =>
     void run(async () => {
       await hardwareApi.uninstallComponent(component.id);
-      return `${component.name} al cajón.`;
+      return tr("{0} al cajón.", component.name);
     });
 
   const buy = (part: Part) => {
     if (!account) {
-      status.report('Elige antes la cuenta que paga.');
+      status.report(tr("Elige antes la cuenta que paga."));
       return;
     }
 
     void run(async () => {
       const bought = await hardwareApi.buyPart(part.id, Number(account));
       loadAccounts();
-      return `${bought.name} comprada por ${formatMoney(bought.paid)}. Está en el cajón.`;
+      return tr("{0} comprada por {1}. Está en el cajón.", bought.name, formatMoney(bought.paid));
     });
   };
 
   const rename = (machine: number, name: string) =>
     void run(async () => {
       await hardwareApi.renameMachine(machine, name);
-      return `El equipo se llama ahora ${name}.`;
+      return tr("El equipo se llama ahora {0}.", name);
     });
 
   const scrap = (machine: number, name: string) =>
     void run(async () => {
       await hardwareApi.scrapMachine(machine);
-      return `${name} dado de baja.`;
+      return tr("{0} dado de baja.", name);
     });
 
   /**
@@ -146,38 +148,38 @@ export function HardwarePage() {
   const link = (from: number, to: number) =>
     void run(async () => {
       await hardwareApi.createLink(from, to);
-      return 'Cable tendido.';
+      return tr("Cable tendido.");
     });
 
   const unlink = (cable: MachineLink) =>
     void run(async () => {
       await hardwareApi.deleteLink(cable.id);
-      return 'Cable retirado.';
+      return tr("Cable retirado.");
     });
 
   const buyMachine = (name: string) => {
     if (!account) {
-      status.report('Elige antes la cuenta que paga.');
+      status.report(tr("Elige antes la cuenta que paga."));
       return;
     }
 
     void run(async () => {
       const bought = await hardwareApi.buyMachine(Number(account), name);
       loadAccounts();
-      return `${bought.name} montado por ${formatMoney(bought.paid)}. Nace vacío.`;
+      return tr("{0} montado por {1}. Nace vacío.", bought.name, formatMoney(bought.paid));
     });
   };
 
   const buyKit = (kit: Kit) => {
     if (!account) {
-      status.report('Elige antes la cuenta que paga.');
+      status.report(tr("Elige antes la cuenta que paga."));
       return;
     }
 
     void run(async () => {
       const bought = await hardwareApi.buyKit(kit.id, Number(account));
       loadAccounts();
-      return `${bought.kit} montado en ${bought.machine_name} por ${formatMoney(bought.paid)}.`;
+      return tr("{0} montado en {1} por {2}.", bought.kit, bought.machine_name, formatMoney(bought.paid));
     });
   };
 
@@ -211,7 +213,7 @@ export function HardwarePage() {
         />
       )}
 
-      <h3>Red</h3>
+      <h3>{tr("Red")}</h3>
       <MachineNodeMap
         machines={machines}
         links={links}
@@ -224,10 +226,10 @@ export function HardwarePage() {
         onUnlink={unlink}
       />
 
-      <h3>Cajón</h3>
+      <h3>{tr("Cajón")}</h3>
       <Drawer components={drawer} machines={machines} busy={busy} onInstall={install} />
 
-      <h3>Tienda</h3>
+      <h3>{tr("Tienda")}</h3>
       <AccountSelect accounts={accounts} value={account} onChange={setAccount} />
       <MachineShop quote={quote} busy={busy} onBuy={buyMachine} />
       <KitShop kits={kits} busy={busy} onBuy={buyKit} />

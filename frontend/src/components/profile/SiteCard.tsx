@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useState } from 'react';
 
 import { accountApi, type Profile } from '../../utils/api';
@@ -17,6 +18,7 @@ type SiteCardProps = {
  * no un formulario abierto para siempre.
  */
 export function SiteCard({ profile, onSaved }: SiteCardProps) {
+  useIdioma();
   const status = useStatusMessage();
 
   const [editing, setEditing] = useState(false);
@@ -50,7 +52,7 @@ export function SiteCard({ profile, onSaved }: SiteCardProps) {
             setEditing((one) => !one);
           }}
         >
-          {editing ? 'cerrar' : 'editar'}
+          {editing ? tr("cerrar") : tr("editar")}
         </button>
       </header>
 

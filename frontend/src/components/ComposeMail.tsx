@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../i18n/text';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { mailApi } from '../utils/api';
@@ -18,6 +19,7 @@ type ComposeMailProps = {
 
 /** El redactor. Vive dentro del panel de lectura, en el sitio del mensaje. */
 export function ComposeMail({ onSent, onCerrar, para = '', asunto = '' }: ComposeMailProps) {
+  useIdioma();
   const status = useStatusMessage();
 
   const [destinatario, setDestinatario] = useState(para);
@@ -37,7 +39,7 @@ export function ComposeMail({ onSent, onCerrar, para = '', asunto = '' }: Compos
     try {
       await mailApi.sendMail(destinatario, titulo, texto);
       setTexto('');
-      status.report('Enviado.');
+      status.report(tr("Enviado."));
       onSent();
       onCerrar?.();
     } catch (error) {
@@ -48,17 +50,17 @@ export function ComposeMail({ onSent, onCerrar, para = '', asunto = '' }: Compos
   return (
     <form className="correo__redactar" onSubmit={enviar}>
       <label className="correo__campo">
-        <span className="micro">para</span>
+        <span className="micro">{tr("para")}</span>
         <input
           value={destinatario}
-          placeholder="nombre del jugador"
+          placeholder={tr("nombre del jugador")}
           onChange={(event) => setDestinatario(event.target.value)}
           required
         />
       </label>
 
       <label className="correo__campo">
-        <span className="micro">asunto</span>
+        <span className="micro">{tr("asunto")}</span>
         <input
           value={titulo}
           maxLength={LARGO_ASUNTO}
@@ -70,7 +72,7 @@ export function ComposeMail({ onSent, onCerrar, para = '', asunto = '' }: Compos
       <textarea
         className="correo__cuerpo-editable"
         value={texto}
-        placeholder="Escribe aquí."
+        placeholder={tr("Escribe aquí.")}
         onChange={(event) => setTexto(event.target.value)}
         required
       />
@@ -79,10 +81,9 @@ export function ComposeMail({ onSent, onCerrar, para = '', asunto = '' }: Compos
         <StatusMessage text={status.message} />
         {onCerrar && (
           <button type="button" onClick={onCerrar}>
-            Descartar
-          </button>
+            {tr("Descartar")} </button>
         )}
-        <button>Enviar</button>
+        <button>{tr("Enviar")}</button>
       </div>
     </form>
   );

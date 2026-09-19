@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { RemoteFile } from '../../utils/api';
 import { formatCount } from '../../utils/format';
 
@@ -8,8 +9,9 @@ type RemoteFileListProps = {
 };
 
 export function RemoteFileList({ files, onDownload, onDelete }: RemoteFileListProps) {
+  useIdioma();
   if (!files.length) {
-    return <p className="rfiles__empty">Sin ficheros, o ninguno visible desde aquí.</p>;
+    return <p className="rfiles__empty">{tr("Sin ficheros, o ninguno visible desde aquí.")}</p>;
   }
 
   return (
@@ -26,18 +28,16 @@ export function RemoteFileList({ files, onDownload, onDelete }: RemoteFileListPr
               <small>v{file.version}</small>
             </span>
             <span className="rfile__spec">
-              {formatCount(file.size)} MB · {formatCount(file.ram)} MB en memoria · tipo{' '}
+              {formatCount(file.size)} MB · {formatCount(file.ram)} {tr("MB en memoria · tipo")}{' '}
               {file.type}
             </span>
           </span>
 
           <span className="rfile__actions">
             <button type="button" onClick={() => onDownload(file)}>
-              bajar
-            </button>
+              {tr("bajar")} </button>
             <button type="button" onClick={() => onDelete(file)}>
-              borrar
-            </button>
+              {tr("borrar")} </button>
           </span>
         </li>
       ))}

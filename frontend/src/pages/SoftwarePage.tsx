@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../i18n/text';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -57,6 +58,7 @@ function lecturaDeCompilacion(row: UnknownRow): Compilation | null {
  * seis botones por fila y ninguna pista de por qué la mitad no hacían nada.
  */
 export function SoftwarePage() {
+  useIdioma();
   const status = useStatusMessage();
   const { onboarding } = useOnboarding();
 
@@ -101,8 +103,8 @@ export function SoftwarePage() {
   }, [cargar]);
 
   const nombreDeTipo = useMemo(
-    () => new Map(tipos.map((uno) => [uno.id, uno.name])),
-    [tipos],
+    () => new Map(tipos.map((uno) => [uno.id, tr(uno.name)])),
+    [tipos, idiomaActual()],
   );
 
   // Lo que hay en el equipo que se está mirando, cargado o no. Un programa corre en la
@@ -125,7 +127,7 @@ export function SoftwarePage() {
   // está guardado y gasta la RAM de ahí. El backend hace la misma cuenta al cargarlo.
   const ctx = useMemo(
     () => contextoDe(enElEquipo, elegido?.ram ?? 0),
-    [enElEquipo, elegido?.ram],
+    [enElEquipo, elegido?.ram, idiomaActual()],
   );
 
   const compilacionActiva = compilaciones.find((una) => !una.completed);
@@ -138,7 +140,7 @@ export function SoftwarePage() {
     try {
       await softwareApi.createFolder(nuevaCarpeta.trim(), sitio.volumen, sitio.carpeta);
       setNuevaCarpeta('');
-      status.report('Carpeta creada.');
+      status.report(tr("Carpeta creada."));
       await cargar();
     } catch (error) {
       status.reportError(error);
@@ -148,7 +150,7 @@ export function SoftwarePage() {
   const borrarCarpeta = async (id: number) => {
     try {
       await softwareApi.deleteFolder(id);
-      status.report('Carpeta borrada.');
+      status.report(tr("Carpeta borrada."));
       await cargar();
     } catch (error) {
       status.reportError(error);
@@ -159,7 +161,7 @@ export function SoftwarePage() {
   const meterEn = async (id: number, destino: number | null) => {
     try {
       await softwareApi.moveIntoFolder(id, destino);
-      status.report('Movido.');
+      status.report(tr("Movido."));
       await cargar();
     } catch (error) {
       status.reportError(error);
@@ -170,7 +172,7 @@ export function SoftwarePage() {
     try {
       const tarea = await processesApi.startProcess(accion, undefined, id);
       setProcessId(tarea.id);
-      status.report(`${label}: tarea #${tarea.id}, lista en ${tarea.seconds} s.`);
+      status.report(tr("{0}: tarea #{1}, lista en {2} s.", label, tarea.id, tarea.seconds));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -181,7 +183,7 @@ export function SoftwarePage() {
     try {
       const tarea = await researchApi.startResearch(id);
       setProcessId(tarea.process_id);
-      status.report(`Investigar: tarea #${tarea.process_id}, lista en ${tarea.seconds} s.`);
+      status.report(tr("Investigar: tarea #{0}, lista en {1} s.", tarea.process_id, tarea.seconds));
       cargar();
     } catch (error) {
       status.reportError(error);
@@ -198,7 +200,7 @@ export function SoftwarePage() {
   const mover = async (fichero: number, destino: number) => {
     try {
       await softwareApi.moveSoftware(fichero, destino);
-      status.report('Fichero movido.');
+      status.report(tr("Fichero movido."));
       await cargar();
     } catch (error) {
       status.reportError(error);
@@ -207,7 +209,7 @@ export function SoftwarePage() {
 
   return (
     <>
-      <h2>Discos</h2>
+      <h2>{tr("Discos")}</h2>
 
       <CircuitRail onboarding={onboarding} />
 
@@ -217,9 +219,7 @@ export function SoftwarePage() {
       {!sitio ? (
         <>
           <p className="muted">
-            En la raíz no hay ficheros: hay volúmenes. Un fichero vive dentro de una máquina,
-            igual que en un ordenador de verdad no hay nada flotando por encima de los discos.
-          </p>
+            {tr("En la raíz no hay ficheros: hay volúmenes. Un fichero vive dentro de una máquina, igual que en un ordenador de verdad no hay nada flotando por encima de los discos.")} </p>
 
           <Volumenes
             maquinas={maquinas}
@@ -231,14 +231,14 @@ export function SoftwarePage() {
         <>
           <div className="swmeters">
             <Meter
-              label={`Disco · ${elegido?.name ?? '—'}`}
+              label={tr("Disco · {0}", elegido?.name ?? '—')}
               usado={discoEnUso(enElEquipo)}
               total={elegido?.hdd ?? 0}
               unidad=""
               nota="Todo lo guardado en este equipo, esté en la carpeta que esté."
             />
             <Meter
-              label={`Memoria · ${elegido?.name ?? '—'}`}
+              label={tr("Memoria · {0}", elegido?.name ?? '—')}
               usado={ramEnUso(enElEquipo)}
               total={elegido?.ram ?? 0}
               unidad=""
@@ -251,27 +251,24 @@ export function SoftwarePage() {
           {compilacionActiva && (
             <article className="swnote">
               <p className="swnote__head">
-                <b>Compilando programa</b>
-                <span className="swfile__type">en curso</span>
+                <b>{tr("Compilando programa")}</b>
+                <span className="swfile__type">{tr("en curso")}</span>
               </p>
               <p className="swnote__meta">
-                Tarea #{compilacionActiva.id} · {compilacionActiva.workedSeconds}/
-                {compilacionActiva.idealSeconds} s. Al terminar, el fichero aparece en la raíz
-                del equipo donde quepa.
-              </p>
+                {tr("Tarea #")}{compilacionActiva.id} · {compilacionActiva.workedSeconds}/
+                {compilacionActiva.idealSeconds} {tr("s. Al terminar, el fichero aparece en la raíz del equipo donde quepa.")} </p>
             </article>
           )}
 
           <div className="explorador__barra">
             <input
               value={nuevaCarpeta}
-              placeholder="nombre de la carpeta"
+              placeholder={tr("nombre de la carpeta")}
               maxLength={30}
               onChange={(event) => setNuevaCarpeta(event.target.value)}
             />
             <button disabled={!nuevaCarpeta.trim()} onClick={() => void crearCarpeta()}>
-              Nueva carpeta
-            </button>
+              {tr("Nueva carpeta")} </button>
           </div>
 
           <div className="explorador__lista">
@@ -287,12 +284,10 @@ export function SoftwarePage() {
                 </button>
 
                 <span className="micro">
-                  {enElEquipo.filter((uno) => uno.parent_id === carpeta.id).length} dentro
-                </span>
+                  {enElEquipo.filter((uno) => uno.parent_id === carpeta.id).length} {tr("dentro")} </span>
 
                 <button type="button" onClick={() => void borrarCarpeta(carpeta.id)}>
-                  Borrar
-                </button>
+                  {tr("Borrar")} </button>
               </div>
             ))}
 
@@ -313,13 +308,13 @@ export function SoftwarePage() {
                     </span>
                   </button>
 
-                  <span className="micro">{nombreDeTipo.get(fichero.type) ?? `tipo ${fichero.type}`}</span>
+                  <span className="micro">{nombreDeTipo.get(fichero.type) ?? tr("tipo {0}", fichero.type)}</span>
                   <span className="micro">{fichero.size} MB</span>
 
                   {fichero.running ? (
                     <Tag estado="memoria" />
                   ) : fichero.hidden ? (
-                    <Tag estado="off">oculto</Tag>
+                    <Tag estado="off">{tr("oculto")}</Tag>
                   ) : (
                     <Tag estado="disco" />
                   )}
@@ -330,7 +325,7 @@ export function SoftwarePage() {
                       void meterEn(fichero.id, event.target.value ? Number(event.target.value) : null)
                     }
                   >
-                    <option value="">raíz del equipo</option>
+                    <option value="">{tr("raíz del equipo")}</option>
                     {enElEquipo
                       .filter((uno) => uno.folder)
                       .map((carpeta) => (
@@ -344,7 +339,7 @@ export function SoftwarePage() {
                 {abierto === fichero.id && (
                   <FileCard
                     fichero={fichero}
-                    tipo={nombreDeTipo.get(fichero.type) ?? `tipo ${fichero.type}`}
+                    tipo={nombreDeTipo.get(fichero.type) ?? tr("tipo {0}", fichero.type)}
                     ctx={ctx}
                     onTarea={(accion, label) => void encolar(accion, label, fichero.id)}
                     onInvestigar={() => void investigar(fichero.id)}
@@ -357,9 +352,7 @@ export function SoftwarePage() {
 
             {!aqui.length && (
               <p className="correo__nada">
-                Esta carpeta está vacía. Lo que compiles en <Link to="/lab">Lab</Link> aparece
-                en la raíz del equipo, y desde ahí lo puedes ordenar.
-              </p>
+                {tr("Esta carpeta está vacía. Lo que compiles en")} <Link to="/lab">Lab</Link> {tr("aparece en la raíz del equipo, y desde ahí lo puedes ordenar.")} </p>
             )}
           </div>
         </>

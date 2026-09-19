@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { ProgramStats } from '../../utils/api';
 
 /**
@@ -16,34 +17,34 @@ const PARES: {
   defensa: { key: keyof ProgramStats; label: string };
 }[] = [
   {
-    fase: 'Ejecución',
-    ataque: { key: 'effectiveness', label: 'Eficacia' },
-    defensa: { key: 'resistance', label: 'Resistencia' },
+    get fase() { return tr("Ejecución"); },
+    ataque: { key: 'effectiveness', get label() { return tr("Eficacia"); } },
+    defensa: { key: 'resistance', get label() { return tr("Resistencia"); } },
   },
   {
-    fase: 'Penetración',
-    ataque: { key: 'penetration', label: 'Penetración' },
-    defensa: { key: 'hardening', label: 'Blindaje' },
+    get fase() { return tr("Penetración"); },
+    ataque: { key: 'penetration', get label() { return tr("Penetración"); } },
+    defensa: { key: 'hardening', get label() { return tr("Blindaje"); } },
   },
   {
-    fase: 'Detección',
-    ataque: { key: 'stealth', label: 'Sigilo' },
-    defensa: { key: 'detection', label: 'Detección' },
+    get fase() { return tr("Detección"); },
+    ataque: { key: 'stealth', get label() { return tr("Sigilo"); } },
+    defensa: { key: 'detection', get label() { return tr("Detección"); } },
   },
   {
-    fase: 'Manipulación',
-    ataque: { key: 'manipulation', label: 'Manipulación' },
-    defensa: { key: 'integrity', label: 'Integridad' },
+    get fase() { return tr("Manipulación"); },
+    ataque: { key: 'manipulation', get label() { return tr("Manipulación"); } },
+    defensa: { key: 'integrity', get label() { return tr("Integridad"); } },
   },
   {
-    fase: 'Rastro',
-    ataque: { key: 'anti_forensics', label: 'Anti-forense' },
-    defensa: { key: 'forensics', label: 'Forense' },
+    get fase() { return tr("Rastro"); },
+    ataque: { key: 'anti_forensics', get label() { return tr("Anti-forense"); } },
+    defensa: { key: 'forensics', get label() { return tr("Forense"); } },
   },
   {
-    fase: 'Persistencia',
-    ataque: { key: 'persistence', label: 'Persistencia' },
-    defensa: { key: 'removal', label: 'Limpieza' },
+    get fase() { return tr("Persistencia"); },
+    ataque: { key: 'persistence', get label() { return tr("Persistencia"); } },
+    defensa: { key: 'removal', get label() { return tr("Limpieza"); } },
   },
 ];
 
@@ -67,6 +68,7 @@ type StatSheetProps = {
  * máquina y no entre ellos.
  */
 export function StatSheet({ stats, capacidad }: StatSheetProps) {
+  useIdioma();
   return (
     <div className="asheet">
       <ul className="asheet__pairs">
@@ -84,7 +86,7 @@ export function StatSheet({ stats, capacidad }: StatSheetProps) {
         antes de romperse solo. Por eso va fuera de la rejilla de pares y no dentro.
       */}
       <p className="asheet__lone">
-        <Atributo label="Estabilidad" valor={stats.stability} lado="neutro" />
+        <Atributo label={tr("Estabilidad")} valor={stats.stability} lado="neutro" />
       </p>
 
       <p className="asheet__cost">
@@ -92,7 +94,7 @@ export function StatSheet({ stats, capacidad }: StatSheetProps) {
         <Coste label="RAM" pide={stats.ram} hay={capacidad?.ram} />
         <Coste label="RED" pide={stats.net} hay={capacidad?.net} />
         <span className="acost">
-          <span className="acost__label">DISCO</span>
+          <span className="acost__label">{tr("DISCO")}</span>
           <span className="acost__value">{stats.weight}</span>
         </span>
       </p>
@@ -110,6 +112,7 @@ function Atributo({
   valor: number;
   lado: 'atq' | 'def' | 'neutro';
 }) {
+  useIdioma();
   return (
     <span className={`astat astat--${lado}${valor >= TOPE ? ' is-full' : ''}`}>
       <span className="astat__label">{label}</span>
@@ -123,6 +126,7 @@ function Atributo({
 
 /** Un coste, marcado cuando la máquina no llega. */
 function Coste({ label, pide, hay }: { label: string; pide: number; hay?: number }) {
+  useIdioma();
   const corto = hay !== undefined && hay < pide;
 
   return (

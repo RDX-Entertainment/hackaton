@@ -1,3 +1,4 @@
+import { tr, useIdioma, idiomaActual } from '../i18n/text';
 import { useEffect, useMemo, useState } from 'react';
 
 import { browserName, collectSystemInfo, formatUptime } from '../utils/systemInfo';
@@ -36,8 +37,9 @@ const SWATCHES = [
 const TICK_MS = 1000;
 
 export function SystemFetch() {
+  useIdioma();
   // The probe touches the DOM and WebGL, so it runs once and is kept.
-  const staticRows = useMemo(() => collectSystemInfo(), []);
+  const staticRows = useMemo(() => collectSystemInfo(), [idiomaActual()]);
 
   const [now, setNow] = useState(() => Date.now());
 
@@ -86,8 +88,7 @@ export function SystemFetch() {
         </div>
 
         <p className="fetch__note">
-          read locally from {browserName()} · nothing leaves this machine
-        </p>
+          {tr("read locally from")} {browserName()} {tr("· nothing leaves this machine")} </p>
       </div>
     </div>
   );

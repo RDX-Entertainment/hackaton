@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { SiteAction, SiteDocument } from '../../utils/api';
@@ -47,6 +48,7 @@ export function SiteNavigator({
   onBank,
   onRestore,
 }: SiteNavigatorProps) {
+  useIdioma();
   const pages = site?.pages ?? [];
   const [openId, setOpenId] = useState(pages[0]?.id ?? '');
   const [ignored, setIgnored] = useState(false);
@@ -96,7 +98,7 @@ export function SiteNavigator({
         onPay({
           kind: message.kind,
           target: message.target,
-          label: message.params.label ?? 'Pago',
+          label: message.params.label ?? tr("Pago"),
           params: message.params,
         });
       }
@@ -111,12 +113,11 @@ export function SiteNavigator({
       {site?.redirect && !ignored && (
         <div className="site-redirect">
           <span>
-            Este sitio te manda a <b>{site.redirect}</b>.
+            {tr("Este sitio te manda a")} <b>{site.redirect}</b>.
           </span>
           <span>
             <button type="button" onClick={() => setIgnored(true)}>
-              Quedarme
-            </button>
+              {tr("Quedarme")} </button>
             <button
               type="button"
               className="is-primary"
@@ -125,8 +126,7 @@ export function SiteNavigator({
                 if (target !== null) onVisit(target);
               }}
             >
-              Ir
-            </button>
+              {tr("Ir")} </button>
           </span>
         </div>
       )}

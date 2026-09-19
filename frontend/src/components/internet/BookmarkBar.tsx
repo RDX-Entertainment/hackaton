@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import type { Visited } from '../../utils/api';
 import { formatIp } from '../../utils/ip';
 
@@ -9,11 +10,11 @@ type BookmarkBarProps = {
 };
 
 export function BookmarkBar({ bookmarks, current, onVisit, onRemove }: BookmarkBarProps) {
+  useIdioma();
   if (bookmarks.length === 0) {
     return (
       <p className="marks marks--empty">
-        Sin marcadores. Guarda una máquina desde su pestaña pública y aparecerá aquí.
-      </p>
+        {tr("Sin marcadores. Guarda una máquina desde su pestaña pública y aparecerá aquí.")} </p>
     );
   }
 
@@ -31,7 +32,7 @@ export function BookmarkBar({ bookmarks, current, onVisit, onRemove }: BookmarkB
           <button
             type="button"
             className="mark__drop"
-            aria-label={`Quitar ${mark.name || formatIp(mark.ip)} de marcadores`}
+            aria-label={tr("Quitar {0} de marcadores", mark.name || formatIp(mark.ip))}
             onClick={() => onRemove(mark.ip)}
           >
             ×

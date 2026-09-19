@@ -1,3 +1,4 @@
+import { tr, useIdioma } from '../../i18n/text';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { bankApi, financesApi, type BankAccount, type SiteAction } from '../../utils/api';
@@ -21,6 +22,7 @@ type SitePayDialogProps = {
  * el concepto sea mentira es asunto de quien lo escribió: eso es el juego.
  */
 export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
+  useIdioma();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [from, setFrom] = useState(0);
   const [pin, setPin] = useState('');
@@ -52,7 +54,7 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
 
   const amount = Number(action.params?.amount ?? 0);
   const concept = action.params?.concept ?? action.label;
-  const kind = action.kind === 'charge' ? 'Cobro' : 'Pago';
+  const kind = action.kind === 'charge' ? tr("Cobro") : tr("Pago");
   const target = Number(action.target);
   const source = accounts.find((one) => one.account === from);
   const short = source ? source.cash < amount : false;
@@ -71,7 +73,7 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
         concept,
       });
 
-      setDone(`Pagado. Te quedan ${formatMoney(movement.balance)}.`);
+      setDone(tr("Pagado. Te quedan {0}.", formatMoney(movement.balance)));
       setPin('');
     } catch (error) {
       setFailed(messageFrom(error));
@@ -85,30 +87,25 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
       <form onSubmit={pay}>
         <header>
           <b>
-            <span className="site-pay__seal">SISTEMA</span> Verificando con el banco
-          </b>
+            <span className="site-pay__seal">{tr("SISTEMA")}</span> {tr("Verificando con el banco")} </b>
           <button type="button" onClick={onClose}>
-            cerrar
-          </button>
+            {tr("cerrar")} </button>
         </header>
 
         <p className="site-pay__note">
-          <b>{concept}</b> — lo pide {kind === 'Cobro' ? 'un cobro' : 'un pago'} de esta página.
-          Comprueba el importe y la cuenta antes de autorizar: el PIN se lo das al juego, nunca
-          al sitio.
-        </p>
+          <b>{concept}</b> {tr("— lo pide")} {kind === 'Cobro' ? tr("un cobro") : tr("un pago")} {tr("de esta página. Comprueba el importe y la cuenta antes de autorizar: el PIN se lo das al juego, nunca al sitio.")} </p>
 
         <dl>
           <div>
-            <dt>Importe</dt>
+            <dt>{tr("Importe")}</dt>
             <dd>{formatMoney(amount)}</dd>
           </div>
           <div>
-            <dt>A la cuenta</dt>
+            <dt>{tr("A la cuenta")}</dt>
             <dd>{action.target}</dd>
           </div>
           <div>
-            <dt>Concepto</dt>
+            <dt>{tr("Concepto")}</dt>
             <dd>{concept}</dd>
           </div>
         </dl>
@@ -118,8 +115,7 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
         ) : (
           <>
             <label>
-              Pagar desde
-              <select
+              {tr("Pagar desde")} <select
                 value={from}
                 onChange={(event) => setFrom(Number(event.target.value))}
                 disabled={!accounts.length}
@@ -131,7 +127,7 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
                     </option>
                   ))
                 ) : (
-                  <option value={0}>Sin cuentas con PIN</option>
+                  <option value={0}>{tr("Sin cuentas con PIN")}</option>
                 )}
               </select>
             </label>
@@ -149,11 +145,11 @@ export function SitePayDialog({ action, onClose }: SitePayDialogProps) {
             </label>
 
             <button className="is-primary" disabled={sending || !from || short || amount <= 0}>
-              {sending ? 'Pagando…' : `Pagar ${formatMoney(amount)}`}
+              {sending ? tr("Pagando…") : tr("Pagar {0}", formatMoney(amount))}
             </button>
 
             {short && source && (
-              <small className="error">Solo tienes {formatMoney(source.cash)} en esa cuenta.</small>
+              <small className="error">{tr("Solo tienes")} {formatMoney(source.cash)} {tr("en esa cuenta.")}</small>
             )}
             {failed && <small className="error">{failed}</small>}
           </>
