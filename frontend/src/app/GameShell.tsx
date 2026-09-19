@@ -11,6 +11,7 @@ import { LegacyRoute } from './LegacyRoute';
 import { LEGACY_ITEMS } from './navigation';
 import { Cerrada } from '../components/onboarding/Cerrada';
 import { TutorialProvider, useTutorial } from './tutorial';
+import { t } from '../i18n';
 
 /**
  * El armazón de toda pantalla con sesión: el HUD arriba, el carril de destinos
@@ -71,7 +72,12 @@ function Armazon() {
                 <Route
                   key={item.path}
                   path={item.path}
-                  element={<Vigilada path={item.path} label={item.label} />}
+                  element={
+                    <Vigilada
+                      path={item.path}
+                      label={t(`nav.screen.${item.path}`) ?? item.label}
+                    />
+                  }
                 />
               ))}
             </Routes>

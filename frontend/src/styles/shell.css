@@ -160,6 +160,39 @@
   font-size: var(--texto-cuerpo);
 }
 
+/* La lengua es una lectura de la sesión, no una pantalla escondida en Ajustes. */
+.selector-idioma {
+  display: flex;
+  align-items: center;
+  gap: var(--e1);
+  min-width: 0;
+  color: var(--color-text-subtle);
+}
+
+.selector-idioma__label {
+  font-size: var(--texto-micro);
+  letter-spacing: var(--track-rotulo);
+  text-transform: uppercase;
+}
+
+.selector-idioma select {
+  width: auto;
+  min-width: 5.8rem;
+  height: 1.9rem;
+  padding: 0.25rem 1.5rem 0.25rem 0.45rem;
+  font-size: var(--texto-cuerpo);
+  cursor: pointer;
+}
+
+.selector-idioma select:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.selector-idioma select[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
 /* ---------- Carril de destinos ---------- */
 
 .carril {
@@ -363,7 +396,8 @@
   }
 
   .hud__nombre,
-  .hud__login {
+  .hud__login,
+  .selector-idioma__label {
     display: none;
   }
 
@@ -377,5 +411,16 @@
 
   .game {
     padding: var(--e4) var(--e3) var(--e8);
+  }
+}
+
+@media (max-width: 600px) {
+  /* En un teléfono mandan la navegación, la sesión y el idioma; las cifras siguen en Home. */
+  .hud__lecturas {
+    display: none;
+  }
+
+  .selector-idioma select {
+    min-width: 5.2rem;
   }
 }

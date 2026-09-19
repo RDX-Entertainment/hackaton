@@ -6,7 +6,9 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { adminApi, dashboardApi, type Dashboard } from '../../utils/api';
 import { formatIp, maskIp } from '../../utils/ip';
 import { formatMoney } from '../../utils/format';
+import { t } from '../../i18n';
 import { Icono } from '../iconos/Icono';
+import { LanguageSelect } from './LanguageSelect';
 
 /** Cada cuánto se refresca la cabecera. El worker mueve el dinero y las tareas. */
 const REFRESCO_MS = 20_000;
@@ -75,18 +77,18 @@ export function TopBar() {
           <>
             <span className="hud__lectura">
               <span className="micro">
-                <Icono nombre="dinero" tamano={12} /> fondos
+                <Icono nombre="dinero" tamano={12} /> {t('shell.funds') ?? 'fondos'}
               </span>
               <span className="dato">{formatMoney(dashboard.money)}</span>
             </span>
             <span className="hud__lectura">
               <span className="micro">
-                <Icono nombre="tiempo" tamano={12} /> en marcha
+                <Icono nombre="tiempo" tamano={12} /> {t('shell.running') ?? 'en marcha'}
               </span>
               <span className={tareas ? 'dato dato--tiempo' : 'dato'}>{tareas}</span>
             </span>
             <span className="hud__lectura">
-              <span className="micro">correo</span>
+              <span className="micro">{t('shell.mail') ?? 'correo'}</span>
               <span className="dato">{dashboard.unread_mail}</span>
             </span>
           </>
@@ -96,9 +98,11 @@ export function TopBar() {
       <div className="hud__sesion">
         {admin && (
           <Link className="hud__panel" to="/admin">
-            panel
+            {t('shell.admin') ?? 'panel'}
           </Link>
         )}
+
+        <LanguageSelect />
 
         {user && (
           <span className="hud__usuario">
@@ -107,8 +111,16 @@ export function TopBar() {
               type="button"
               className={revelada ? 'hud__ip is-shown' : 'hud__ip'}
               aria-pressed={revelada}
-              aria-label={revelada ? 'Ocultar tu dirección' : 'Mostrar tu dirección'}
-              title={revelada ? 'Ocultar tu dirección' : 'Mostrar tu dirección'}
+              aria-label={
+                revelada
+                  ? (t('shell.hideIp') ?? 'Ocultar tu dirección')
+                  : (t('shell.showIp') ?? 'Mostrar tu dirección')
+              }
+              title={
+                revelada
+                  ? (t('shell.hideIp') ?? 'Ocultar tu dirección')
+                  : (t('shell.showIp') ?? 'Mostrar tu dirección')
+              }
               onClick={() => setRevelada((actual) => !actual)}
             >
               {revelada ? formatIp(user.game_ip) : maskIp(user.game_ip)}
@@ -118,7 +130,7 @@ export function TopBar() {
         )}
 
         <button className="hud__salir" type="button" onClick={() => dispatch(signedOut())}>
-          salir
+          {t('shell.logout') ?? 'salir'}
         </button>
       </div>
     </header>

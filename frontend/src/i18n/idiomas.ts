@@ -17,11 +17,39 @@ export type Idioma = (typeof IDIOMAS)[number];
 export const IDIOMA_BASE: Idioma = 'es';
 
 export const NOMBRE_DEL_IDIOMA: Record<Idioma, string> = {
-  es: 'Castellano',
+  es: 'Español',
   pt: 'Português',
   en: 'English',
 };
 
+/** Etiqueta BCP 47 para fechas y números; `pt` es portugués de Brasil. */
+export const LOCALE_DEL_IDIOMA: Record<Idioma, string> = {
+  es: 'es-ES',
+  pt: 'pt-BR',
+  en: 'en-US',
+};
+
 export function esIdioma(valor: unknown): valor is Idioma {
   return typeof valor === 'string' && (IDIOMAS as readonly string[]).includes(valor);
+}
+
+/**
+ * El primer idioma sale del navegador. Se recorren todos los que declara, no solo el
+ * primero: si el sistema trae `fr-FR, pt-BR`, el juego puede hablarle en portugués.
+ */
+export function idiomaDelNavegador(
+  lenguas: readonly string[] = typeof navigator === 'undefined'
+    ? []
+    : navigator.languages.length
+      ? navigator.languages
+      : [navigator.language],
+): Idioma {
+  for (const lengua of lenguas) {
+    const codigo = lengua.trim().toLowerCase().split('-')[0];
+    if (esIdioma(codigo)) {
+      return codigo;
+    }
+  }
+
+  return IDIOMA_BASE;
 }

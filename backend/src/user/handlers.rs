@@ -441,6 +441,7 @@ pub async fn admin_create_user(
             username: input.username,
             email: input.email,
             password: input.password,
+            lang: None,
         },
     ).await?;
     let user_id = session.user.id;

@@ -101,6 +101,9 @@ pub async fn register(
     input: RegisterRequest,
 ) -> Result<SessionResponse, ApiError> {
     let name = input.username.trim();
+    let lang = normalizar_lengua(
+        input.lang.as_deref().unwrap_or("es"),
+    )?;
 
     if !valid_name(name) {
         return Err(ApiError::BadRequest(
@@ -177,6 +180,8 @@ pub async fn register(
     .await?;
 
     repo::bootstrap_player(&mut tx, id).await?;
+    repo::set_language_in_tx(&mut tx, id, &lang)
+        .await?;
 
     let user =
         repo::find_user_in_tx(&mut tx, id).await?;
@@ -211,15 +216,23 @@ pub async fn me(
 /// comprueba para poder contestar algo legible, alli para que sea verdad pase lo que pase.
 const LENGUAS: [&str; 3] = ["es", "pt", "en"];
 
+fn normalizar_lengua(lang: &str) -> Result<String, ApiError> {
+    let lang = lang.trim().to_ascii_lowercase();
+    if !LENGUAS.contains(&lang.as_str()) {
+        return Err(ApiError::BadRequest(
+            "UNKNOWN_LANGUAGE".into(),
+        ));
+    }
+
+    Ok(lang)
+}
+
 pub async fn set_language(
     pool: &PgPool,
     user_id: i64,
     lang: &str,
 ) -> Result<UserResponse, ApiError> {
-    let lang = lang.trim().to_ascii_lowercase();
-    if !LENGUAS.contains(&lang.as_str()) {
-        return Err(ApiError::BadRequest("UNKNOWN_LANGUAGE".into()));
-    }
+    let lang = normalizar_lengua(lang)?;
     repo::set_language(pool, user_id, &lang).await?;
     me(pool, user_id).await
 }
@@ -289,6 +302,7 @@ pub async fn ensure_admin(
                     username: login.clone(),
                     password: password.clone(),
                     email: Some(email.clone()),
+                    lang: None,
                 },
             )
             .await?;

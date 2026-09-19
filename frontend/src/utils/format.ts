@@ -1,6 +1,13 @@
+import { localeActual } from '../i18n';
+
 /** Money is stored as a plain number and always shown with two decimals. */
 export function formatMoney(amount: number): string {
-  return `$${amount.toFixed(2)}`;
+  const number = new Intl.NumberFormat(localeActual(), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+  return `$${number}`;
 }
 
 /**
@@ -14,7 +21,8 @@ export function formatBitcoin(satoshis: number): string {
   const whole = Math.trunc(satoshis / SATOSHI);
   const rest = Math.abs(satoshis % SATOSHI);
 
-  return `${whole},${String(rest).padStart(BITCOIN_DECIMALS, '0')}`;
+  const separator = localeActual() === 'en-US' ? '.' : ',';
+  return `${whole}${separator}${String(rest).padStart(BITCOIN_DECIMALS, '0')}`;
 }
 
 /**
@@ -50,7 +58,7 @@ export function formatCell(value: unknown): string {
 
 /** Large counters read better broken up: 1234567 → "1.234.567". */
 export function formatCount(value: number): string {
-  return new Intl.NumberFormat('es-ES').format(Math.trunc(value));
+  return new Intl.NumberFormat(localeActual()).format(Math.trunc(value));
 }
 
 /** Hours as the stats table counts them: 3.5 → "3h 30m". */
@@ -73,7 +81,13 @@ export function formatDate(iso: string | null | undefined): string {
   }
 
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString(localeActual());
+}
+
+/** Fecha y hora completas en la lengua elegida, no en la que quedó en el navegador. */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(localeActual());
 }
 
 /** Whole days since a timestamp, for "member for N days". */

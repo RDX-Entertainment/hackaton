@@ -5,6 +5,7 @@ import { RegisterPage } from '../pages/RegisterPage';
 import { AdminShell } from './AdminShell';
 import { GameShell } from './GameShell';
 import { useAppSelector } from './hooks';
+import { useIdioma } from '../i18n';
 
 /**
  * La única decisión de este nivel: hay sesión o no la hay.
@@ -14,6 +15,9 @@ import { useAppSelector } from './hooks';
  */
 export function App() {
   const token = useAppSelector((state) => state.auth.token);
+  // El catálogo no pertenece a una pantalla concreta: al cambiarlo se vuelve a pintar el
+  // árbol entero, incluidas las piezas que solo llaman a `t()` y no leen Redux.
+  useIdioma();
 
   return (
     <>

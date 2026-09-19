@@ -10,24 +10,69 @@
  * poco: un codigo que todavia no esta en ningun catalogo enseña exactamente lo que enseñaba
  * antes, ni mejor ni peor, y el dia que se añade empieza a hablar sin tocar nada mas.
  */
+import { useSyncExternalStore } from 'react';
+
 import { en } from './en';
 import { es } from './es';
-import { IDIOMA_BASE, esIdioma, type Idioma } from './idiomas';
+import {
+  IDIOMA_BASE,
+  LOCALE_DEL_IDIOMA,
+  esIdioma,
+  idiomaDelNavegador,
+  type Idioma,
+} from './idiomas';
 import { pt } from './pt';
 
 const CATALOGOS: Record<Idioma, Record<string, string>> = { es, pt, en };
 
-let actual: Idioma = IDIOMA_BASE;
+const suscriptores = new Set<() => void>();
 
-/** La pone quien conoce la sesion. Un valor que no sea de los tres se ignora. */
-export function usarIdioma(lang: unknown): void {
-  if (esIdioma(lang)) {
-    actual = lang;
+let actual: Idioma = idiomaDelNavegador();
+
+function reflejarEnDocumento(): void {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = actual;
   }
+}
+
+reflejarEnDocumento();
+
+/**
+ * La pone quien conoce la sesión. Sin sesión vuelve al navegador; con una elección
+ * guardada manda el servidor, para que la preferencia siga al jugador entre dispositivos.
+ */
+export function usarIdioma(lang: unknown): void {
+  const siguiente = esIdioma(lang) ? lang : idiomaDelNavegador();
+  if (siguiente === actual) {
+    reflejarEnDocumento();
+    return;
+  }
+
+  actual = siguiente;
+  reflejarEnDocumento();
+  suscriptores.forEach((notificar) => notificar());
 }
 
 export function idiomaActual(): Idioma {
   return actual;
+}
+
+export function localeActual(): string {
+  return LOCALE_DEL_IDIOMA[actual];
+}
+
+/** Hace reactivo el catálogo: cambiar el selector repinta toda la aplicación. */
+export function useIdioma(): Idioma {
+  return useSyncExternalStore(
+    (notificar) => {
+      suscriptores.add(notificar);
+      return () => {
+        suscriptores.delete(notificar);
+      };
+    },
+    idiomaActual,
+    idiomaActual,
+  );
 }
 
 /**
@@ -39,5 +84,12 @@ export function t(clave: string): string | null {
   return CATALOGOS[actual][clave] ?? CATALOGOS[IDIOMA_BASE][clave] ?? null;
 }
 
-export { IDIOMAS, IDIOMA_BASE, NOMBRE_DEL_IDIOMA, esIdioma } from './idiomas';
+export {
+  IDIOMAS,
+  IDIOMA_BASE,
+  LOCALE_DEL_IDIOMA,
+  NOMBRE_DEL_IDIOMA,
+  esIdioma,
+  idiomaDelNavegador,
+} from './idiomas';
 export type { Idioma } from './idiomas';

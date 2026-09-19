@@ -25,6 +25,11 @@ pub struct RegisterRequest {
     // mandar a ninguna parte. Si no viene, el modulo se inventa uno interno.
     #[serde(default)]
     pub email: Option<String>,
+
+    // El cliente manda la que detectó en el navegador. Es opcional para no romper clientes
+    // anteriores; si falta, el juego conserva el castellano como respaldo.
+    #[serde(default)]
+    pub lang: Option<String>,
 }
 
 //

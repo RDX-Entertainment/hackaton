@@ -5,6 +5,7 @@ import { useAppDispatch } from '../app/hooks';
 import { authApi } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
 import { useNavigate } from 'react-router-dom';
+import { idiomaActual } from '../i18n';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -34,7 +35,7 @@ export function LoginForm({ startRegistering = false }: LoginFormProps) {
 
     try {
       const session = registering
-        ? await authApi.register(username, password, identifier)
+        ? await authApi.register(username, password, identifier, idiomaActual())
         : await authApi.login(identifier, password);
 
       dispatch(authenticated(session));

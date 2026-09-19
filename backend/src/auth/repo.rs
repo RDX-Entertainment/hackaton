@@ -295,6 +295,22 @@ pub async fn set_language(pool: &PgPool, id: i64, lang: &str) -> Result<(), sqlx
     Ok(())
 }
 
+/** Fija la lengua durante el alta, antes de hacer visible la cuenta. */
+pub async fn set_language_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    id: i64,
+    lang: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE users_language SET lang = $2 WHERE user_id = $1",
+    )
+    .bind(id)
+    .bind(lang)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 pub async fn find_user_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     id: i64,

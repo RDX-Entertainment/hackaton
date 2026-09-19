@@ -14,6 +14,7 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { authApi } from '../../utils/api';
 import { messageFrom } from '../../utils/errors';
 import { formatIp } from '../../utils/ip';
+import { idiomaActual } from '../../i18n';
 import { findCommand } from './commands';
 import type { Answers, Line, LineKind, Step } from './types';
 
@@ -83,7 +84,7 @@ export function Terminal({ initialCommand }: TerminalProps) {
       announceSession.current(result.user.login, result.user.game_ip);
     },
     register: async (username: string, email: string, password: string) => {
-      const result = await authApi.register(username, password, email);
+      const result = await authApi.register(username, password, email, idiomaActual());
       dispatch(authenticated(result));
       announceSession.current(result.user.login, result.user.game_ip);
     },

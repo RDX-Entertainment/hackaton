@@ -3,6 +3,8 @@ import { Link, NavLink } from 'react-router-dom';
 import { signedOut } from '../../app/authSlice';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { ADMIN_SECTIONS } from '../../app/adminNavigation';
+import { t } from '../../i18n';
+import { LanguageSelect } from '../shell/LanguageSelect';
 
 export function AdminNav() {
   const dispatch = useAppDispatch();
@@ -19,7 +21,7 @@ export function AdminNav() {
         </span>
       </Link>
 
-      <nav className="adminnav" aria-label="Secciones del panel">
+      <nav className="adminnav" aria-label={t('admin.sections') ?? 'Secciones del panel'}>
         {ADMIN_SECTIONS.map((section) => (
           <NavLink
             key={section.path}
@@ -30,15 +32,20 @@ export function AdminNav() {
             <span className="adminnav__icon" aria-hidden="true">
               {section.icon}
             </span>
-            {section.label}
+            {t(`admin.${section.path === '/admin'
+              ? 'catalog'
+              : section.path.split('/').filter(Boolean).at(-1)}`)
+              ?? section.label}
           </NavLink>
         ))}
       </nav>
 
       <div className="topbar__session">
         <Link className="topbar__back" to="/">
-          volver al juego
+          {t('admin.back') ?? 'volver al juego'}
         </Link>
+
+        <LanguageSelect />
 
         {user && (
           <span className="topbar__user">
@@ -48,7 +55,7 @@ export function AdminNav() {
         )}
 
         <button className="topbar__logout" type="button" onClick={() => dispatch(signedOut())}>
-          salir
+          {t('shell.logout') ?? 'salir'}
         </button>
       </div>
     </header>

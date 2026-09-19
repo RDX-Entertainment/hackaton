@@ -3,6 +3,13 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { DESTINOS, destinoDe } from '../../app/navigation';
 import { useTutorial } from '../../app/tutorial';
+import { t } from '../../i18n';
+
+const nombreDestino = (nombre: string) =>
+  t(`nav.destination.${nombre.toLowerCase()}`) ?? nombre;
+
+const nombrePantalla = (path: string, respaldo: string) =>
+  t(`nav.screen.${path}`) ?? respaldo;
 
 /**
  * El carril de destinos: cinco teclas, y ninguna se abre al pasar el ratón.
@@ -60,7 +67,7 @@ export function Carril() {
   }, [navigate, tutorial]);
 
   return (
-    <nav className="carril" aria-label="Destinos del juego">
+    <nav className="carril" aria-label={t('nav.destinations') ?? 'Destinos del juego'}>
       {DESTINOS.map((destino) => {
         const abierta = primeraAbierta(destino);
 
@@ -75,7 +82,7 @@ export function Carril() {
               <span className="carril__numero" aria-hidden="true">
                 {destino.tecla}
               </span>
-              <span className="carril__nombre">{destino.nombre}</span>
+              <span className="carril__nombre">{nombreDestino(destino.nombre)}</span>
             </span>
           );
         }
@@ -92,7 +99,7 @@ export function Carril() {
             <span className="carril__numero" aria-hidden="true">
               {destino.tecla}
             </span>
-            <span className="carril__nombre">{destino.nombre}</span>
+            <span className="carril__nombre">{nombreDestino(destino.nombre)}</span>
           </NavLink>
         );
       })}
@@ -111,7 +118,10 @@ export function Tira() {
   }
 
   return (
-    <nav className="tira" aria-label={`Pantallas de ${actual.nombre}`}>
+    <nav
+      className="tira"
+      aria-label={`${t('nav.screens') ?? 'Pantallas'}: ${nombreDestino(actual.nombre)}`}
+    >
       {actual.items.map((item) =>
         tutorial.permiteVista(item.path) ? (
           <NavLink
@@ -119,7 +129,7 @@ export function Tira() {
             to={`/${item.path}`}
             className={({ isActive }) => (isActive ? 'tira__paso is-active' : 'tira__paso')}
           >
-            {item.label}
+            {nombrePantalla(item.path, item.label)}
           </NavLink>
         ) : (
           <span
@@ -128,7 +138,7 @@ export function Tira() {
             aria-disabled="true"
             title={tutorial.motivo}
           >
-            {item.label}
+            {nombrePantalla(item.path, item.label)}
           </span>
         ),
       )}

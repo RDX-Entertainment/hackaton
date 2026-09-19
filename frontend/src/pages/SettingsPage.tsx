@@ -8,6 +8,7 @@ import { StatusMessage } from '../components/StatusMessage';
 import { IDIOMAS, NOMBRE_DEL_IDIOMA, esIdioma } from '../i18n';
 import { accountApi, authApi, type Settings } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
+import { formatDateTime } from '../utils/format';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -85,7 +86,7 @@ export function SettingsPage() {
               <span className="puesto">{settings.premium ? 'premium' : 'cuenta normal'}</span>
             </div>
             <p className="ajustes__nota">
-              Última entrada: {new Date(settings.last_login).toLocaleString()}
+              Última entrada: {formatDateTime(settings.last_login)}
             </p>
           </div>
         </section>

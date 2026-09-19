@@ -9,12 +9,15 @@ export function register(
   username: string,
   password: string,
   email?: string,
+  lang?: string,
 ): Promise<AuthenticatedSession> {
   return post<AuthenticatedSession>('/auth/register', {
     username,
     password,
     // The server tells an absent e-mail apart from an empty one.
     email: email || undefined,
+    // Una cuenta nueva nace en el idioma del navegador. Después manda lo que elija.
+    lang,
   });
 }
 
