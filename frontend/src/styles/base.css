@@ -307,17 +307,20 @@ button:disabled {
 
 .process-progress {
   margin: 0.7rem 0;
-  max-width: 34rem;
+  width: 100%;
   color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
 .process-progress p {
   margin: 0 0 0.35rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .process-progress__track {
-  height: 6px;
+  height: 9px;
   overflow: hidden;
   background: var(--color-border);
 }
@@ -325,9 +328,16 @@ button:disabled {
 .process-progress__fill {
   display: block;
   height: 100%;
+  width: 100%;
+  transform-origin: left center;
   background: var(--color-accent);
   box-shadow: 0 0 8px var(--color-accent-glow);
-  transition: width 0.08s linear;
+  transition: transform 0.08s linear;
+}
+
+.process-progress.is-paused .process-progress__fill { opacity: .5; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .process-progress__fill { transition: none; }
 }
 
 .process-progress small {

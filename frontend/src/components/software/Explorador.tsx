@@ -106,6 +106,7 @@ export function Volumenes({
           <button
             type="button"
             className="explorador__volumen"
+            data-guia={dentro.some((uno) => !uno.folder && !uno.running) ? 'discos.volumen' : undefined}
             key={maquina.id}
             onClick={() => onEntrar(maquina.id)}
           >

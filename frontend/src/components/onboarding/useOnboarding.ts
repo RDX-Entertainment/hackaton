@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { onboardingApi, type Onboarding } from '../../utils/api';
 
@@ -9,28 +9,38 @@ import { onboardingApi, type Onboarding } from '../../utils/api';
  * espera a que el worker termine, y una portada que dijera «compila el diseño» diez minutos
  * después de haberlo compilado sería peor que no decir nada.
  *
- * Un fallo deja `undefined` y no rompe la pantalla: esto acompaña al juego, no lo sustituye.
+ * Un fallo conserva la última respuesta: una desconexión no completa el tutorial ni quita
+ * las restricciones que el jugador estaba viendo. Antes de la primera respuesta no hay datos.
  */
-export function useOnboarding(intervalMs = 8000) {
+export function useOnboarding(intervalMs = 4000) {
   const [onboarding, setOnboarding] = useState<Onboarding>();
+  const revision = useRef(0);
+  const completed = useRef(false);
 
   const reload = useCallback(() => {
+    if (completed.current) return;
+    const request = ++revision.current;
     onboardingApi
       .getOnboarding()
-      .then(setOnboarding)
-      .catch(() => setOnboarding(undefined));
+      .then((value) => {
+        if (request !== revision.current) return;
+        completed.current = value.completed === true;
+        setOnboarding(value);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
+    if (onboarding?.completed) return;
     reload();
-
-    if (!intervalMs) {
-      return;
-    }
-
-    const timer = window.setInterval(reload, intervalMs);
-    return () => window.clearInterval(timer);
-  }, [reload, intervalMs]);
+    window.addEventListener('game:changed', reload);
+    const timer = intervalMs ? window.setInterval(reload, intervalMs) : undefined;
+    return () => {
+      ++revision.current;
+      window.clearInterval(timer);
+      window.removeEventListener('game:changed', reload);
+    };
+  }, [reload, intervalMs, onboarding?.completed]);
 
   return { onboarding, reload };
 }

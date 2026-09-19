@@ -26,8 +26,33 @@ use super::{
     webscript,
 };
 
-const HACK_SECONDS: i32 = 60;
 const ANALYZE_SECONDS: i32 = 60;
+
+/// El primer acceso otorga el nivel 2: pedirlo tambien en la practica cerraba el circuito.
+/// El alumno de nivel 1 puede usar fuerza bruta en su campo de tiro; el mundo sigue igual.
+fn can_start_hack(level: i16, required: i16, action: i16, own_practice: bool) -> bool {
+    level >= required || (level >= 1 && action == 11 && own_practice)
+}
+
+#[cfg(test)]
+mod tutorial_tests {
+    use super::can_start_hack;
+
+    #[test]
+    fn first_access_is_possible_only_on_the_students_practice_target() {
+        assert!(can_start_hack(1, 2, 11, true));
+        assert!(!can_start_hack(1, 2, 11, false));
+        assert!(!can_start_hack(0, 2, 11, true));
+    }
+
+    #[test]
+    fn practice_does_not_unlock_scanning_or_change_regular_certifications() {
+        assert!(!can_start_hack(1, 3, 15, true));
+        assert!(can_start_hack(2, 2, 11, false));
+        assert!(!can_start_hack(2, 3, 15, false));
+        assert!(can_start_hack(3, 3, 15, false));
+    }
+}
 const LOG_EDIT_SECONDS: i32 = 30;
 
 //
@@ -76,7 +101,7 @@ pub async fn resolve_ip(
             id: player.id,
             name: player.login,
             npc_type: 0,
-            down: false,
+            down: player.down,
             web: player.web,
             server_id: player.server_id,
         });
@@ -95,7 +120,7 @@ pub async fn resolve_ip(
         id: inside.owner_id,
         name: inside.name,
         npc_type: 0,
-        down: false,
+        down: inside.down,
         web: inside.web,
         server_id: Some(inside.server_id),
     })
@@ -162,6 +187,43 @@ pub async fn require_access(
     Ok(())
 }
 
+pub async fn permissions(pool: &PgPool, user: i64, ip: i64) -> Result<Vec<String>, ApiError> {
+    Ok(sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT permissions FROM machine_accesses WHERE attacker_id=$1 AND target_ip=$2 AND status='active' AND (expires_at IS NULL OR expires_at>now())")
+        .bind(user).bind(ip).fetch_optional(pool).await?
+        .and_then(|value| serde_json::from_value(value).ok()).unwrap_or_default())
+}
+
+pub async fn require_permission(pool: &PgPool, user: i64, ip: i64, permission: &str) -> Result<(), ApiError> {
+    if !permissions(pool, user, ip).await?.iter().any(|p| p == permission) {
+        return Err(ApiError::BadRequest("INSUFFICIENT_PERMISSION".into()));
+    }
+    Ok(())
+}
+
+/// Puertas de los servidores simulados. La IP conserva la frontera entre nodos y prácticas.
+pub async fn service_intrusion(pool: &PgPool, user: i64, input: super::dtos::ServiceIntrusionRequest) -> Result<crate::software_system::dtos::OperationStarted, ApiError> {
+    crate::onboarding::services::guard(pool, user, "red.hackear").await?;
+    if !matches!(input.capability.as_str(), "web_exploit" | "ftp_exploit" | "ssh_exploit" | "cracker") {
+        return Err(ApiError::BadRequest("INVALID_SERVICE_CAPABILITY".into()));
+    }
+    let target = resolve_ip(pool, input.ip, user).await?;
+    if target.down { return Err(ApiError::BadRequest("SERVER_DOWN".into())); }
+    if !target.is_npc && target.id == user { return Err(ApiError::BadRequest("Elige una máquina de práctica u otro jugador".into())); }
+    let level = crate::user::repo::effective_certification_level(pool, user).await?;
+    let cracker = input.capability == "cracker";
+    let own_practice = target.is_npc && repo::is_own_practice(pool, user, target.id).await?;
+    if !can_start_hack(level, if cracker {2} else {3}, if cracker {11} else {90}, own_practice) {
+        return Err(ApiError::BadRequest("NO_CERTIFICATION".into()));
+    }
+    if !cracker && !repo::was_scanned(pool, user, input.ip).await? {
+        return Err(ApiError::BadRequest("SCAN_REQUIRED: escanea los puertos antes de explotar un servicio".into()));
+    }
+    let server = target.server_id.ok_or(ApiError::NotFound)?;
+    crate::software_system::services::service_intrusion(pool, user,
+        crate::software_system::dtos::StartOperationRequest { capability: input.capability, target_user_id: target.id, software_id: input.software_id }, server, target.is_npc).await
+}
+
 //
 // ==============================
 // TARGETS
@@ -192,12 +254,19 @@ pub async fn internet_navigate(
     user_id: i64,
     ip: i64,
 ) -> Result<InternetNavigateResponse, ApiError> {
-    let target = resolve_ip(
+    let mut target = resolve_ip(
         pool,
         ip,
         user_id,
     )
     .await?;
+
+    if let Some(server) = target.server_id {
+        if let Some(content) = sqlx::query_scalar::<_, String>("SELECT content FROM node_web_content WHERE server_id=$1")
+            .bind(server).fetch_optional(pool).await? {
+            target.web = Some(content);
+        }
+    }
 
     repo::save_history(
         pool,
@@ -206,12 +275,8 @@ pub async fn internet_navigate(
     )
     .await?;
 
-    let access = repo::has_access(
-        pool,
-        user_id,
-        ip,
-    )
-    .await?;
+    let permissions = permissions(pool, user_id, ip).await?;
+    let access = !permissions.is_empty();
 
     let access_as = if access {
         repo::access_login(pool, user_id, ip).await?
@@ -256,6 +321,8 @@ pub async fn internet_navigate(
         down: target.down,
         access,
         access_as,
+        permissions,
+        server_id: target.server_id,
         bookmarked,
         scanned,
         analysis,
@@ -347,6 +414,11 @@ pub async fn internet_login(
     )
     .await?;
 
+    sqlx::query("INSERT INTO machine_accesses(attacker_id,target_user_id,target_is_npc,target_ip,identity_name,origin,privilege,scope,permissions)
+        SELECT $1,$2,$3,$4,'root','login','root','root',granted_permissions FROM software_capabilities WHERE code='cracker'
+        ON CONFLICT(attacker_id,target_ip) DO UPDATE SET identity_name='root',privilege='root',scope='root',permissions=EXCLUDED.permissions,status='active',expires_at=NULL,obtained_at=now()")
+        .bind(user_id).bind(target.id).bind(target.is_npc).bind(input.ip).execute(pool).await?;
+
     Ok(InternetLoginResponse {
         access: true,
         name: target.name,
@@ -365,126 +437,28 @@ pub async fn internet_hack(
     input: InternetHackRequest,
 ) -> Result<InternetHackResponse, ApiError> {
     crate::onboarding::services::guard(pool, user_id, "red.hackear").await?;
-
-    let (
-        attacker_type,
-        defender_type,
-        certification_needed,
-        action,
-    ): (i16, i16, i16, i16) =
-        match input.kind.as_str() {
-            "bf" => (1, 2, 2, 11),
-            "scan" => (3, 4, 3, 15),
-
-            _ => {
-                return Err(
-                    ApiError::BadRequest(
-                        "unsupported hack type".into(),
-                    ),
-                );
-            }
-        };
-
-    // El nivel con lo que ya ha demostrado: el 2 lo da haber entrado en una maquina, no
-    // haber pulsado dos veces en Academia.
-    let certification =
-        crate::user::repo::effective_certification_level(
-            pool,
-            user_id,
-        )
-        .await?;
-
-    if certification < certification_needed {
-        return Err(
-            ApiError::BadRequest(
-                "NO_CERTIFICATION".into(),
-            ),
-        );
-    }
-
-    let target =
-        resolve_ip(pool, input.ip, user_id).await?;
-
-    if target.down {
-        return Err(
-            ApiError::BadRequest(
-                "SERVER_DOWN".into(),
-            ),
-        );
-    }
-
-    let attacker =
-        repo::best_local_software_version(
-            pool,
-            user_id,
-            attacker_type,
-        )
-        .await?
-        .ok_or_else(|| {
-            ApiError::BadRequest(
-                "NO_SOFT".into(),
-            )
-        })?;
-
-    let defender =
-        repo::best_remote_software_version(
-            pool,
-            target.id,
-            defender_type,
-            target.is_npc,
-        )
-        .await?;
-
-    if attacker < defender {
-        return Err(
-            ApiError::BadRequest(
-                "BAD_CRACKER".into(),
-            ),
-        );
-    }
-
-    let duplicate =
-        repo::active_hack_exists(
-            pool,
-            user_id,
-            action,
-            target.id,
-        )
-        .await?;
-
-    if duplicate {
-        return Err(
-            ApiError::BadRequest(
-                "identical process already active".into(),
-            ),
-        );
-    }
-
-    let info = if target.is_npc {
-        "npc"
-    } else {
-        "player"
+    let (required, action) = match input.kind.as_str() {
+        "bf" => (2,11),
+        "scan" => (3,15),
+        _ => return Err(ApiError::BadRequest("unsupported hack type".into())),
     };
-
-    let seconds = crate::process::services::duration_for(HACK_SECONDS);
-    let process_id =
-        repo::create_hack_process(
-            pool,
-            user_id,
-            target.id,
-            target.server_id,
-            action,
-            info,
-            seconds,
-        )
-        .await?;
-
+    let level = crate::user::repo::effective_certification_level(pool, user_id).await?;
+    let target = resolve_ip(pool, input.ip, user_id).await?;
+    let practice = target.is_npc && repo::is_own_practice(pool,user_id,target.id).await?;
+    if !can_start_hack(level,required,action,practice) {
+        return Err(ApiError::BadRequest("NO_CERTIFICATION".into()));
+    }
+    if target.down { return Err(ApiError::BadRequest("SERVER_DOWN".into())); }
+    let server = target.server_id.ok_or(ApiError::NotFound)?;
+    let operation = if input.kind == "scan" {
+        crate::software_system::services::port_scan(pool,user_id,target.id,server,target.is_npc,input.software_id).await?
+    } else {
+        crate::software_system::services::brute_force(pool,user_id,target.id,server,target.is_npc).await?
+    };
     Ok(InternetHackResponse {
-        process_id,
-        action,
-        seconds,
-        attacker_version: attacker,
-        defender_version: defender,
+        process_id: operation.process_id,action,seconds: operation.seconds,
+        attacker_version:None,defender_version:None,
+        estimated_chance:Some(operation.estimated_chance),attacker_stats:Some(operation.attacker),
     })
 }
 
@@ -502,10 +476,11 @@ pub async fn remote_log(
     let target =
         resolve_ip(pool, ip, user_id).await?;
 
-    require_access(
+    require_permission(
         pool,
         user_id,
         ip,
+        "read_logs",
     )
     .await?;
 
@@ -533,10 +508,11 @@ pub async fn edit_remote_log(
     let target =
         resolve_ip(pool, ip, user_id).await?;
 
-    require_access(
+    require_permission(
         pool,
         user_id,
         ip,
+        "modify_logs",
     )
     .await?;
 

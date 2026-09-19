@@ -1,5 +1,7 @@
 import { tr, useIdioma, idiomaActual } from '../i18n/text';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useTutorial } from '../app/tutorial';
 
 import { AddressBar, suggestionsFrom } from '../components/internet/AddressBar';
 import { BookmarkBar } from '../components/internet/BookmarkBar';
@@ -10,7 +12,7 @@ import { StatusMessage } from '../components/StatusMessage';
 import { ProcessProgress } from '../components/ProcessProgress';
 import {
   internetApi,
-  processesApi,
+  arsenalApi,
   type HackKind,
   type Remote,
   type RemoteFile,
@@ -22,9 +24,6 @@ import { formatIp, parseIp } from '../utils/ip';
 import { useBrowserHistory } from '../utils/useBrowserHistory';
 import { useStatusMessage } from '../utils/useStatusMessage';
 
-/** El número de acción del legado para entrar por un exploit de FTP o SSH. */
-const EXPLOIT_ACTION = 16;
-
 /** Todo lo que se encola responde con un id o con el otro, nunca con los dos. */
 type Queued = { process_id?: number; id?: number };
 
@@ -32,6 +31,12 @@ export function InternetPage() {
   useIdioma();
   const status = useStatusMessage();
   const trail = useBrowserHistory();
+  const location = useLocation();
+  const tutorial = useTutorial();
+  const practiceOpened = useRef('');
+  const navigation = useRef(0);
+  const currentIp = useRef<number | undefined>(undefined);
+  const operationTarget = useRef<{ ip: number; tab: RemoteTab } | undefined>(undefined);
 
   const [address, setAddress] = useState('');
   const [remote, setRemote] = useState<Remote>();
@@ -45,6 +50,7 @@ export function InternetPage() {
   const [notFound, setNotFound] = useState<number>();
   const [processId, setProcessId] = useState<number>();
   const [accessProcessId, setAccessProcessId] = useState<number>();
+  const [submitting, setSubmitting] = useState(false);
 
   const loadSides = useCallback(() => {
     internetApi.listTargets().then(setTargets).catch(() => {});
@@ -57,19 +63,13 @@ export function InternetPage() {
   }, [loadSides]);
 
   /** Todo lo que hay pasado el login solo se lee con acceso, así que carga junto. */
-  const loadInsides = useCallback(async (ip: number) => {
-    try {
-      setFiles(await internetApi.listFiles(ip));
-    } catch {
-      setFiles([]);
-    }
-
-    try {
-      const remoteLog = await internetApi.readLog(ip);
-      setLog(remoteLog.text);
-    } catch {
-      setLog('');
-    }
+  const loadInsides = useCallback(async (machine: Remote, request: number) => {
+    const [items, remoteLog] = await Promise.all([
+      machine.permissions.includes('read_files') ? internetApi.listFiles(machine.ip).catch(() => []) : Promise.resolve([]),
+      machine.permissions.includes('read_logs') ? internetApi.readLog(machine.ip).catch(() => ({ text: '' })) : Promise.resolve({ text: '' }),
+    ]);
+    if (request !== navigation.current) return;
+    setFiles(items); setLog(remoteLog.text);
   }, []);
 
   /**
@@ -78,6 +78,8 @@ export function InternetPage() {
    */
   const open = useCallback(
     async (ip: number, record = true) => {
+      const request = ++navigation.current;
+      currentIp.current = ip;
       setAddress(formatIp(ip));
       setFiles([]);
       setLog('');
@@ -87,13 +89,14 @@ export function InternetPage() {
 
       try {
         const machine = await internetApi.navigate(ip);
+        if (request !== navigation.current) return;
         setRemote(machine);
 
         // Con sesión abierta lo que interesa está dentro; sin ella, la cara pública.
-        setTab(machine.access ? 'access' : 'public');
+        setTab(machine.access ? 'force' : 'public');
 
         if (machine.access) {
-          await loadInsides(ip);
+          await loadInsides(machine, request);
         }
 
         if (record) {
@@ -102,6 +105,7 @@ export function InternetPage() {
 
         return machine;
       } catch (error) {
+        if (request !== navigation.current) return;
         setRemote(undefined);
 
         // Que no haya nadie en esa IP lo cuenta la portada con su 404: repetirlo arriba en
@@ -112,7 +116,7 @@ export function InternetPage() {
           status.reportError(error);
         }
       } finally {
-        setLoading(false);
+        if (request === navigation.current) setLoading(false);
       }
 
       loadSides();
@@ -128,18 +132,43 @@ export function InternetPage() {
     }
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const direct = params.get('ip');
+    if (direct && practiceOpened.current !== location.key) {
+      const ip = Number(direct);
+      if (Number.isInteger(ip) && ip > 0 && ip <= 4294967295) {
+        practiceOpened.current = location.key; void open(ip);
+      }
+      return;
+    }
+    const wanted = params.get('practice');
+    if (!wanted || practiceOpened.current === location.key) return;
+    const target = tutorial.onboarding?.practice.find((one) => String(one.ip) === wanted);
+    if (!target) return;
+    practiceOpened.current = location.key;
+    void open(target.ip).then((machine) => {
+      if (machine && !machine.access) setTab('force');
+    });
+  }, [location.key, location.search, tutorial.onboarding?.practice, open]);
+
   /** Avisa con el id que haya usado el servidor para la tarea. */
-  const announce = async (work: Promise<Queued>, label: string, seeksAccess = false) => {
+  const announce = async (work: Promise<Queued>, label: string, seeksAccess = false, resultTab: RemoteTab = tab) => {
+    const ip = remote?.ip;
+    setSubmitting(true);
     try {
       const queued = await work;
       const id = queued.process_id ?? queued.id;
       if (id) {
         setProcessId(id);
-        if (seeksAccess) setAccessProcessId(id);
+        setAccessProcessId(id);
+        if (ip !== undefined) operationTarget.current = { ip, tab: seeksAccess ? 'force' : resultTab };
       }
       status.report(tr("{0} encolado como tarea #{1}. Ocurre cuando pase el worker.", label, id));
     } catch (error) {
       status.reportError(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -159,21 +188,49 @@ export function InternetPage() {
     }
   };
 
-  const crack = async (kind: HackKind) => {
+  const publish = async (content: string) => {
+    if (!remote) return;
+    const ip = remote.ip;
+    const request = navigation.current;
+    setSubmitting(true);
+    try {
+      const saved = await arsenalApi.modifyWeb(ip, content);
+      if (currentIp.current !== ip || navigation.current !== request) return;
+      // Recargar también Webscript: no basta con sustituir el HTML de la vista previa.
+      const refreshed = await open(ip, false);
+      if (currentIp.current !== ip || navigation.current !== request + 1) return;
+      if (refreshed) {
+        setTab('public');
+        status.report(tr("HTML publicado en {0} · revisión {1}.", formatIp(ip), saved.revision));
+      } else {
+        status.report(tr("HTML guardado. No se pudo recargar el sitio; vuelve a abrir la IP."));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const crack = async (kind: HackKind, softwareId?: number) => {
     if (!remote) {
       return;
     }
 
+    setSubmitting(true);
     try {
-      const result = await internetApi.hack(remote.ip, kind);
+      const result = await internetApi.hack(remote.ip, kind, softwareId);
       setProcessId(result.process_id);
       setAccessProcessId(result.process_id);
+      operationTarget.current = { ip: remote.ip, tab: 'force' };
       status.report(
-        tr("Tarea #{0} · tu v{1} contra su ", result.process_id, result.attacker_version) +
+        result.attacker_stats
+        ? tr("{0} #{1} · eficacia {2}{3} · sigilo {4} · probabilidad {5} · {6} s.", kind === 'scan' ? tr("Escaneo") : tr("Fuerza bruta"), result.process_id, result.attacker_stats.effectiveness, kind === 'scan' ? '' : tr(" · penetración {0}", result.attacker_stats.penetration), result.attacker_stats.stealth, result.estimated_chance, result.seconds)
+        : tr("Tarea #{0} · tu v{1} contra su ", result.process_id, result.attacker_version) +
           tr("v{0}. Pasa el worker y vuelve a conectar.", result.defender_version),
       );
     } catch (error) {
       status.reportError(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -251,17 +308,19 @@ export function InternetPage() {
             <ProcessProgress
               processId={processId}
               onFinished={(process) => {
-                if (!remote) return;
+                tutorial.recargar();
+                setAccessProcessId(undefined);
+                if (process.status !== 'succeeded') {
+                  status.report(process.result_message || tr("La operación no consiguió su objetivo."));
+                  return;
+                }
+                const target = operationTarget.current;
+                if (!target || currentIp.current !== target.ip) return;
                 void (async () => {
-                  const refreshed = await open(remote.ip, false);
-                  if (processId !== accessProcessId || process.status !== 'succeeded') return;
-
-                  if (refreshed?.access) {
-                    setTab('files');
-                    status.report(tr("Acceso conseguido. El software de la máquina está en Files."));
-                  } else {
-                    status.report(tr("El proceso terminó, pero no consiguió acceso a esta máquina."));
-                  }
+                  const refreshed = await open(target.ip, false);
+                  if (!refreshed || currentIp.current !== target.ip) return;
+                  setTab(target.tab);
+                  status.report(process.result_message || (process.status === 'succeeded' ? tr("Operación completada. Acciones y permisos actualizados.") : tr("La operación no consiguió su objetivo.")));
                 })();
               }}
             />
@@ -273,17 +332,13 @@ export function InternetPage() {
               tab={tab}
               files={files}
               log={log}
-              busy={loading}
+              busy={loading || submitting || Boolean(accessProcessId)}
               onTab={setTab}
               onSignIn={signIn}
-              onCrack={(kind) => void crack(kind)}
-              onExploit={() =>
-                void announce(
-                  processesApi.startProcess(EXPLOIT_ACTION, remote.id, undefined, remote.kind),
-                  'Exploit',
-                  true,
-                )
-              }
+              onCrack={(kind, softwareId) => void crack(kind, softwareId)}
+              onIntrude={(capability, softwareId) => void announce(internetApi.intrude(remote.ip, capability, softwareId), tr("Intrusión"), true)}
+              onPublish={publish}
+              onUpload={(id) => void announce(internetApi.transferFile(remote.ip, id, 'upload'), tr("Subida"))}
               onAnalyze={() => void announce(internetApi.analyze(remote.ip), tr("Análisis"))}
               onToggleBookmark={() => void toggleBookmark()}
               onVisit={(target) => void open(target)}

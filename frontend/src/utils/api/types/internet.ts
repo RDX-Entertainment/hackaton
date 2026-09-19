@@ -41,6 +41,8 @@ export type Remote = {
   down: boolean;
   access: boolean;
   access_as: string | null;
+  permissions: string[];
+  server_id: number | null;
   bookmarked: boolean;
   scanned: boolean;
   analysis: RemoteAnalysis | null;
@@ -54,8 +56,10 @@ export type HackResult = {
   process_id: number;
   action: number;
   seconds: number;
-  attacker_version: number;
-  defender_version: number;
+  attacker_version: number | null;
+  defender_version: number | null;
+  estimated_chance: string | null;
+  attacker_stats: { effectiveness: number; penetration: number; stealth: number } | null;
 };
 
 export type RemoteFile = {

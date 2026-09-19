@@ -105,28 +105,15 @@ async fn accept(
     .await?
     .ok_or(ApiError::NotFound)?;
 
-    let version =
-        repo::best_cracker_version(pool, user_id)
-            .await?
-            .unwrap_or(0);
+    let player_level = repo::certification_level(pool, user_id).await?;
 
-    if level != player_level(version) {
+    if level != player_level {
         return Err(ApiError::BadRequest(
-            "mission level does not match your best cracker"
+            "mission level does not match your certification"
                 .into(),
         ));
     }
 
     Ok(repo::accept(pool, mission_id, user_id)
         .await?)
-}
-
-/// El nivel de un jugador sale de su mejor cracker, que es lo que decide a que misiones
-/// puede optar.
-fn player_level(cracker_version: i32) -> i16 {
-    match cracker_version {
-        60.. => 3,
-        30.. => 2,
-        _ => 1,
-    }
 }

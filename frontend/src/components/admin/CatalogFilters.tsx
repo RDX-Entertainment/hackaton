@@ -26,7 +26,7 @@ export const KIND_LABEL: Record<ComponentKind, string> = {
 
 const KINDS: ComponentKind[] = ['mobo', 'cpu', 'ram', 'hdd', 'net'];
 
-const TIERS: Tier[] = ['domestica', 'gaming', 'server', 'industrial'];
+const TIERS: Tier[] = ['domestica', 'gamer', 'workstation', 'server'];
 
 export function matches(part: Part, query: CatalogQuery): boolean {
   if (query.kind !== 'all' && part.kind !== query.kind) {

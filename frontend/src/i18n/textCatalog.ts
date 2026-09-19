@@ -1,5 +1,12 @@
 /** Interface copy: source | English | Portuguese | Spanish (when source is English). */
 const entries = `
+Abrir objetivo|Open target|Abrir objetivo
+Consigue acceso a {0}|Gain access to {0}|Consiga acesso a {0}
+Botín: {0} · grado {1}|Loot: {0} · grade {1}|Recompensa: {0} · grau {1}
+Cómo conseguir módulos|How to obtain modules|Como obter módulos
+Completa encargos: cada objetivo pagado entrega un módulo, y los de mayor nivel pueden entregar grados superiores.|Complete contracts: every paid target grants a module, and higher-level contracts may grant higher grades.|Conclua contratos: cada objetivo pago concede um módulo, e contratos de nível maior podem conceder graus superiores.
+Crea y compila un programa para instalar módulos. Los encargos completados entregan nuevas copias.|Create and compile a program to install modules. Completed contracts grant new copies.|Crie e compile um programa para instalar módulos. Contratos concluídos concedem novas cópias.
+No hay copias libres. Completa un encargo o retira un módulo instalado.|There are no free copies. Complete a contract or remove an installed module.|Não há cópias livres. Conclua um contrato ou remova um módulo instalado.
 completado|completed|concluído
 succeeded|succeeded|concluído|completado
 failed|failed|falhou|fallido

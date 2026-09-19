@@ -23,6 +23,11 @@ pub struct MissionResponse {
     pub info2: i64,
     pub prize: i64,
     pub level: i16,
+    pub objective: &'static str,
+    pub target_name: String,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub reward_module_name: Option<String>,
+    pub reward_module_tier: Option<i32>,
 }
 
 impl From<MissionRow> for MissionResponse {
@@ -37,6 +42,11 @@ impl From<MissionRow> for MissionResponse {
             info2: value.info2,
             prize: value.prize,
             level: value.level,
+            objective: "gain_access",
+            target_name: value.target_name,
+            completed_at: value.completed_at,
+            reward_module_name: value.reward_module_name,
+            reward_module_tier: value.reward_module_tier,
         }
     }
 }

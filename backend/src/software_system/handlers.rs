@@ -9,6 +9,8 @@ use crate::{auth::Ctx, error::ApiError, state::AppState};
 use actix_web::{HttpResponse, web};
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
+    super::workshop::configure(cfg);
+    cfg.route("/software-system/antivirus", web::post().to(antivirus));
     cfg.route("/software-system/capabilities", web::get().to(capabilities))
         .route("/software-system/accesses", web::get().to(accesses))
         .route(
@@ -51,6 +53,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/software-system/operations",
             web::post().to(start_operation),
         );
+}
+async fn antivirus(state: web::Data<AppState>, ctx: Ctx, input: web::Json<super::dtos::AntivirusRequest>) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Created().json(services::antivirus(&state.pool, ctx.id, input.into_inner()).await?))
 }
 async fn modify_web(
     state: web::Data<AppState>,

@@ -1,5 +1,6 @@
 import { tr, useIdioma } from '../../i18n/text';
-import type { ProgramStats } from '../../utils/api';
+import type { Capability, ProgramStats } from '../../utils/api';
+import { visibleAttributes } from './attributes';
 
 /**
  * Los doce atributos de combate, en los seis pares que los enfrenta el motor.
@@ -51,7 +52,9 @@ const PARES: {
 const TOPE = 100;
 
 type StatSheetProps = {
+  extraAttributes?: string[];
   stats: ProgramStats;
+  capability?: Capability;
   /**
    * La máquina sobre la que tiene que correr, cuando hay con qué comparar. Un coste que el
    * hardware no cubre es la diferencia entre un programa que tienes y uno que puedes usar.
@@ -67,16 +70,17 @@ type StatSheetProps = {
  * significan algo unos al lado de otros; los costes van en cifra, porque se comparan contra la
  * máquina y no entre ellos.
  */
-export function StatSheet({ stats, capacidad }: StatSheetProps) {
+export function StatSheet({ stats, capacidad, capability, extraAttributes = [] }: StatSheetProps) {
   useIdioma();
+  const visible = [...visibleAttributes(capability), ...extraAttributes];
   return (
     <div className="asheet">
       <ul className="asheet__pairs">
-        {PARES.map(({ fase, ataque, defensa }) => (
-          <li className="apair" key={fase}>
+        {PARES.filter(({ ataque, defensa }) => visible.includes(ataque.key) || visible.includes(defensa.key)).map(({ fase, ataque, defensa }) => (
+          <li className={`apair${visible.includes(ataque.key) && visible.includes(defensa.key) ? '' : ' apair--single'}`} key={fase}>
             <span className="apair__phase">{fase}</span>
-            <Atributo label={ataque.label} valor={stats[ataque.key]} lado="atq" />
-            <Atributo label={defensa.label} valor={stats[defensa.key]} lado="def" />
+            {visible.includes(ataque.key) && <Atributo label={ataque.label} valor={stats[ataque.key]} lado="atq" />}
+            {visible.includes(defensa.key) && <Atributo label={defensa.label} valor={stats[defensa.key]} lado="def" />}
           </li>
         ))}
       </ul>

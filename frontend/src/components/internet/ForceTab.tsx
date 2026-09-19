@@ -48,7 +48,7 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
       key: 'bf',
       title: tr("Fuerza bruta"),
       command: 'cracker',
-      detail: tr("Tu crackeador contra su contraseña. Lo que tarda depende de la diferencia de versiones."),
+      detail: tr("Eficacia contra resistencia, penetración contra blindaje y sigilo contra detección. Los atributos y el hardware deciden las probabilidades y el tiempo; la versión no decide el resultado."),
       run: () => onCrack('bf'),
       blocked: down ?? inside,
     },
@@ -97,6 +97,7 @@ export function ForceTab({ remote, busy, onCrack, onExploit, onAnalyze }: ForceT
                 <button
                   type="button"
                   data-foco="red.hackear"
+                  data-guia={attack.key === 'bf' ? 'red.cracker' : undefined}
                   className={hackear.destacada ? 'es-foco' : undefined}
                   disabled={busy || !hackear.permitida}
                   title={hackear.motivo ?? undefined}

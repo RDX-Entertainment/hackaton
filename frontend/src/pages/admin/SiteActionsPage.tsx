@@ -2,6 +2,7 @@ import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { AdminCard } from '../../components/admin/AdminCard';
+import { AdminLoadError } from '../../components/admin/AdminLoadError';
 import { Loading } from '../../components/Notice';
 import { StatusMessage } from '../../components/StatusMessage';
 import { adminApi, type ActionInfo, type Organization, type SiteGrant } from '../../utils/api';
@@ -42,6 +43,7 @@ export function SiteActionsPage() {
   const [grants, setGrants] = useState<SiteGrant[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   const [family, setFamily] = useState('integrated');
   const [action, setAction] = useState('*');
@@ -49,15 +51,18 @@ export function SiteActionsPage() {
   const [target, setTarget] = useState(0);
 
   const load = useCallback(async () => {
-    const [list, catalogue, orgs] = await Promise.all([
-      adminApi.listSiteGrants(),
-      adminApi.listSiteActions(),
-      adminApi.listOrganizations(),
-    ]);
+    setLoadError(null);
+    try {
+      const [list, catalogue, orgs] = await Promise.all([
+        adminApi.listSiteGrants(),
+        adminApi.listSiteActions(),
+        adminApi.listOrganizations(),
+      ]);
 
-    setGrants(list);
-    setActions(catalogue);
-    setOrganizations(orgs);
+      setGrants(list);
+      setActions(catalogue);
+      setOrganizations(orgs);
+    } catch (error) { setLoadError(error); }
   }, []);
 
   useEffect(() => {
@@ -77,6 +82,7 @@ export function SiteActionsPage() {
     }
   };
 
+  if (loadError) return <AdminLoadError title={tr("Acciones de sitio")} error={loadError} onRetry={() => void load()} />;
   if (!actions) {
     return <Loading />;
   }

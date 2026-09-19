@@ -9,6 +9,7 @@ use sqlx::FromRow;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct BankAccountRow {
+    pub is_main: bool,
     pub id: i64,
     pub bank_acc: i64,
     pub bank_id: i64,
@@ -76,6 +77,8 @@ pub struct WalletLockRow {
 /// modelo porque hay que compararlo, y no sale nunca en un DTO.
 #[derive(Debug, Clone, FromRow)]
 pub struct AccountAuthRow {
+    pub bank_user: Option<i64>,
+    pub is_main: bool,
     pub number: i64,
     pub bank_id: i64,
     pub bank_name: String,

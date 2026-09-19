@@ -70,6 +70,23 @@ pub async fn transfer(
     concept: &str,
     origin_ip: Option<i64>,
 ) -> Result<TransactionResponse, ApiError> {
+    transfer_authorized(pool, from, Some(pin), None, to, amount, concept, origin_ip).await
+}
+
+/// Main-account authority comes only from the authenticated player, never the request body.
+pub async fn transfer_main(pool: &PgPool, user: i64, from: i64, to: i64, amount: i64, concept: &str, ip: Option<i64>) -> Result<TransactionResponse, ApiError> {
+    transfer_authorized(pool, from, None, Some(user), to, amount, concept, ip).await
+}
+
+pub async fn main_access(pool: &PgPool, user: i64) -> Result<AccountAccessResponse, ApiError> {
+    let number: i64 = sqlx::query_scalar("SELECT a.bank_acc FROM users u JOIN bank_accounts a ON a.id=u.main_bank_account AND a.bank_user=u.id WHERE u.id=$1")
+        .bind(user).fetch_optional(pool).await?.ok_or(ApiError::NotFound)?;
+    let found = repo::find_account_by_number(pool, number).await?.ok_or(ApiError::NotFound)?;
+    if !found.is_main || found.bank_user != Some(user) { return Err(ApiError::Unauthorized); }
+    Ok(AccountAccessResponse { account: found.number, bank_id: found.bank_id, bank_name: found.bank_name, holder: found.holder, cash: found.cash })
+}
+
+async fn transfer_authorized(pool: &PgPool, from: i64, pin: Option<&str>, main_user: Option<i64>, to: i64, amount: i64, concept: &str, origin_ip: Option<i64>) -> Result<TransactionResponse, ApiError> {
     if amount <= 0 {
         return Err(ApiError::BadRequest(
             "el importe tiene que ser mayor que cero".into(),
@@ -85,6 +102,11 @@ pub async fn transfer(
     let concept = clean_concept(concept)?;
 
     let mut tx = pool.begin().await?;
+
+    if let Some(user) = main_user {
+        // Prevent changing the principal account halfway through authorization.
+        sqlx::query("SELECT id FROM users WHERE id=$1 FOR SHARE").bind(user).execute(&mut *tx).await?;
+    }
 
     // Se bloquea siempre en el mismo orden, de menor a mayor numero de cuenta. Dos
     // transferencias cruzadas a la vez —A a B y B a A— se bloquearian en orden contrario y
@@ -105,7 +127,11 @@ pub async fn transfer(
         (second_row, first_row)
     };
 
-    if source.pin.as_deref() != Some(pin) {
+    let authorized = match main_user {
+        Some(user) => source.bank_user == Some(user) && source.is_main,
+        None => pin.is_some() && source.pin.as_deref() == pin,
+    };
+    if !authorized {
         return Err(ApiError::Unauthorized);
     }
 

@@ -11,6 +11,7 @@ export type Bank = {
 };
 
 export type BankAccount = {
+  is_main: boolean;
   id: number;
   account: number;
   bank_id: number;
@@ -57,4 +58,3 @@ export type Settings = {
   premium: boolean;
   last_login: string;
 };
-

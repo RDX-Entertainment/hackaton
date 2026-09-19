@@ -27,10 +27,8 @@
  * negro: sobre un texto de 13 px se comía los trazos finos y cansaba a los diez
  * minutos. Al 18 % se nota como material y no como filtro.
  *
- * La opacidad la lleva la capa y no el color del degradado, y por eso puede
- * **respirar**: un tubo de verdad no da una luz fija. El parpadeo es lento y
- * corto —cuatro décimas cada siete segundos— para que se perciba sin que nadie
- * pueda señalar cuándo pasó.
+ * La trama permanece quieta: animar la opacidad de toda la pantalla obligaba
+ * a componer capas grandes continuamente, incluso mientras el jugador escribe.
  */
 .capa--barrido {
   z-index: 90;
@@ -40,21 +38,6 @@
     transparent 0 2px,
     #000 2px 3px
   );
-  animation: respira-tubo 7s ease-in-out infinite;
-}
-
-@keyframes respira-tubo {
-  0%,
-  88%,
-  100% {
-    opacity: 0.18;
-  }
-  92% {
-    opacity: 0.26;
-  }
-  96% {
-    opacity: 0.14;
-  }
 }
 
 /*
@@ -65,6 +48,7 @@
 .capa--barrido::after {
   content: "";
   position: absolute;
+  top: 0;
   right: 0;
   left: 0;
   height: 26vh;
@@ -75,32 +59,25 @@
     transparent
   );
   animation: rueda-tubo 12s linear infinite;
+  will-change: transform;
 }
 
 @keyframes rueda-tubo {
   0% {
-    top: -30vh;
+    transform: translateY(-30vh);
   }
   100% {
-    top: 100%;
+    transform: translateY(100vh);
   }
 }
 
 /*
- * La estática, y ahora se mueve.
- *
- * Es la misma trama de ruido, pero saltando cinco posiciones por segundo con
- * `steps`, que es como hierve el grano de una película: sin `steps` seria un
- * deslizamiento suave, que no es estática sino una textura que resbala.
- *
- * La capa se sale del marco un 8 % por cada lado para que el salto no descubra
- * los bordes.
+ * Grano estático: conserva la textura sin mover una superficie mayor que la
+ * pantalla ni mantener una capa de ruido animada en la GPU.
  */
 .capa--grano {
   z-index: 91;
-  inset: -8%;
   opacity: 0.035;
-  animation: estatica 640ms steps(5) infinite;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
 }
 
@@ -113,24 +90,6 @@
     transparent 62%,
     rgba(0, 0, 0, 0.55) 100%
   );
-}
-
-@keyframes estatica {
-  0% {
-    transform: translate3d(0, 0, 0);
-  }
-  20% {
-    transform: translate3d(-3%, 2%, 0);
-  }
-  40% {
-    transform: translate3d(2%, -3%, 0);
-  }
-  60% {
-    transform: translate3d(-2%, -2%, 0);
-  }
-  80% {
-    transform: translate3d(3%, 1%, 0);
-  }
 }
 
 /*

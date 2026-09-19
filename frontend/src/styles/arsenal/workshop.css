@@ -20,6 +20,43 @@
  * Los módulos son casillas y no un multi-select: son pocos, cada uno lleva su resumen de lo
  * que aporta y lo que cuesta, y elegir tres de una lista con Ctrl pulsado no es elegir.
  */
+.compose.aforge { max-width: none; width: 100%; }
+.aforge__heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.7rem; }
+.aforge__heading h3 { margin: 0.3rem 0; }
+.aforge__workbench { display: grid; grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.2fr); gap: 1.5rem; align-items: start; }
+.aforge__design { display: grid; gap: 0.85rem; min-width: 0; }
+.aforge__design input, .aforge__design select { min-width: 0; width: 100%; }
+.aforge label::before { content: none; }
+.aforge__hologram {
+  display: grid; justify-items: center; gap: 0.5rem; padding: 1.7rem 1rem 1rem;
+  min-height: 235px; text-align: center; overflow-wrap: anywhere;
+  background: radial-gradient(ellipse at center, var(--color-accent-glow), transparent 70%);
+}
+.aforge__hologram strong { max-width: 100%; font-family: var(--font-display); font-size: 1.25rem; }
+.aforge__hologram > span { color: var(--color-text-muted); font-size: 0.7rem; }
+.aforge__orb {
+  display: grid; place-items: center; width: 140px; height: 140px; margin-bottom: 0.5rem;
+  border: 1px solid var(--color-accent-dim); border-radius: 50%; color: var(--color-accent);
+  box-shadow: 0 0 24px var(--color-accent-glow), inset 0 0 20px var(--color-accent-glow);
+  animation: aforge-float 4s ease-in-out infinite;
+}
+.aforge__orb svg { filter: drop-shadow(0 0 6px var(--color-accent-glow)); }
+@keyframes aforge-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@media (prefers-reduced-motion: reduce) { .aforge__orb { animation: none; } }
+.aforge .aforge__modules { min-width: 0; margin: 0; }
+.aforge .aforge__module { grid-template-columns: auto minmax(0, 1fr); padding: 0.65rem 0; }
+.aforge .aforge__module input { padding: 0; }
+.aforge .aforge__module small { overflow-wrap: anywhere; }
+.aforge .aforge__preview { margin: 0; }
+.aforge .apair, .aforge .asheet__lone { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.3rem 1rem; }
+.aforge .apair__phase { grid-column: 1 / -1; }
+.aforge .asheet__lone .astat { grid-column: 1; }
+@media (max-width: 900px) {
+  .aforge__workbench { grid-template-columns: minmax(0, 1fr); }
+  .aforge__hologram { min-height: 190px; padding-top: 1rem; }
+  .aforge__orb { width: 110px; height: 110px; }
+}
+
 .aforge__modules {
   padding: 0.7rem 0.8rem;
   border: var(--border-width) solid var(--color-border);
@@ -67,6 +104,22 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.module-collector {
+  padding: 1.2rem; margin-bottom: 1.6rem;
+  border: var(--border-width) solid var(--color-border-strong);
+  background: var(--color-surface-sunken);
+}
+.module-collector__body { display: flex; align-items: center; gap: 1.2rem; }
+.module-collector__body > svg { flex-shrink: 0; color: var(--color-accent); }
+.module-collector__body > div { flex: 1; min-width: 0; }
+.module-collector h3 { margin: 0.35rem 0; }
+.module-collector p { color: var(--color-text-muted); font-size: 0.8rem; }
+.module-collector button { flex-shrink: 0; }
+@media (max-width: 600px) {
+  .module-collector__body { flex-wrap: wrap; gap: 0.8rem; }
+  .module-collector__body button { width: 100%; }
 }
 
 .arsenal__modules li {

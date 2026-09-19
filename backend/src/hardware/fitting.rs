@@ -72,6 +72,13 @@ pub fn unit_for(kind: &str) -> &'static str {
     }
 }
 
+pub fn check_ram_layout(cpus: i16, ram: i16) -> Result<(), ApiError> {
+    if cpus <= 0 || ram < cpus || ram % cpus != 0 {
+        return Err(ApiError::BadRequest("RAM_GROUPS: cada socket de CPU necesita un grupo igual de ranuras RAM (mínimo una)".into()));
+    }
+    Ok(())
+}
+
 /// Si esta pieza entra en esta placa, contando lo que ya hay dentro.
 ///
 /// `used_slots` y `used_power` son lo ocupado ANTES de meter esta pieza.
@@ -164,6 +171,7 @@ pub fn check_build(parts: &[(PartRow, i16)]) -> Result<(), ApiError> {
     }
 
     let board = Board::from(&board.0);
+    check_ram_layout(board.cpu_slots, board.ram_slots)?;
 
     // Se acumula igual que lo haria la maquina real, en el mismo orden en que se
     // instalarian, para que el mensaje de error sea el que veria el jugador.
@@ -194,6 +202,20 @@ pub fn check_build(parts: &[(PartRow, i16)]) -> Result<(), ApiError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod ram_tests {
+    use super::check_ram_layout;
+    #[test]
+    fn one_equal_memory_bank_per_cpu_socket() {
+        for (cpus, ram) in [(1, 1), (2, 2), (2, 8), (4, 4), (4, 16)] {
+            assert!(check_ram_layout(cpus, ram).is_ok());
+        }
+        for (cpus, ram) in [(0, 4), (2, 1), (2, 3), (4, 2), (4, 6)] {
+            assert!(check_ram_layout(cpus, ram).is_err());
+        }
+    }
 }
 
 impl From<&BoardRow> for Board {

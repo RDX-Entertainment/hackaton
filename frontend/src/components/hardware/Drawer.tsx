@@ -12,7 +12,7 @@ const FOLDERS: { kind: ComponentKind; label: string }[] = [
   { kind: 'net', get label() { return tr("red"); } },
 ];
 
-const TIERS: Tier[] = ['domestica', 'gaming', 'server', 'industrial'];
+const TIERS: Tier[] = ['domestica', 'gamer', 'workstation', 'server'];
 
 function haystack(part: Component): string {
   return [

@@ -106,6 +106,9 @@ pub async fn start(
     user_id: i64,
     input: StartProcessRequest,
 ) -> Result<ProcessStartedResponse, ApiError> {
+    if matches!(input.action, 7 | 11 | 15 | 16 | 96 | 97) {
+        return Err(ApiError::BadRequest("Usa Servicios en Internet o Antivirus en Lab → Lanzar".into()));
+    }
     let known = PROCESS_ACTIONS
         .iter()
         .any(|(_, id)| *id == input.action);
@@ -152,6 +155,9 @@ pub async fn start(
     }
 
     let victim_id = input.victim_id.unwrap_or(0);
+    if victim_id != 0 && victim_id != user_id && matches!(input.action, 1 | 2 | 3 | 8 | 9 | 10 | 13 | 14) {
+        return Err(ApiError::BadRequest("Usa la acción de la máquina en Internet; el acceso pertenece a una IP concreta".into()));
+    }
     let seconds = duration_of(input.action);
 
     let duplicate = repo::duplicate_exists(

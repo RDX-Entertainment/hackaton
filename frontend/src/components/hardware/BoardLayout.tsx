@@ -30,10 +30,12 @@ type BoardLayoutProps = {
   slots: Slots;
   busy: boolean;
   onUninstall: (component: Component) => void;
+  onAdd: (kind: ComponentKind) => void;
 };
 
-export function BoardLayout({ board, components, slots, busy, onUninstall }: BoardLayoutProps) {
+export function BoardLayout({ board, components, slots, busy, onUninstall, onAdd }: BoardLayoutProps) {
   useIdioma();
+  const zones = ZONES.flatMap((zone) => Array.from({ length: zone.kind === 'ram' ? Math.max(1, slots.cpu_total) : 1 }, (_, group) => ({ ...zone, group })));
   const total = (kind: ComponentKind) =>
     kind === 'cpu'
       ? slots.cpu_total
@@ -63,16 +65,17 @@ export function BoardLayout({ board, components, slots, busy, onUninstall }: Boa
         <span className="board__trace board__trace--a" aria-hidden="true" />
         <span className="board__trace board__trace--b" aria-hidden="true" />
 
-        {ZONES.map((zone) => {
-          const filled = components.filter((part) => part.kind === zone.kind);
-          const count = total(zone.kind);
+        {zones.map((zone) => {
+          const filled = components.filter((part) => part.kind === zone.kind).sort((a, b) => a.id - b.id)
+            .filter((_, index) => zone.kind !== 'ram' || index % Math.max(1, slots.cpu_used) === zone.group);
+          const count = zone.kind === 'ram' ? Math.floor(slots.ram_total / Math.max(1, slots.cpu_total)) : total(zone.kind);
 
           return (
-            <section className={`zone zone--${zone.kind}`} key={zone.kind}>
-              <span className="zone__legend">{zone.legend}</span>
+            <section className={`zone zone--${zone.kind}`} key={`${zone.kind}-${zone.group}`}>
+              <span className="zone__legend">{zone.kind === 'ram' ? `DIMM · CPU ${zone.group + 1}${zone.group >= slots.cpu_used ? tr("· sin procesador") : ''}` : zone.legend}</span>
 
               <div className="zone__slots">
-                {Array.from({ length: count }, (_, index) => {
+                {Array.from({ length: Math.max(count, filled.length) }, (_, index) => {
                   const part = filled[index];
 
                   if (!part) {
@@ -82,6 +85,7 @@ export function BoardLayout({ board, components, slots, busy, onUninstall }: Boa
                           {zone.empty} {index + 1}
                         </span>
                         <span className="mount__free">{tr("libre")}</span>
+                        <button disabled={busy} onClick={() => onAdd(zone.kind)} aria-label={tr("Agregar {0} compatible", zone.empty)}>+</button>
                       </article>
                     );
                   }

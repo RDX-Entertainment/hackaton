@@ -11,6 +11,7 @@ use super::models::{BankAccountRow, BankRow, ChargeRow, TransactionRow, WalletRo
 
 #[derive(Debug, Serialize)]
 pub struct BankAccountResponse {
+    pub is_main: bool,
     pub id: i64,
     pub account: i64,
     pub bank_id: i64,
@@ -22,6 +23,7 @@ pub struct BankAccountResponse {
 impl From<BankAccountRow> for BankAccountResponse {
     fn from(value: BankAccountRow) -> Self {
         Self {
+            is_main: value.is_main,
             id: value.id,
             account: value.bank_acc,
             bank_id: value.bank_id,

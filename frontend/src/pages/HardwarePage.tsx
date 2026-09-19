@@ -1,9 +1,12 @@
 import { tr, useIdioma } from '../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useAppSelector } from '../app/hooks';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { authenticated } from '../app/authSlice';
 import { AccountSelect } from '../components/AccountSelect';
 import { Drawer } from '../components/hardware/Drawer';
+import { CompatibleParts } from '../components/hardware/CompatibleParts';
+import { GatewayControl } from '../components/hardware/GatewayControl';
 import { KitShop } from '../components/hardware/KitShop';
 import { MachineShop } from '../components/hardware/MachineShop';
 import { MachineCard } from '../components/hardware/MachineCard';
@@ -14,8 +17,10 @@ import { Loading } from '../components/Notice';
 import { StatusMessage } from '../components/StatusMessage';
 import {
   financesApi,
+  authApi,
   hardwareApi,
   type Component,
+  type ComponentKind,
   type Kit,
   type MachineDetail,
   type MachineLink,
@@ -29,6 +34,8 @@ import { useStatusMessage } from '../utils/useStatusMessage';
 export function HardwarePage() {
   useIdioma();
   const status = useStatusMessage();
+  const dispatch = useAppDispatch();
+  const session = useAppSelector((state) => state.auth);
   // La direccion que se ve desde fuera. La pinta el nodo de Internet del mapa.
   const gameIp = useAppSelector((state) => state.auth.user?.game_ip);
 
@@ -46,6 +53,7 @@ export function HardwarePage() {
   const [accounts, setAccounts] = useState<UnknownRow[]>([]);
   const [account, setAccount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [compatible, setCompatible] = useState<{ machine: number; kind: ComponentKind | null } | null>(null);
 
   const reload = useCallback(async () => {
     const [detail, owned, next, cables] = await Promise.all([
@@ -103,16 +111,16 @@ export function HardwarePage() {
       return tr("{0} al cajón.", component.name);
     });
 
-  const buy = (part: Part) => {
+  const buy = (part: Part, machine?: number) => {
     if (!account) {
       status.report(tr("Elige antes la cuenta que paga."));
       return;
     }
 
     void run(async () => {
-      const bought = await hardwareApi.buyPart(part.id, Number(account));
+      const bought = await hardwareApi.buyPart(part.id, Number(account), machine);
       loadAccounts();
-      return tr("{0} comprada por {1}. Está en el cajón.", bought.name, formatMoney(bought.paid));
+      return tr("{0} comprada por {1}. {2}", bought.name, formatMoney(bought.paid), machine ? tr("Instalada en el equipo.") : tr("Está en el cajón."));
     });
   };
 
@@ -121,6 +129,22 @@ export function HardwarePage() {
       await hardwareApi.renameMachine(machine, name);
       return tr("El equipo se llama ahora {0}.", name);
     });
+
+  const setGateway = (machine: number) =>
+    void run(async () => {
+      await hardwareApi.setGateway(machine);
+      if (session.token) {
+        const user = await authApi.me();
+        dispatch(authenticated({ token: session.token, user }));
+      }
+      return tr("Máquina principal actualizada. Ya puedes retirar la última tarjeta de red de la anterior.");
+    });
+
+  const buySwitch = () => void run(async () => {
+    const bought = await hardwareApi.buySwitch(Number(account));
+    loadAccounts(); setSelected(bought.machine);
+    return tr("Switch LAN de 8 puertos añadido al mapa por {0}.", formatMoney(bought.paid));
+  });
 
   const scrap = (machine: number, name: string) =>
     void run(async () => {
@@ -189,6 +213,7 @@ export function HardwarePage() {
 
   const drawer = components.filter((part) => part.installed_in === null);
   const actual = machines.find((detail) => detail.machine.id === selected) ?? machines[0];
+  const compatibleMachine = machines.find((detail) => detail.machine.id === compatible?.machine);
 
   return (
     <>
@@ -201,17 +226,30 @@ export function HardwarePage() {
         onSelect={setSelected}
       />
 
-      {actual && (
+      {actual && actual.machine.node_kind !== 'switch' && (
+        <GatewayControl detail={actual} machines={machines} busy={busy} onChange={setGateway} />
+      )}
+
+      {actual && actual.machine.node_kind !== 'switch' && (
         <MachineCard
           key={actual.machine.id}
           detail={actual}
-          only={machines.length === 1}
+          only={machines.filter((one) => one.machine.node_kind !== 'switch').length === 1}
           busy={busy}
           onUninstall={uninstall}
           onRename={rename}
           onScrap={scrap}
+          onAdd={(kind) => setCompatible({ machine: actual.machine.id, kind })}
         />
       )}
+
+      {actual?.machine.node_kind === 'switch' && <section className="panel machine__readiness">
+        <h3>{actual.machine.name} · Switch LAN</h3><p>{actual.machine.switch_ports} {tr("puertos · Activo · no consume una plaza de cómputo.")}</p>
+        <button disabled={busy} onClick={() => scrap(actual.machine.id, actual.machine.name)}>{tr("Retirar switch y sus cables")}</button>
+      </section>}
+
+      {compatible && compatibleMachine && <CompatibleParts detail={compatibleMachine} owned={components} parts={parts}
+        busy={busy} account={account} kind={compatible.kind} onClose={() => setCompatible(null)} onInstall={install} onBuy={buy} />}
 
       <h3>{tr("Red")}</h3>
       <MachineNodeMap
@@ -227,13 +265,13 @@ export function HardwarePage() {
       />
 
       <h3>{tr("Cajón")}</h3>
-      <Drawer components={drawer} machines={machines} busy={busy} onInstall={install} />
+      <Drawer components={drawer} machines={machines.filter((one) => one.machine.node_kind !== 'switch')} busy={busy} onInstall={install} />
 
       <h3>{tr("Tienda")}</h3>
       <AccountSelect accounts={accounts} value={account} onChange={setAccount} />
       <MachineShop quote={quote} busy={busy} onBuy={buyMachine} />
       <KitShop kits={kits} busy={busy} onBuy={buyKit} />
-      <Shop parts={parts} busy={busy} onBuy={buy} />
+      <Shop parts={parts} busy={busy} onBuy={buy} canBuyExtras={Boolean(account)} onBuySwitch={buySwitch} />
     </>
   );
 }

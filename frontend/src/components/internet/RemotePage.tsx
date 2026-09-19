@@ -2,17 +2,20 @@ import { tr, useIdioma } from '../../i18n/text';
 import type { HackKind, Remote, RemoteFile } from '../../utils/api';
 import { formatIp } from '../../utils/ip';
 import { AccessTab } from './AccessTab';
-import { ForceTab } from './ForceTab';
+import { ServicePanel } from './ServicePanel';
+import { WebEditor } from './WebEditor';
+import { RemoteUpload } from './RemoteUpload';
 import { PublicTab } from './PublicTab';
 import { RemoteFileList } from './RemoteFileList';
 
-export type RemoteTab = 'public' | 'access' | 'files' | 'force';
+export type RemoteTab = 'public' | 'access' | 'files' | 'force' | 'webedit';
 
 const TABS: { key: RemoteTab; label: string; hint: string }[] = [
-  { key: 'public', label: 'public', get hint() { return tr("lo que enseña a cualquiera"); } },
-  { key: 'access', get label() { return tr("acceso"); }, get hint() { return tr("ssh: entrar y lo que hay dentro"); } },
-  { key: 'files', label: 'files', get hint() { return tr("software y ficheros de la máquina"); } },
-  { key: 'force', label: 'force', get hint() { return tr("romperla por la fuerza"); } },
+  { key: 'public', label: 'sitio', get hint() { return tr("lo que enseña a cualquiera"); } },
+  { key: 'force', get label() { return tr("servicios"); }, get hint() { return tr("elige el punto de entrada"); } },
+  { key: 'access', label: 'SSH', get hint() { return tr("entrar y revisar el registro"); } },
+  { key: 'files', label: 'almacenamiento', get hint() { return tr("software y ficheros de la máquina"); } },
+  { key: 'webedit', get label() { return tr("editar HTML"); }, get hint() { return tr("modificar el sitio de este nodo"); } },
 ];
 
 type RemotePageProps = {
@@ -23,8 +26,10 @@ type RemotePageProps = {
   busy: boolean;
   onTab: (tab: RemoteTab) => void;
   onSignIn: (user: string, password: string) => Promise<boolean>;
-  onCrack: (kind: HackKind) => void;
-  onExploit: () => void;
+  onCrack: (kind: HackKind, softwareId?: number) => void;
+  onIntrude: (capability: string, softwareId: number) => void;
+  onPublish: (content: string) => Promise<void>;
+  onUpload: (id: number) => void;
   onAnalyze: () => void;
   onToggleBookmark: () => void;
   onDownload: (file: RemoteFile) => void;
@@ -44,7 +49,9 @@ export function RemotePage({
   onTab,
   onSignIn,
   onCrack,
-  onExploit,
+  onIntrude,
+  onPublish,
+  onUpload,
   onAnalyze,
   onToggleBookmark,
   onDownload,
@@ -65,10 +72,11 @@ export function RemotePage({
         </span>
 
         <nav className="viewport__tabs" aria-label={tr("Secciones de la máquina")}>
-          {TABS.filter((one) => one.key !== 'files' || remote.access).map((one) => (
+          {TABS.filter((one) => (one.key !== 'files' || remote.permissions.includes('read_files')) && (one.key !== 'webedit' || remote.permissions.includes('read_web'))).map((one) => (
             <button
               type="button"
               key={one.key}
+              data-guia={`red.${one.key}`}
               className={one.key === tab ? `vtab vtab--${one.key} is-active` : `vtab vtab--${one.key}`}
               title={one.hint}
               aria-current={one.key === tab}
@@ -102,10 +110,11 @@ export function RemotePage({
 
         {tab === 'files' && (
           <div className="page">
-            {remote.access ? (
+            {remote.permissions.includes('read_files') ? (
               <section className="page__block page__block--first">
                 <h4>{tr("Software encontrado")}</h4>
-                <RemoteFileList files={files} onDownload={onDownload} onDelete={onDelete} />
+                {remote.permissions.includes('write_files') && <RemoteUpload busy={busy || remote.down} onUpload={onUpload} />}
+                <RemoteFileList files={files} onDownload={onDownload} onDelete={onDelete} canDelete={remote.permissions.includes('write_files')} busy={busy || remote.down} />
               </section>
             ) : (
               <p className="page__note">{tr("Necesitas acceso a la máquina para inspeccionar sus ficheros.")}</p>
@@ -114,14 +123,16 @@ export function RemotePage({
         )}
 
         {tab === 'force' && (
-          <ForceTab
+          <ServicePanel
             remote={remote}
             busy={busy}
             onCrack={onCrack}
-            onExploit={onExploit}
+            onIntrude={onIntrude}
             onAnalyze={onAnalyze}
+            onTab={onTab}
           />
         )}
+        {tab === 'webedit' && remote.permissions.includes('read_web') && <WebEditor key={remote.ip} remote={remote} busy={busy} onPublish={onPublish} />}
       </div>
     </section>
   );

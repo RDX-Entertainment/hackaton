@@ -75,6 +75,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw await errorFrom(response);
   }
 
+  if (method !== 'GET') window.dispatchEvent(new Event('game:changed'));
+
   // DELETE and some POSTs answer with no body at all.
   if (response.status === NO_CONTENT) {
     return undefined as T;

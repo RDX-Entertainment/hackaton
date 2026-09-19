@@ -300,7 +300,7 @@ export function MachineNodeMap({
       {machines.map((detail) => {
         const { machine, slots, board } = detail;
         const { x, y } = posicionDe(machine.id);
-        const bocas = slots.net_total;
+        const bocas = machine.node_kind === 'switch' ? machine.switch_ports : slots.net_total;
         const ocupantes = ocupantesDe(detail);
         const salida = tieneSalida(detail);
 
@@ -319,7 +319,7 @@ export function MachineNodeMap({
             onPointerDown={(event) => empezarArrastre(event, machine.id)}
             onPointerUp={() => soltarArrastre(machine.id)}
           >
-            <small className="nodemap__zone">{salida ? 'salida' : 'interno'}</small>
+            <small className="nodemap__zone">{machine.is_gateway ? tr("★ principal ·") : ''}{machine.node_kind === 'switch' ? 'switch' : machine.operational === false ? 'desactivada' : salida ? 'salida' : 'interno'}</small>
             <b className="nodemap__name">{machine.name}</b>
             {/*
               La direccion por la que se llega a esta maquina, y solo esa: la publica si sale
@@ -329,7 +329,7 @@ export function MachineNodeMap({
             <small className="nodemap__ip">
               {salida ? formatIp(machine.public_ip) : `lan ${formatIp(machine.lan_ip)}`}
             </small>
-            <small className="nodemap__board">{board?.name ?? tr("sin placa")}</small>
+            <small className="nodemap__board">{machine.node_kind === 'switch' ? tr("{0} puertos LAN", bocas) : board?.name ?? tr("sin placa")}</small>
 
             <span className="nodemap__ports">
               {Array.from({ length: Math.max(0, bocas) }).map((_, indice) => {

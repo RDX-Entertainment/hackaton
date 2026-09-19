@@ -13,7 +13,7 @@ use super::{
     dtos::{
         Blueprint, Capability, CompilationQueued, CreateBlueprintRequest, EvidenceSummary,
         ForgeEvidenceRequest, MachineAccess, ModifyWebRequest, OperationStarted, Program,
-        ResearchModule, StartOperationRequest, Stats, TacticalActionStarted, WebContent,
+        ResearchModule, StartOperationRequest, Stats, TacticalActionStarted, WebContent, WebPublication,
     },
     models::{ModuleRow, ProgramRow},
     repo,
@@ -168,6 +168,11 @@ fn intrusion_phase_plan(
         combat::resolve(defense.detection, attack.stealth, rolls),
     )
 }
+
+fn antivirus_phase(clean: bool, antivirus: &Stats, stealth: i32, persistence: i32, rolls: &mut impl RollSource) -> Resolution {
+    if clean { combat::resolve(antivirus.removal, persistence, rolls) }
+    else { combat::resolve(antivirus.detection, stealth, rolls) }
+}
 fn module_stats(module: &ModuleRow) -> Stats {
     Stats {
         effectiveness: module.effectiveness_delta,
@@ -264,6 +269,7 @@ async fn projected(
 }
 
 pub async fn programs(pool: &PgPool, user: i64) -> Result<Vec<Program>, ApiError> {
+    sqlx::query("SELECT ensure_port_scan_profiles($1,false)").bind(user).execute(pool).await?;
     let mut programs = Vec::new();
     for p in repo::programs(pool, user).await? {
             let resources = repo::origin_machine(pool, p.software_id).await?;
@@ -280,6 +286,8 @@ pub async fn programs(pool: &PgPool, user: i64) -> Result<Vec<Program>, ApiError
                 )
                 .collect();
             programs.push(Program {
+                functions: super::workshop::functions(pool, p.software_id).await?,
+                module_slots: super::workshop::slots(p.version),
                 software_id: p.software_id,
                 server_id: p.server_id,
                 resources,
@@ -314,30 +322,12 @@ pub async fn accesses(pool: &PgPool, user: i64) -> Result<Vec<MachineAccess>, Ap
         .collect())
 }
 pub async fn web_content(pool: &PgPool, user: i64, ip: i64) -> Result<WebContent, ApiError> {
-    let access = repo::access(pool, user, ip)
-        .await?
-        .ok_or_else(|| ApiError::BadRequest("NO_ACCESS".into()))?;
-    if !json_strings(&access.permissions)
-        .iter()
-        .any(|p| p == "read_files")
-    {
-        return Err(ApiError::BadRequest("INSUFFICIENT_PERMISSION".into()));
-    }
-    // Sin pagina escrita se devuelve la hoja en blanco, que es lo que hay: un editor que no
-    // se puede abrir hasta que otro haya editado antes no le sirve a nadie.
-    let content = repo::web_content(pool, access.target_user_id, access.target_is_npc).await?;
-    Ok(match content {
-        Some(content) => WebContent {
-            path: content.path,
-            content: content.content,
-            revision: content.revision,
-        },
-        None => WebContent {
-            path: "/index.html".into(),
-            content: String::new(),
-            revision: 0,
-        },
-    })
+    crate::internet::services::require_permission(pool, user, ip, "read_web").await?;
+    let target = crate::internet::services::resolve_ip(pool, ip, user).await?;
+    let content: Option<(String,i64)> = sqlx::query_as("SELECT content,revision FROM node_web_content WHERE server_id=$1")
+        .bind(target.server_id).fetch_optional(pool).await?;
+    let (content,revision) = content.unwrap_or((target.web.unwrap_or_default(),0));
+    Ok(WebContent { path: "/index.html".into(), content, revision })
 }
 pub async fn evidence(pool: &PgPool, user: i64) -> Result<Vec<EvidenceSummary>, ApiError> {
     Ok(repo::evidence(pool, user)
@@ -367,20 +357,66 @@ pub async fn modify_web(
     user: i64,
     ip: i64,
     input: ModifyWebRequest,
-) -> Result<TacticalActionStarted, ApiError> {
+) -> Result<WebPublication, ApiError> {
     if input.content.trim().is_empty() || input.content.len() > 20_000 {
         return Err(ApiError::BadRequest("INVALID_WEB_CONTENT".into()));
     }
-    start_tactical(
-        pool,
-        user,
-        ip,
-        "web_manipulator",
-        "write_files",
-        92,
-        json!({"content":input.content,"path":"/index.html"}),
-    )
-    .await
+    crate::internet::sanitize::check(&input.content)?;
+    let target = crate::internet::services::resolve_ip(pool, ip, user).await?;
+    if target.down { return Err(ApiError::BadRequest("SERVER_DOWN".into())); }
+    let server = target.server_id.ok_or(ApiError::NotFound)?;
+    let mut tx = pool.begin().await?;
+    // Ganar write_web ya autoriza la escritura: no exige un segundo exploit/programa.
+    // Mantener bloqueado el acceso evita publicar a la vez que se revoca o cambia de dueño.
+    let permissions: Option<serde_json::Value> = sqlx::query_scalar(
+        "SELECT permissions FROM machine_accesses WHERE attacker_id=$1 AND target_ip=$2
+         AND target_user_id=$3 AND target_is_npc=$4 AND status='active'
+         AND (expires_at IS NULL OR expires_at>now()) FOR SHARE")
+        .bind(user).bind(ip).bind(target.id).bind(target.is_npc)
+        .fetch_optional(&mut *tx).await?;
+    if !permissions.as_ref().is_some_and(|p| json_strings(p).iter().any(|p| p == "write_web")) {
+        return Err(ApiError::BadRequest("INSUFFICIENT_PERMISSION".into()));
+    }
+    // Serializa también la primera publicación (cuando todavía no hay node_web_content).
+    let operational: Option<bool> = sqlx::query_scalar(
+        "SELECT operational FROM hardware WHERE server_id=$1 AND user_id=$2 AND is_npc=$3
+         AND (public_ip=$4 OR lan_ip=$4) FOR UPDATE")
+        .bind(server).bind(target.id).bind(target.is_npc).bind(ip)
+        .fetch_optional(&mut *tx).await?;
+    match operational {
+        Some(true) => {},
+        Some(false) => return Err(ApiError::BadRequest("SERVER_DOWN".into())),
+        None => return Err(ApiError::NotFound),
+    }
+    let previous: Option<String> = sqlx::query_scalar("SELECT content FROM node_web_content WHERE server_id=$1")
+        .bind(server).fetch_optional(&mut *tx).await?;
+    // Es un recibo completado, no una tarea pendiente que el worker pueda repetir.
+    let process_id: i64 = sqlx::query_scalar(
+        "INSERT INTO processes(creator_id,victim_id,victim_server,action,info,info_str,
+         status,started_at,completed_at,result_code,result_message,process_payload)
+         VALUES($1,$2,$3,92,'web_publish','web_publish','succeeded',now(),now(),
+         'WEB_PUBLISHED','HTML publicado en el servidor atacado',$4) RETURNING pid")
+        .bind(user).bind(target.id).bind(server)
+        .bind(json!({"ip":ip,"target_is_npc":target.is_npc,"permission":"write_web","publication":"direct"}))
+        .fetch_one(&mut *tx).await?;
+    sqlx::query("INSERT INTO node_web_revisions(server_id,process_id,content,created_by) VALUES($1,$2,$3,$4)")
+        .bind(server).bind(process_id).bind(previous.unwrap_or_else(|| target.web.unwrap_or_default())).bind(user)
+        .execute(&mut *tx).await?;
+    let (content, revision): (String, i64) = sqlx::query_as(
+        "INSERT INTO node_web_content(server_id,content) VALUES($1,$2)
+         ON CONFLICT(server_id) DO UPDATE SET content=EXCLUDED.content,
+         revision=node_web_content.revision+1,updated_at=now() RETURNING content,revision")
+        .bind(server).bind(input.content).fetch_one(&mut *tx).await?;
+    sqlx::query("INSERT INTO game_evidence(process_id,target_user_id,target_is_npc,action_code,
+        real_origin_ip,real_identity,program_signature,state,visible_to_target,details)
+        VALUES($1,$2,$3,'modify_web',(SELECT game_ip FROM users WHERE id=$4),$5,
+        'web_editor','normal',true,$6)")
+        .bind(process_id).bind(target.id).bind(target.is_npc).bind(user).bind(format!("user:{user}"))
+        .bind(json!({"result":"WEB_PUBLISHED","ip":ip,"server_id":server,"revision":revision}))
+        .execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(WebPublication { process_id, seconds: 0, estimated_chance: "publicado".into(),
+        web: WebContent { path: "/index.html".into(), content, revision } })
 }
 
 pub async fn hide_evidence(
@@ -571,6 +607,10 @@ pub async fn tune_program(
     stats: Stats,
 ) -> Result<(), ApiError> {
     onboarding::services::guard(pool, user, "lab.mejorar").await?;
+    let admin: bool = sqlx::query_scalar("SELECT is_admin FROM users WHERE id=$1").bind(user).fetch_one(pool).await?;
+    if !admin { return Err(ApiError::BadRequest("Las mejoras se realizan instalando y fusionando módulos.".into())); }
+    let equipped: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM program_modules WHERE software_id=$1)").bind(software).fetch_one(pool).await?;
+    if equipped { return Err(ApiError::BadRequest("Retira los módulos antes de editar el perfil base.".into())); }
 
     let attrs = [
         stats.effectiveness,
@@ -622,6 +662,7 @@ pub async fn create_blueprint(
 ) -> Result<Blueprint, ApiError> {
     onboarding::services::guard(pool, user, "lab.disenar").await?;
     validate_blueprint(&input)?;
+    if !input.module_ids.is_empty() { return Err(ApiError::BadRequest("Los módulos ahora se instalan después de compilar, en Lab → Mejorar.".into())); }
     let name = input.name.trim();
     let capability = repo::capability(pool, &input.capability)
         .await?
@@ -727,6 +768,55 @@ pub async fn start_operation(
             "an operation needs another player as target".into(),
         ));
     }
+    let target_server = repo::gateway_server(pool, input.target_user_id).await?
+        .ok_or_else(|| ApiError::BadRequest("El objetivo no tiene una maquina publica disponible".into()))?;
+    combat_operation(pool, user, input, target_server, false, 90).await
+}
+
+/// Internet ya validó la IP, certificación y acceso al NPC de práctica.
+pub async fn brute_force(pool: &PgPool, user: i64, target: i64, server: i64, npc: bool) -> Result<OperationStarted, ApiError> {
+    repo::ensure_legacy_profiles(pool, user, false).await?;
+    repo::ensure_legacy_profiles(pool, target, npc).await?;
+    combat_operation(pool, user, StartOperationRequest {
+        capability: "cracker".into(), target_user_id: target, software_id: None,
+    }, server, npc, 11).await
+}
+
+pub async fn port_scan(pool: &PgPool, user: i64, target: i64, server: i64, npc: bool, software_id: Option<i64>) -> Result<OperationStarted, ApiError> {
+    sqlx::query("SELECT ensure_port_scan_profiles($1,false)").bind(user).execute(pool).await?;
+    let scanner = match software_id {
+        Some(id) => repo::attacker_candidates(pool, user, "port_scan").await?.into_iter().find(|p| p.software_id==id)
+            .ok_or_else(|| ApiError::BadRequest("Activa un Escáner de puertos propio en Software".into()))?,
+        None => selected_attacker(pool, user, "port_scan").await?,
+    };
+    let attack = stats(&scanner);
+    let origin = repo::origin_machine(pool, scanner.software_id).await?
+        .ok_or_else(|| ApiError::BadRequest("El equipo del escáner está desactivado".into()))?;
+    if origin.cpu < attack.cpu || origin.ram < attack.ram || origin.net < attack.net {
+        return Err(ApiError::BadRequest("El equipo no tiene recursos suficientes para escanear".into()));
+    }
+    let defense = selected_defender(pool, target, "port_scan", npc, server).await?.as_ref().map(stats).unwrap_or_default();
+    let mut rolls = RuntimeRolls;
+    let scan = combat::resolve(attack.effectiveness, defense.hardening, &mut rolls);
+    let detection = combat::resolve(defense.detection, attack.stealth, &mut rolls);
+    let work_units = 120 + defense.hardening;
+    let pressure = (attack.cpu * 100 / origin.cpu.max(1)).max(attack.ram * 100 / origin.ram.max(1)).max(attack.net * 100 / origin.net.max(1));
+    let seconds = crate::process::services::duration_for((work_units * 20 * (100+pressure) / ((attack.effectiveness+attack.stability).max(1)*100)).clamp(20,300));
+    let process_id = repo::enqueue_operation(pool,user,target,scanner.software_id,"port_scan",seconds,
+        json!({"cpu":attack.cpu,"ram":attack.ram,"net":attack.net,"attacker":attack,"defender":defense}),
+        json!({"capability":"port_scan","target_is_npc":npc,"phase_plan":{"execution":{"probability":scan.probability,"roll":scan.roll},"detection":{"probability":detection.probability,"roll":detection.roll}}}),server,15).await?
+        .ok_or_else(|| ApiError::BadRequest("Ya hay un escaneo en curso contra esta máquina".into()))?;
+    Ok(OperationStarted { process_id,seconds,capability:"port_scan".into(),work_units,attacker:attack,defender:defense,estimated_chance:chance_label(scan.probability).into() })
+}
+
+pub async fn service_intrusion(pool: &PgPool, user: i64, input: StartOperationRequest, server: i64, npc: bool) -> Result<OperationStarted, ApiError> {
+    repo::ensure_legacy_profiles(pool, user, false).await?;
+    repo::ensure_legacy_profiles(pool, input.target_user_id, npc).await?;
+    let action = if input.capability == "cracker" {11} else {90};
+    combat_operation(pool, user, input, server, npc, action).await
+}
+
+async fn combat_operation(pool: &PgPool, user: i64, input: StartOperationRequest, target_server: i64, npc: bool, action: i16) -> Result<OperationStarted, ApiError> {
     let capability = input.capability;
     let attacker = match input.software_id {
         Some(id) => repo::attacker_candidates(pool, user, &capability).await?
@@ -738,9 +828,7 @@ pub async fn start_operation(
         || !matches!(attacker.action_kind.as_deref(), Some("intrude" | "infect")) {
         return Err(ApiError::BadRequest("Esta capacidad se usa desde su accion especializada".into()));
     }
-    let target_server = repo::gateway_server(pool, input.target_user_id).await?
-        .ok_or_else(|| ApiError::BadRequest("El objetivo no tiene una maquina publica disponible".into()))?;
-    let defender = selected_defender(pool, input.target_user_id, &capability, false, target_server).await?;
+    let defender = selected_defender(pool, input.target_user_id, &capability, npc, target_server).await?;
     let attacker_stats = stats(&attacker);
     let defender_stats = defender.as_ref().map(stats).unwrap_or_default();
     let capability_definition = repo::capability(pool, &capability)
@@ -783,9 +871,10 @@ pub async fn start_operation(
     let (execution, penetration, detection) =
         intrusion_phase_plan(&attacker_stats, &defender_stats, &mut rolls);
     let estimated_chance =
-        chance_label((execution.probability + penetration.probability) / 2).to_owned();
-    let payload = json!({"capability":capability,"target_user_id":input.target_user_id,"action_kind":attacker.action_kind,"grants_login":attacker.grants_login,"access_scope":capability_definition.max_access_scope,"granted_permissions":capability_definition.granted_permissions,"attack_effectiveness":attacker_stats.effectiveness,"attack_penetration":attacker_stats.penetration,"attack_stealth":attacker_stats.stealth,"defense_resistance":defender_stats.resistance,"defense_hardening":defender_stats.hardening,"defense_detection":defender_stats.detection,"phase_plan":{"execution":{"probability":execution.probability,"roll":execution.roll},"penetration":{"probability":penetration.probability,"roll":penetration.roll},"detection":{"probability":detection.probability,"roll":detection.roll}}});
-    let process_id=repo::enqueue_operation(pool,user,input.target_user_id,attacker.software_id,&capability,seconds,json!({"cpu":attacker_stats.cpu,"ram":attacker_stats.ram,"net":attacker_stats.net,"attacker":attacker_stats,"defender":defender_stats}),payload,target_server).await?;
+        chance_label(execution.probability * penetration.probability / 100).to_owned();
+    let payload = json!({"capability":capability,"target_user_id":input.target_user_id,"target_is_npc":npc,"action_kind":attacker.action_kind,"grants_login":attacker.grants_login,"access_scope":capability_definition.max_access_scope,"granted_permissions":capability_definition.granted_permissions,"attack_effectiveness":attacker_stats.effectiveness,"attack_penetration":attacker_stats.penetration,"attack_stealth":attacker_stats.stealth,"defense_resistance":defender_stats.resistance,"defense_hardening":defender_stats.hardening,"defense_detection":defender_stats.detection,"phase_plan":{"execution":{"probability":execution.probability,"roll":execution.roll},"penetration":{"probability":penetration.probability,"roll":penetration.roll},"detection":{"probability":detection.probability,"roll":detection.roll}}});
+    let process_id=repo::enqueue_operation(pool,user,input.target_user_id,attacker.software_id,&capability,seconds,json!({"cpu":attacker_stats.cpu,"ram":attacker_stats.ram,"net":attacker_stats.net,"attacker":attacker_stats,"defender":defender_stats}),payload,target_server,action).await?
+        .ok_or_else(|| ApiError::BadRequest("identical process already active".into()))?;
     Ok(OperationStarted {
         process_id,
         seconds,
@@ -805,6 +894,48 @@ fn chance_label(probability: i32) -> &'static str {
         ..=80 => "alta",
         _ => "muy alta",
     }
+}
+
+/// El antivirus actúa solamente en su equipo. Detectar no elimina; limpiar exige que
+/// el virus ya sea visible. Cada función compara su atributo, nunca la versión.
+pub async fn antivirus(pool: &PgPool, user: i64, input: super::dtos::AntivirusRequest) -> Result<super::dtos::AntivirusQueued, ApiError> {
+    onboarding::services::guard(pool, user, "lab.lanzar").await?;
+    repo::ensure_legacy_profiles(pool, user, false).await?;
+    let program = repo::attacker_candidates(pool, user, "antivirus").await?.into_iter()
+        .find(|p| p.software_id == input.software_id)
+        .ok_or_else(|| ApiError::BadRequest("Instala un antivirus propio en un equipo activo".into()))?;
+    let required = if matches!(input.mode, super::dtos::AntivirusMode::Clean) { "antivirus_clean" } else { "antivirus_scan" };
+    let allowed: bool = sqlx::query_scalar("SELECT program_has_function($1,$2)").bind(program.software_id).bind(required).fetch_one(pool).await?;
+    if !allowed { return Err(ApiError::BadRequest("Este programa no tiene el módulo que concede esa función.".into())); }
+    let values = stats(&program);
+    let origin = repo::origin_machine(pool, program.software_id).await?
+        .ok_or_else(|| ApiError::BadRequest("El equipo está desactivado".into()))?;
+    if origin.cpu < values.cpu || origin.ram < values.ram || origin.net < values.net {
+        return Err(ApiError::BadRequest("El equipo no tiene recursos suficientes".into()));
+    }
+    let clean = matches!(input.mode, super::dtos::AntivirusMode::Clean);
+    let candidates: Vec<(i64, i32, i32)> = sqlx::query_as(
+        "SELECT s.id,COALESCE(p.stealth,source.stealth,40),COALESCE(p.persistence,source.persistence,40)
+         FROM software s LEFT JOIN effective_software_profiles p ON p.software_id=s.id
+         LEFT JOIN effective_software_profiles source ON source.software_id=s.original_from
+         WHERE s.user_id=$1 AND NOT s.is_npc AND s.server_id=$2
+           AND (s.soft_type IN (8,9,10,20,29,96) OR (s.soft_type=99 AND s.original_from>0))
+           AND (NOT $3 OR NOT s.soft_hidden) ORDER BY s.id")
+        .bind(user).bind(program.server_id).bind(clean).fetch_all(pool).await?;
+    let mut rolls = RuntimeRolls;
+    let plans: Vec<_> = candidates.into_iter().map(|(id, stealth, persistence)| {
+        let result = antivirus_phase(clean, &values, stealth, persistence, &mut rolls);
+        json!({"software_id":id,"probability":result.probability,"roll":result.roll})
+    }).collect();
+    // El tiempo no revela cuántos virus ocultos hay. La estadística elegida acelera su tarea.
+    let power = if clean { values.removal } else { values.detection };
+    let seconds = crate::process::services::duration_for((100 - power / 2).max(20));
+    let action = if clean { 97 } else { 96 };
+    let process_id = repo::enqueue_operation(pool,user,user,program.software_id,"antivirus",seconds,
+        json!({"cpu":values.cpu,"ram":values.ram,"net":values.net,"antivirus":values}),
+        json!({"capability":"antivirus","mode":if clean {"clean"} else {"scan"},"targets":plans}),program.server_id,action)
+        .await?.ok_or_else(|| ApiError::BadRequest("Ya hay un antivirus realizando esa tarea en este equipo".into()))?;
+    Ok(super::dtos::AntivirusQueued { process_id, seconds })
 }
 
 /// La víctima no necesita conocer un id oculto: el análisis busca una discontinuidad en
@@ -852,6 +983,28 @@ mod tests {
         let mut rolls = Rolls(vec![1, 1, 1]);
         let (execution, penetration, detection) = intrusion_phase_plan(&attack, &defense, &mut rolls);
         assert!(execution.success && penetration.success && detection.success);
+    }
+
+    #[test]
+    fn antivirus_detection_and_removal_are_independent() {
+        let detector = Stats { detection: 90, removal: 10, ..Default::default() };
+        let cleaner = Stats { detection: 10, removal: 90, ..Default::default() };
+        assert!(antivirus_phase(false, &detector, 50, 50, &mut Rolls(vec![50])).success);
+        assert!(!antivirus_phase(true, &detector, 50, 50, &mut Rolls(vec![50])).success);
+        assert!(!antivirus_phase(false, &cleaner, 50, 50, &mut Rolls(vec![50])).success);
+        assert!(antivirus_phase(true, &cleaner, 50, 50, &mut Rolls(vec![50])).success);
+    }
+
+    #[test]
+    fn brute_force_attributes_change_their_own_phases() {
+        let low = Stats { effectiveness: 20, penetration: 20, stealth: 20, ..Default::default() };
+        let high = Stats { effectiveness: 80, penetration: 80, stealth: 80, ..Default::default() };
+        let defense = Stats { resistance: 50, hardening: 50, detection: 50, ..Default::default() };
+        let (a,b,c) = intrusion_phase_plan(&low,&defense,&mut Rolls(vec![50,50,50]));
+        let (x,y,z) = intrusion_phase_plan(&high,&defense,&mut Rolls(vec![50,50,50]));
+        assert!(x.probability > a.probability && y.probability > b.probability && z.probability < c.probability);
+        assert!(!a.success && !b.success && c.success);
+        assert!(x.success && y.success && !z.success);
     }
 
     #[test]

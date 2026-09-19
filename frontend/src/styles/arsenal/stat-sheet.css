@@ -39,6 +39,8 @@
   padding-top: 0.15rem;
 }
 
+.apair--single .astat { grid-column: 2 / -1; }
+
 /* La estabilidad, sin pareja, alineada con la columna de ataque. */
 .asheet__lone {
   display: grid;
@@ -173,6 +175,7 @@
   .asheet { padding: 0.65rem; }
   .apair, .asheet__lone { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem 0.8rem; }
   .apair__phase { grid-column: 1 / -1; }
+  .apair--single .astat { grid-column: 1 / -1; }
   .asheet__lone .astat { grid-column: 1; }
   .astat { min-width: 0; }
   .astat__label { overflow-wrap: anywhere; }

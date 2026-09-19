@@ -32,6 +32,19 @@ export type ProcessSnapshot = {
 
 export type ProcessCommand = 'pause' | 'resume' | 'delete';
 export type MissionCommand = 'accept' | 'abort';
+export type Mission = {
+  id: number;
+  type: number;
+  status: number;
+  hirer: number;
+  victim: number;
+  prize: number;
+  level: number;
+  objective: 'gain_access';
+  target_name: string;
+  completed_at: string | null;
+  reward_module_name: string | null;
+  reward_module_tier: number | null;
+};
 export type HackKind = 'bf' | 'scan';
 export type TransferDirection = 'download' | 'upload';
-

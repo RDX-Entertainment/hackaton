@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Icono } from '../components/iconos/Icono';
 import { CircuitRail } from '../components/onboarding/CircuitRail';
 import { NextStep } from '../components/onboarding/NextStep';
-import { useOnboarding } from '../components/onboarding/useOnboarding';
+import { useTutorial } from '../app/tutorial';
 import { EmptyNotice, ErrorNotice, Loading } from '../components/Notice';
 import { dashboardApi, type Dashboard, type News } from '../utils/api';
 import { messageFrom } from '../utils/errors';
@@ -23,7 +23,7 @@ export function HomePage() {
   const [dashboard, setDashboard] = useState<Dashboard>();
   const [news, setNews] = useState<News[]>([]);
   const [error, setError] = useState('');
-  const { onboarding } = useOnboarding();
+  const { onboarding } = useTutorial();
 
   useEffect(() => {
     dashboardApi.getDashboard().then(setDashboard).catch((cause) => setError(messageFrom(cause)));

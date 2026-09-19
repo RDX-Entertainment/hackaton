@@ -6,6 +6,11 @@ use super::models::{
     TutorialStepRow,
 };
 
+pub async fn completed(pool: &PgPool, user_id: i64) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT complete_tutorial_if_ready($1)")
+        .bind(user_id).fetch_one(pool).await
+}
+
 /// Las seis preguntas, en una sola ida y vuelta.
 ///
 /// Son `EXISTS` y no cuentas porque lo unico que decide un paso es si hay al menos uno, y

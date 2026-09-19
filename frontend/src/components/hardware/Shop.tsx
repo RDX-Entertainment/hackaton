@@ -8,19 +8,22 @@ type ShopProps = {
   parts: Part[];
   busy: boolean;
   onBuy: (part: Part) => void;
+  canBuyExtras: boolean;
+  onBuySwitch: () => void;
 };
 
-const TABS: { kind: ComponentKind; label: string }[] = [
+const TABS: { kind: ComponentKind | 'extras'; label: string }[] = [
   { kind: 'mobo', label: 'placas' },
   { kind: 'cpu', label: 'cpu' },
   { kind: 'ram', get label() { return tr("memoria"); } },
   { kind: 'hdd', get label() { return tr("disco"); } },
   { kind: 'net', get label() { return tr("red"); } },
+  { kind: 'extras', label: 'Extras' },
 ];
 
-export function Shop({ parts, busy, onBuy }: ShopProps) {
+export function Shop({ parts, busy, onBuy, canBuyExtras, onBuySwitch }: ShopProps) {
   useIdioma();
-  const [kind, setKind] = useState<ComponentKind>('mobo');
+  const [kind, setKind] = useState<ComponentKind | 'extras'>('mobo');
   const shown = parts.filter((part) => part.kind === kind);
 
   return (
@@ -43,7 +46,13 @@ export function Shop({ parts, busy, onBuy }: ShopProps) {
       </header>
 
       <div className="panel__body">
-        {shown.length === 0 ? (
+        {kind === 'extras' ? (
+          <div className="shop__extra">
+            <div><b>{tr("Switch LAN · 8 puertos")}</b><p>{tr("Conecta equipos en tu red. Aparece directamente en el mapa y no consume una plaza de cómputo.")}</p></div>
+            <span>{formatMoney(1000)}</span>
+            <button type="button" disabled={busy || !canBuyExtras} onClick={onBuySwitch}>{tr("Comprar switch")}</button>
+          </div>
+        ) : shown.length === 0 ? (
           <p className="panel__empty">{tr("Nada a la venta de este tipo.")}</p>
         ) : (
           <table className="shop">

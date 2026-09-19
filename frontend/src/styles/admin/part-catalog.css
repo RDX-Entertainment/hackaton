@@ -145,6 +145,7 @@
 
 .partform__grid--limits {
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  align-items: start;
 }
 
 .partform label {
@@ -198,6 +199,41 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 0.5rem;
+  align-items: start;
+}
+
+.partform__ram-slots {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.partform__stepper {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  gap: 4px;
+}
+
+.partform__stepper button {
+  height: 34px;
+  padding: 0;
+  font-size: 20px;
+}
+
+.partform__stepper button::before,
+.partform__stepper button::after {
+  content: none;
+}
+
+.partform__stepper input {
+  height: 34px;
+  padding-inline: 2px;
+  text-align: center;
+}
+
+.partform__ram-slots small {
+  font-size: 10px;
+  opacity: 0.75;
 }
 
 .partform__hint {
@@ -392,4 +428,3 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-

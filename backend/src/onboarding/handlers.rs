@@ -38,7 +38,7 @@ pub fn configure(
 // ==============================
 //
 
-/// En que paso esta el jugador, deducido del mundo. Solo lee.
+/// Progreso del jugador; consolida la graduación permanente si ya cumplió el circuito.
 pub async fn onboarding(
     state: web::Data<AppState>,
     ctx: Ctx,

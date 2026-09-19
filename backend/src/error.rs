@@ -11,7 +11,18 @@ pub enum ApiError {
     #[error("not found")]
     NotFound,
     #[error("internal server error")]
-    Internal(#[from] sqlx::Error),
+    Internal(sqlx::Error),
+}
+
+impl From<sqlx::Error> for ApiError {
+    fn from(error: sqlx::Error) -> Self {
+        if let sqlx::Error::Database(ref database) = error {
+            if database.code().as_deref() == Some("P0059") {
+                return Self::BadRequest("HARDWARE_DISABLED: el equipo está desactivado; completa sus componentes y equilibra la RAM".into());
+            }
+        }
+        Self::Internal(error)
+    }
 }
 
 /// El codigo que lleva dentro un mensaje, cuando lo lleva.

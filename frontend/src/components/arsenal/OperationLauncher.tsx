@@ -1,7 +1,7 @@
 import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { arsenalApi, type Program, type RankedPlayer, type Machine } from '../../utils/api';
+import { arsenalApi, type Program, type RankedPlayer, type Machine, type Capability } from '../../utils/api';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 import { EmptyNotice } from '../Notice';
 import { ProcessProgress } from '../ProcessProgress';
@@ -10,24 +10,23 @@ import { StatSheet } from './StatSheet';
 
 type Props = {
   programas: Program[];
+  capacidades: Capability[];
   jugadores: RankedPlayer[];
   maquinas: Machine[];
   yo: number | null;
   onLanzada: () => void;
 };
 
-export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzada }: Props) {
+export function OperationLauncher({ programas, capacidades, jugadores, maquinas, yo, onLanzada }: Props) {
   useIdioma();
   const status = useStatusMessage();
   const [selected, setSelected] = useState('');
   const [target, setTarget] = useState('');
   const [processId, setProcessId] = useState<number>();
   const [pending, setPending] = useState(false);
-  const weapons = useMemo(() => programas.filter((program) => program.running
-    && program.role === 'attacker' && program.capability
-    && ['intrude', 'infect'].includes(program.action_kind ?? '')), [programas, idiomaActual()]);
+  const weapons = useMemo(() => programas.filter(p => p.running).flatMap(p => capacidades.filter(c => (p.functions ?? [p.capability]).includes(c.code) && c.role === 'attacker' && ['intrude','infect'].includes(c.action_kind)).map(c => ({...p, capability:c.code, capability_name:c.name, action_kind:c.action_kind, selectionKey:`${p.software_id}:${c.code}`}))), [programas,capacidades, idiomaActual()]);
   const rivals = jugadores.filter((player) => player.user_id !== yo);
-  const weapon = weapons.find((program) => String(program.software_id) === selected) ?? weapons[0];
+  const weapon = weapons.find((program) => program.selectionKey === selected) ?? weapons[0];
   const opponent = rivals.find((player) => String(player.user_id) === target) ?? rivals[0];
   const machine = maquinas.find((item) => item.id === weapon?.server_id);
   const resources = weapon?.resources;
@@ -54,8 +53,8 @@ export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzad
   if (!opponent) return <EmptyNotice>{tr("No hay otro jugador contra el que operar todavía.")}</EmptyNotice>;
 
   return <form className="compose arsenal__operation" onSubmit={launch}>
-    <label>{tr("Programa y origen")} <select value={weapon.software_id} onChange={(event) => setSelected(event.target.value)}>
-        {weapons.map((program) => <option key={program.software_id} value={program.software_id}>
+    <label>{tr("Programa y origen")} <select value={weapon.selectionKey} onChange={(event) => setSelected(event.target.value)}>
+        {weapons.map((program) => <option key={program.selectionKey} value={program.selectionKey}>
           {program.name} · {tr(program.capability_name ?? '')} · {maquinas.find((item) => item.id === program.server_id)?.name ?? tr("Equipo #{0}", program.server_id)}
         </option>)}
       </select>
@@ -65,7 +64,7 @@ export function OperationLauncher({ programas, jugadores, maquinas, yo, onLanzad
       </select>
     </label>
     <p className="muted">{tr("Sale de")} {machine?.name ?? tr("equipo #{0}", weapon.server_id)}{tr(". Los recursos incluyen su cluster, si pertenece a uno.")}</p>
-    <StatSheet stats={weapon.stats} capacidad={resources ?? undefined} />
+    <StatSheet stats={weapon.stats} capability={capacidades.find((c) => c.code === weapon.capability)} capacidad={resources ?? undefined} />
     {!fits && <p role="status">{tr("El equipo no dispone de recursos suficientes para ejecutar este programa.")}</p>}
     {weapon.action_kind === 'infect' && <p className="muted">{tr("Requiere acceso previo a la máquina objetivo y espacio en su disco.")}</p>}
     <button disabled={pending || !fits}>{pending ? tr("Lanzando…") : tr("Lanzar operación")}</button>

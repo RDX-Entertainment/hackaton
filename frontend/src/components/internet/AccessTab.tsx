@@ -87,7 +87,7 @@ export function AccessTab({
             {tr("entrar")} </button>
 
           <p className="ssh__hint">
-            {tr("¿No la sabes? En")} <b>force</b> {tr("están las formas de conseguirla.")} </p>
+            {tr("¿No la sabes? En")} <b>{tr("servicios")}</b> {tr("están las formas de entrar.")} </p>
         </form>
       </div>
     );
@@ -100,10 +100,10 @@ export function AccessTab({
         {formatIp(remote.ip)}
       </p>
 
-      <section className="page__block">
+      {remote.permissions.includes('read_logs') ? <section className="page__block">
         <h4>{tr("Registro")}</h4>
-        <RemoteLogEditor log={log} onRewrite={onRewriteLog} onWipe={onWipeLog} />
-      </section>
+        {remote.permissions.includes('modify_logs') ? <RemoteLogEditor log={log} onRewrite={onRewriteLog} onWipe={onWipeLog} /> : <pre>{log}</pre>}
+      </section> : <p className="page__note">{tr("Tu acceso actual no incluye SSH ni sus registros. Abre Servicios para atacar otra puerta.")}</p>}
     </div>
   );
 }

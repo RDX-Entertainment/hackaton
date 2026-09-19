@@ -38,9 +38,12 @@ export function listShopParts(): Promise<Part[]> {
 export function buyPart(
   part: number,
   account: number,
+  machine?: number,
 ): Promise<{ component: number; kind: string; name: string; power: number; paid: number }> {
-  return post('/hardware/shop', { part, account });
+  return post('/hardware/shop', { part, account, machine });
 }
+
+export const buySwitch = (account: number) => post<MachineBought>('/hardware/switches', { account, name: 'Switch LAN' });
 
 /** Assembled machines this player is allowed to see: the shop plus their clan's. */
 export function listKits(): Promise<Kit[]> {
@@ -62,6 +65,10 @@ export function buyMachine(account: number, name?: string): Promise<MachineBough
 
 export function renameMachine(id: number, name: string): Promise<void> {
   return put<void>(`/hardware/machines/${id}`, { name });
+}
+
+export function setGateway(id: number): Promise<void> {
+  return put<void>(`/hardware/machines/${id}/gateway`);
 }
 
 export function scrapMachine(id: number): Promise<void> {

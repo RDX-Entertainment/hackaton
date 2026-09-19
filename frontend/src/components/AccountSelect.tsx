@@ -1,4 +1,5 @@
 import { tr, useIdioma } from '../i18n/text';
+import { useEffect } from 'react';
 import type { UnknownRow } from '../utils/api';
 import { formatCell } from '../utils/format';
 
@@ -20,6 +21,11 @@ export function AccountSelect({
   label = tr("Paying account"),
 }: AccountSelectProps) {
   useIdioma();
+  useEffect(() => {
+    if (value && accounts.some((one) => String(one.account) === value)) return;
+    const main = accounts.find((one) => one.is_main);
+    if (main) onChange(String(main.account));
+  }, [accounts, value, onChange]);
   return (
     <label>
       {label}
@@ -29,7 +35,7 @@ export function AccountSelect({
           const number = formatCell(account.account);
           return (
             <option key={number} value={number}>
-              {number} · ${formatCell(account.cash ?? 0)}
+              {number}{account.is_main ? tr("· Principal") : ''} · ${formatCell(account.cash ?? 0)}
             </option>
           );
         })}

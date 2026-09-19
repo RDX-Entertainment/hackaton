@@ -2,6 +2,7 @@ import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { KitBrowser } from '../../components/admin/KitBrowser';
+import { AdminLoadError } from '../../components/admin/AdminLoadError';
 import { KitForm } from '../../components/admin/KitForm';
 import { Loading } from '../../components/Notice';
 import { StatusMessage } from '../../components/StatusMessage';
@@ -21,17 +22,18 @@ export function KitsPage() {
   const [kits, setKits] = useState<Kit[]>();
   const [parts, setParts] = useState<Part[]>([]);
   const [clans, setClans] = useState<KitClan[]>([]);
-  const [denied, setDenied] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [editing, setEditing] = useState<Kit | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setKits(await adminApi.listKits());
       setParts(await adminApi.listParts());
       setClans(await adminApi.listClans());
-    } catch {
-      setDenied(true);
+    } catch (error) {
+      setLoadError(error);
     }
   }, []);
 
@@ -76,15 +78,7 @@ export function KitsPage() {
       return tr("{0} es ahora el equipo con el que nace un jugador.", kit.name);
     });
 
-  if (denied) {
-    return (
-      <>
-        <h2>Kits</h2>
-        <p className="muted">
-          {tr("Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es administrador, igual que a una ruta inventada.")} </p>
-      </>
-    );
-  }
+  if (loadError) return <AdminLoadError title="Kits" error={loadError} onRetry={() => void load()} />;
 
   if (!kits) {
     return <Loading />;

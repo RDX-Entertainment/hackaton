@@ -129,13 +129,13 @@
 }
 
 .chip--server.is-active,
-.chip--industrial.is-active {
+.chip--workstation.is-active {
   color: var(--color-highlight);
   border-color: var(--color-highlight);
 }
 
 .chip--server.is-active b,
-.chip--industrial.is-active b {
+.chip--workstation.is-active b {
   color: var(--color-highlight);
 }
 

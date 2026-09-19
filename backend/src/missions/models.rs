@@ -11,4 +11,8 @@ pub struct MissionRow {
     pub info2: i64,
     pub prize: i64,
     pub level: i16,
+    pub target_name: String,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub reward_module_name: Option<String>,
+    pub reward_module_tier: Option<i32>,
 }

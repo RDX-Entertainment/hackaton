@@ -1,19 +1,20 @@
 import { tr, useIdioma, idiomaActual } from '../i18n/text';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { BlueprintForge } from '../components/arsenal/BlueprintForge';
+import { AntivirusPanel } from '../components/arsenal/AntivirusPanel';
+import { ModuleWorkshop } from '../components/arsenal/ModuleWorkshop';
 import { OperationLauncher } from '../components/arsenal/OperationLauncher';
 import { StatSheet } from '../components/arsenal/StatSheet';
 import { DataTable } from '../components/DataTable';
 import { Icono } from '../components/iconos/Icono';
-import { EmptyNotice, Loading } from '../components/Notice';
+import { EmptyNotice } from '../components/Notice';
 import { CircuitRail } from '../components/onboarding/CircuitRail';
-import { useOnboarding } from '../components/onboarding/useOnboarding';
 import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import { Tag } from '../components/Tag';
 import { useAppSelector } from '../app/hooks';
-import { useAccion } from '../app/tutorial';
+import { useAccion, useTutorial } from '../app/tutorial';
 import {
   arsenalApi,
   hardwareApi,
@@ -26,12 +27,13 @@ import {
   type Machine,
   type OwnedFile,
   type Program,
-  type ProgramStats,
   type RankedPlayer,
   type ResearchModule,
   type UnknownRow,
 } from '../utils/api';
 import { useStatusMessage } from '../utils/useStatusMessage';
+import { messageFrom } from '../utils/errors';
+import { useStableData } from '../utils/useStableData';
 
 /** La tarea de compilar, en la cola general del legado. */
 const ACCION_COMPILAR = 91;
@@ -41,34 +43,8 @@ type Mesa = 'crear' | 'investigar' | 'mejorar' | 'lanzar';
 const MESAS: { id: Mesa; nombre: string; que: string }[] = [
   { id: 'crear', get nombre() { return tr("Crear"); }, get que() { return tr("diseñar un programa y compilarlo"); } },
   { id: 'investigar', get nombre() { return tr("Investigar"); }, get que() { return tr("subirle la versión a uno que ya tienes"); } },
-  { id: 'mejorar', get nombre() { return tr("Mejorar"); }, get que() { return tr("ajustar sus propiedades"); } },
+  { id: 'mejorar', get nombre() { return tr("Mejorar"); }, get que() { return tr("instalar módulos y fusionar copias"); } },
   { id: 'lanzar', get nombre() { return tr("Lanzar"); }, get que() { return tr("usarlo contra una máquina"); } },
-];
-
-const PROPIEDADES: { key: keyof ProgramStats; label: string }[] = [
-  { key: 'effectiveness', label: 'eficacia' },
-  { key: 'penetration', get label() { return tr("penetración"); } },
-  { key: 'stealth', label: 'sigilo' },
-  { key: 'detection', get label() { return tr("detección"); } },
-  { key: 'removal', get label() { return tr("eliminación"); } },
-  { key: 'stability', label: 'estabilidad' },
-];
-
-const TACTICOS: { key: keyof ProgramStats; label: string }[] = [
-  { key: 'resistance', label: 'resistencia' },
-  { key: 'hardening', label: 'endurecimiento' },
-  { key: 'manipulation', get label() { return tr("manipulación"); } },
-  { key: 'integrity', label: 'integridad' },
-  { key: 'anti_forensics', label: 'antiforense' },
-  { key: 'forensics', label: 'forense' },
-  { key: 'persistence', label: 'persistencia' },
-];
-
-const COSTE: { key: keyof ProgramStats; label: string }[] = [
-  { key: 'cpu', label: 'CPU' },
-  { key: 'ram', label: 'RAM' },
-  { key: 'net', get label() { return tr("red"); } },
-  { key: 'weight', get label() { return tr("peso en disco"); } },
 ];
 
 /**
@@ -86,7 +62,7 @@ const COSTE: { key: keyof ProgramStats; label: string }[] = [
 export function LabPage() {
   useIdioma();
   const status = useStatusMessage();
-  const { onboarding } = useOnboarding();
+  const { onboarding } = useTutorial();
   const yo = useAppSelector((state) => state.auth.user?.id ?? null);
 
   const [mesa, setMesa] = useState<Mesa>('crear');
@@ -96,62 +72,91 @@ export function LabPage() {
   const compilar_ = useAccion('lab.compilar');
   const investigar_ = useAccion('lab.investigar');
 
-  const [capacidades, setCapacidades] = useState<Capability[]>([]);
-  const [modulos, setModulos] = useState<ResearchModule[]>([]);
-  const [programas, setProgramas] = useState<Program[]>([]);
-  const [disenos, setDisenos] = useState<Blueprint[]>([]);
-  const [jugadores, setJugadores] = useState<RankedPlayer[]>([]);
-  const [maquinas, setMaquinas] = useState<Machine[]>([]);
-  const [ficheros, setFicheros] = useState<OwnedFile[]>([]);
-  const [historial, setHistorial] = useState<UnknownRow[]>([]);
+  const [capacidades, setCapacidades] = useStableData<Capability[]>([]);
+  const [modulos, setModulos] = useStableData<ResearchModule[]>([]);
+  const [moduleError, setModuleError] = useState('');
+  const [programas, setProgramas] = useStableData<Program[]>([]);
+  const [disenos, setDisenos] = useStableData<Blueprint[]>([]);
+  const [jugadores, setJugadores] = useStableData<RankedPlayer[]>([]);
+  const [maquinas, setMaquinas] = useStableData<Machine[]>([]);
+  const [ficheros, setFicheros] = useStableData<OwnedFile[]>([]);
+  const [historial, setHistorial] = useStableData<UnknownRow[]>([]);
 
   const [compilando, setCompilando] = useState<number>();
   const [tarea, setTarea] = useState<number>();
-  const [elegido, setElegido] = useState<number>();
-  const [borrador, setBorrador] = useState<ProgramStats>();
-  const [ocupado, setOcupado] = useState(false);
+  const [researchHere, setResearchHere] = useState<number>();
+  const [compilationHere, setCompilationHere] = useState<{ id: number; blueprint: number; seconds: number }>();
+  const [startingCompilation, setStartingCompilation] = useState(false);
+  const compilationRequest = useRef(0);
+
+  const loadCompilation = useCallback(async () => {
+    const request = ++compilationRequest.current;
+    const rows = await processesApi.listProcesses();
+    if (request !== compilationRequest.current) return;
+    const live = rows.find(row => Number(row.action) === ACCION_COMPILAR && !row.completed);
+    setCompilando(live ? Number(live.id) : undefined);
+  }, []);
+  useEffect(() => () => { ++compilationRequest.current; }, []);
+
+  const cargarModulos = useCallback(async () => {
+    try {
+      setModulos(await arsenalApi.listModules());
+      setModuleError('');
+    } catch (error) {
+      setModuleError(messageFrom(error));
+      throw error;
+    }
+  }, []);
 
   const cargar = useCallback(() => {
-    arsenalApi.listCapabilities().then(setCapacidades).catch(() => setCapacidades([]));
-    arsenalApi.listModules().then(setModulos).catch(() => setModulos([]));
-    arsenalApi.listBlueprints().then(setDisenos).catch(() => setDisenos([]));
+    arsenalApi.listCapabilities().then(setCapacidades).catch(status.reportError);
+    void cargarModulos().catch(() => {});
+    arsenalApi.listBlueprints().then(setDisenos).catch(status.reportError);
     arsenalApi
       .listPrograms()
       .then((lista) => {
         setProgramas(lista);
-        setElegido((actual) => actual ?? lista[0]?.software_id);
       })
-      .catch(() => setProgramas([]));
-    softwareApi.listSoftware().then(setFicheros).catch(() => setFicheros([]));
-    researchApi.listResearch().then(setHistorial).catch(() => setHistorial([]));
-    processesApi
-      .listProcesses()
-      .then((filas) => {
-        const viva = filas.find((fila) => Number(fila.action) === ACCION_COMPILAR && !fila.completed);
-        setCompilando(viva ? Number(viva.id) : undefined);
-      })
-      .catch(() => {});
-  }, []);
+      .catch(status.reportError);
+    softwareApi.listSoftware().then(setFicheros).catch(status.reportError);
+    researchApi.listResearch().then(setHistorial).catch(status.reportError);
+    void loadCompilation().catch(() => {});
+  }, [cargarModulos, loadCompilation]);
 
   useEffect(() => {
     cargar();
-    rankingApi.listPlayers().then(setJugadores).catch(() => setJugadores([]));
-    hardwareApi.listMachines().then(setMaquinas).catch(() => setMaquinas([]));
-
-    const reloj = window.setInterval(cargar, 5_000);
-    return () => window.clearInterval(reloj);
+    rankingApi.listPlayers().then(setJugadores).catch(status.reportError);
+    hardwareApi.listMachines().then(setMaquinas).catch(status.reportError);
   }, [cargar]);
 
-  const programa = useMemo(
-    () => programas.find((uno) => uno.software_id === elegido),
-    [programas, elegido, idiomaActual()],
-  );
-
+  // Poll only live data for the visible desk. Catalogs/designs reload after actions.
+  // Preserve previous data on failure, and never overlap slow polling batches.
   useEffect(() => {
-    if (programa) {
-      setBorrador(programa.stats);
-    }
-  }, [programa]);
+    let active = true;
+    let reading = false;
+    const refresh = async () => {
+      if (document.hidden || reading || !active) return;
+      reading = true;
+      const jobs: Promise<unknown>[] = [
+        arsenalApi.listPrograms().then(rows => { if (active) setProgramas(rows); }),
+        loadCompilation(),
+      ];
+      if (mesa === 'investigar') {
+        jobs.push(softwareApi.listSoftware().then(rows => { if (active) setFicheros(rows); }));
+        jobs.push(researchApi.listResearch().then(rows => { if (active) setHistorial(rows); }));
+      }
+      const results = await Promise.allSettled(jobs);
+      if (active) {
+        const failed = results.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected') status.reportError(failed.reason);
+      }
+      reading = false;
+    };
+    const timer = window.setInterval(() => { void refresh(); }, 5000);
+    const visible = () => { if (!document.hidden) void refresh(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+  }, [mesa, setProgramas, setFicheros, setHistorial, status.reportError, loadCompilation]);
 
   const nombreDeCapacidad = useMemo(
     () => new Map(capacidades.map((una) => [una.code, tr(una.name)])),
@@ -159,19 +164,24 @@ export function LabPage() {
   );
 
   const compilar = async (diseno: Blueprint) => {
-    if (compilando) {
+    if (compilando || startingCompilation) {
       return;
     }
 
+    setStartingCompilation(true);
     try {
       const hecho = await arsenalApi.compile(diseno.id);
+      ++compilationRequest.current;
       setCompilando(hecho.process_id);
+      setCompilationHere({ id: hecho.process_id, blueprint: diseno.id, seconds: hecho.seconds });
       status.report(
         tr("Compilando «{0}» ({1} s). El fichero aparece en Discos al terminar.", hecho.name, hecho.seconds),
       );
       cargar();
     } catch (error) {
       status.reportError(error);
+    } finally {
+      setStartingCompilation(false);
     }
   };
 
@@ -179,6 +189,7 @@ export function LabPage() {
     try {
       const encolado = await researchApi.startResearch(id);
       setTarea(encolado.process_id);
+      setResearchHere(id);
       status.report(tr("Investigando: tarea #{0} ({1} s).", encolado.process_id, encolado.seconds));
       cargar();
     } catch (error) {
@@ -186,30 +197,8 @@ export function LabPage() {
     }
   };
 
-  const guardarPerfil = async (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!programa || !borrador) {
-      return;
-    }
-
-    setOcupado(true);
-
-    try {
-      await arsenalApi.tuneProgram(programa.software_id, borrador);
-      status.report(tr("Perfil guardado."));
-      cargar();
-    } catch (error) {
-      status.reportError(error);
-    } finally {
-      setOcupado(false);
-    }
-  };
-
-  const poner = (key: keyof ProgramStats, valor: number) =>
-    setBorrador((actual) => actual && { ...actual, [key]: valor });
-
   const investigables = ficheros.filter((uno) => !uno.folder);
+  const localCompilation = compilationHere && (!compilando || compilationHere.id === compilando) ? compilationHere : undefined;
 
   return (
     <>
@@ -222,6 +211,7 @@ export function LabPage() {
           <button
             key={una.id}
             type="button"
+            data-guia={`lab.${una.id}`}
             className={mesa === una.id ? 'mesas__mesa is-current' : 'mesas__mesa'}
             onClick={() => setMesa(una.id)}
           >
@@ -232,13 +222,19 @@ export function LabPage() {
       </nav>
 
       <StatusMessage text={status.message} as="block" />
-      {tarea && <ProcessProgress processId={tarea} onFinished={cargar} />}
 
       {mesa === 'crear' && (
         <>
-          <BlueprintForge capacidades={capacidades} modulos={modulos} onCreado={cargar} />
+          {moduleError && (
+            <div role="alert" className="vacio">
+              <p>{tr("No se pudieron cargar tus módulos:")} {moduleError}</p>
+              <button type="button" onClick={() => void cargarModulos().catch(() => {})}>{tr("Reintentar carga de módulos")}</button>
+            </div>
+          )}
+          <BlueprintForge capacidades={capacidades} modulos={modulos} onCreado={cargar} modulesUnavailable={!!moduleError} />
 
           <h3>{tr("Diseños guardados")}</h3>
+          {compilando && (!localCompilation || !disenos.some(d => d.id === localCompilation.blueprint)) && <ProcessProgress processId={compilando} title={tr("Compilando programa")} onFinished={cargar} />}
           {disenos.length ? (
             disenos.map((diseno) => (
               <article className="tarjeta" key={diseno.id} style={{ marginBottom: '0.75rem' }}>
@@ -252,7 +248,7 @@ export function LabPage() {
                   </span>
                 </div>
 
-                <StatSheet stats={diseno.projected} />
+                <StatSheet stats={diseno.projected} capability={capacidades.find((c) => c.code === diseno.capability)} />
 
                 <div className="tarjeta__acciones">
                   {compilando ? (
@@ -263,12 +259,13 @@ export function LabPage() {
                   <button
                     data-foco="lab.compilar"
                     className={compilar_.destacada ? 'es-foco' : undefined}
-                    disabled={!!compilando || !compilar_.permitida}
+                    disabled={startingCompilation || !!compilando || !compilar_.permitida}
                     title={compilar_.motivo ?? undefined}
                     onClick={() => void compilar(diseno)}
                   >
                     {tr("Compilar")} </button>
                 </div>
+                {localCompilation?.blueprint === diseno.id && <ProcessProgress processId={localCompilation.id} initialSeconds={localCompilation.seconds} title={tr("Compilando «{0}»", diseno.name)} onFinished={cargar} />}
               </article>
             ))
           ) : (
@@ -279,7 +276,6 @@ export function LabPage() {
             </div>
           )}
 
-          {compilando && <ProcessProgress processId={compilando} onFinished={cargar} />}
         </>
       )}
 
@@ -313,6 +309,7 @@ export function LabPage() {
                     >
                       {tr("Investigar")} </button>
                   </div>
+                  {tarea && researchHere === fichero.id && <ProcessProgress processId={tarea} title={tr("Investigando «{0}»", fichero.name)} onFinished={cargar} />}
                 </article>
               ))}
             </div>
@@ -326,102 +323,17 @@ export function LabPage() {
         </>
       )}
 
-      {mesa === 'mejorar' && (
-        <>
-          {!programas.length ? (
-            <EmptyNotice>
-              {tr("Todavía no hay ningún programa con perfil. Compila uno primero.")} </EmptyNotice>
-          ) : !borrador || !programa ? (
-            <Loading />
-          ) : (
-            <>
-              <label className="lab__picker">
-                {tr("Programa")} <select
-                  value={elegido ?? ''}
-                  onChange={(event) => setElegido(Number(event.target.value))}
-                >
-                  {programas.map((uno) => (
-                    <option key={uno.software_id} value={uno.software_id}>
-                      {uno.name} · {tr(uno.capability_name ?? tr("sin capacidad"))}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <form className="compose lab__form" onSubmit={guardarPerfil}>
-                <h3>
-                  {programa.name} · {tr(programa.capability_name ?? '')}
-                </h3>
-                <p className="muted">
-                  {programa.running
-                    ? tr("En memoria: lo que guardes aquí lo leen las operaciones que empiecen después.")
-                    : tr("En disco: cárgalo en memoria antes de lanzar nada con él.")}
-                </p>
-
-                <fieldset>
-                  <legend>{tr("Propiedades (0–100)")}</legend>
-                  {PROPIEDADES.map((campo) => (
-                    <label key={campo.key}>
-                      {campo.label}
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={borrador[campo.key]}
-                        onChange={(event) => poner(campo.key, Number(event.target.value))}
-                      />
-                    </label>
-                  ))}
-                </fieldset>
-
-                <fieldset>
-                  <legend>{tr("Atributos tácticos (0–100)")}</legend>
-                  {TACTICOS.map((campo) => (
-                    <label key={campo.key}>
-                      {campo.label}
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={borrador[campo.key]}
-                        onChange={(event) => poner(campo.key, Number(event.target.value))}
-                      />
-                    </label>
-                  ))}
-                </fieldset>
-
-                <fieldset>
-                  <legend>{tr("Coste de ejecución")}</legend>
-                  {COSTE.map((campo) => (
-                    <label key={campo.key}>
-                      {campo.label}
-                      <input
-                        type="number"
-                        min={1}
-                        value={borrador[campo.key]}
-                        onChange={(event) => poner(campo.key, Number(event.target.value))}
-                      />
-                    </label>
-                  ))}
-                </fieldset>
-
-                <p className="muted">
-                  {tr("Pares tácticos: eficacia ↔ resistencia · penetración ↔ endurecimiento · sigilo ↔ detección · manipulación ↔ integridad · antiforense ↔ forense · persistencia ↔ eliminación.")} </p>
-
-                <button disabled={ocupado}>{tr("Guardar perfil")}</button>
-              </form>
-            </>
-          )}
-        </>
-      )}
+      {mesa === 'mejorar' && <ModuleWorkshop programs={programas} capabilities={capacidades} onChanged={cargar} />}
 
       {mesa === 'lanzar' && (
         <>
           <p className="muted">
             {tr("Solo dispara lo que esté cargado en memoria. Lo demás está en el disco, esperando.")} </p>
 
+          <AntivirusPanel programas={programas} capacidades={capacidades} maquinas={maquinas} onFinished={cargar} />
           <OperationLauncher
             programas={programas}
+            capacidades={capacidades}
             jugadores={jugadores}
             maquinas={maquinas}
             yo={yo}

@@ -156,12 +156,14 @@ pub async fn remote_software(
     pool: &PgPool,
     owner_id: i64,
     owner_is_npc: bool,
+    server: Option<i64>,
 ) -> Result<Vec<RemoteSoftwareResponse>, ApiError> {
     let result =
         repo::find_remote_software(
             pool,
             owner_id,
             owner_is_npc,
+            server,
         )
         .await?
         .into_iter()
@@ -240,6 +242,8 @@ pub async fn transfer_software(
         .await?
         .ok_or(ApiError::NotFound)?;
 
+    if action == 1 { require_node_file(pool, input.software_id, target_server).await?; }
+
     if !transferable(
         software.soft_type,
     ) {
@@ -311,6 +315,7 @@ pub async fn delete_remote_software(
     target_server: Option<i64>,
     software_id: i64,
 ) -> Result<DeleteSoftwareStartedResponse, ApiError> {
+    require_node_file(pool, software_id, target_server).await?;
     let exists =
         repo::remote_software_exists(
             pool,
@@ -349,6 +354,13 @@ pub async fn delete_remote_software(
             seconds,
         },
     )
+}
+
+async fn require_node_file(pool: &PgPool, id: i64, server: Option<i64>) -> Result<(), ApiError> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM software WHERE id=$1 AND server_id=$2 AND NOT soft_hidden)")
+        .bind(id).bind(server).fetch_one(pool).await?;
+    if !exists { return Err(ApiError::NotFound); }
+    Ok(())
 }
 
 //

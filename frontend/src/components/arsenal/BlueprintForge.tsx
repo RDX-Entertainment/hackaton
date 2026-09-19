@@ -1,19 +1,21 @@
 import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { useAccion } from '../../app/tutorial';
 import { arsenalApi, type Capability, type ResearchModule, type ProgramStats } from '../../utils/api';
 import { StatSheet } from './StatSheet';
 import { useStatusMessage } from '../../utils/useStatusMessage';
 import { StatusMessage } from '../StatusMessage';
+import { Icono, type NombreDeIcono } from '../iconos/Icono';
 
 const LARGO_NOMBRE = 25;
-const MAX_MODULOS = 3;
 
 type BlueprintForgeProps = {
   capacidades: Capability[];
   modulos: ResearchModule[];
   onCreado: () => void;
+  modulesUnavailable?: boolean;
 };
 
 /**
@@ -21,8 +23,10 @@ type BlueprintForgeProps = {
  *
  * La previsión viene del servidor: elegir módulos y compilar usa la misma regla.
  */
-export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForgeProps) {
+export function BlueprintForge({ capacidades, onCreado }: BlueprintForgeProps) {
   useIdioma();
+  const location = useLocation();
+  const requested = new URLSearchParams(location.search).get('capability');
   // El tutorial decide si este es el paso de disenar; el servidor lo comprueba igual.
   const disenar = useAccion('lab.disenar');
 
@@ -30,23 +34,27 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
 
   const [nombre, setNombre] = useState('');
   const [elegida, setElegida] = useState('');
-  const [piezas, setPiezas] = useState<number[]>([]);
   const [preview, setPreview] = useState<ProgramStats>();
   const [previewError, setPreviewError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const capacidad = elegida || capacidades[0]?.code || '';
+  const capacidad = elegida || capacidades.find(c => c.code === requested)?.code || capacidades[0]?.code || '';
+  const definicion = capacidades.find((una) => una.code === capacidad);
+  const icono: NombreDeIcono = definicion?.role === 'defender'
+    ? 'cerrado'
+    : definicion?.action_kind === 'intrude' ? 'llave'
+    : definicion?.role === 'utility' ? 'red' : 'lanzar';
   useEffect(() => {
     let current = true;
     setPreview(undefined);
     setPreviewError('');
     if (capacidad) {
-      arsenalApi.previewBlueprint(capacidad, piezas)
+      arsenalApi.previewBlueprint(capacidad, [])
         .then((stats) => { if (current) setPreview(stats); })
         .catch(() => { if (current) setPreviewError(tr("No se pudo calcular la vista previa.")); });
     }
     return () => { current = false; };
-  }, [capacidad, piezas]);
+  }, [capacidad]);
 
   // Los dominios, en el orden en que llegan, para agrupar el selector sin inventar un orden.
   const dominios = useMemo(
@@ -54,45 +62,14 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
     [capacidades, idiomaActual()],
   );
 
-  // El servidor solo acepta módulos de la capacidad elegida —o universales—, así que la lista
-  // se recorta aquí en vez de dejar que el intento termine en un 400.
-  const encajan = useMemo(
-    () => modulos.filter((pieza) => !pieza.capability || pieza.capability === capacidad),
-    [modulos, capacidad, idiomaActual()],
-  );
-
-  const cambiarCapacidad = (code: string) => {
-    setElegida(code);
-    // Las piezas de la capacidad anterior no valen para la nueva.
-    setPiezas([]);
-  };
-
-  const alternar = (id: number) => {
-    status.clear();
-
-    setPiezas((actuales) => {
-      if (actuales.includes(id)) {
-        return actuales.filter((otro) => otro !== id);
-      }
-
-      if (actuales.length >= MAX_MODULOS) {
-        status.report(tr("Un diseño admite {0} módulos como mucho.", MAX_MODULOS));
-        return actuales;
-      }
-
-      return [...actuales, id];
-    });
-  };
-
   const crear = async (event: FormEvent) => {
     event.preventDefault();
     if (saving) return;
     setSaving(true);
 
     try {
-      const creado = await arsenalApi.createBlueprint(nombre.trim(), capacidad, piezas);
+      const creado = await arsenalApi.createBlueprint(nombre.trim(), capacidad, []);
       setNombre('');
-      setPiezas([]);
       status.report(tr("Diseño «{0}» guardado. Compílalo para tener el fichero.", creado.name));
       onCreado();
     } catch (error) {
@@ -107,9 +84,21 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
   }
 
   return (
-    <form className="compose" onSubmit={crear}>
+    <form className="compose aforge" onSubmit={crear}>
+      <header className="aforge__heading">
+        <div><span className="micro">{tr("Mesa de creación")}</span><h3>{tr("Diseña tu software")}</h3></div>
+        <span className="micro">{tr("Capacidad + módulos → programa")}</span>
+      </header>
+      <div className="aforge__workbench">
+      <div className="aforge__design">
+        <div className="aforge__hologram">
+          <div className="aforge__orb" aria-hidden="true"><Icono nombre={icono} tamano={88} /></div>
+          <strong>{nombre.trim() || tr(definicion?.name ?? '')}</strong>
+          <span>{tr(definicion?.domain ?? '')} · {definicion?.role === 'defender' ? tr("defensa") : definicion?.role === 'utility' ? tr("utilidad") : tr("ataque")}</span>
+        </div>
       <label>
         {tr("Nombre")} <input
+          data-guia="lab.nombre"
           value={nombre}
           maxLength={LARGO_NOMBRE}
           onChange={(event) => setNombre(event.target.value)}
@@ -118,14 +107,14 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
       </label>
 
       <label>
-        {tr("Capacidad")} <select value={capacidad} onChange={(event) => cambiarCapacidad(event.target.value)}>
+        {tr("Capacidad")} <select data-guia="lab.capacidad" value={capacidad} onChange={(event) => setElegida(event.target.value)}>
           {dominios.map((dominio) => (
             <optgroup key={dominio} label={tr(dominio)}>
               {capacidades
                 .filter((una) => una.domain === dominio)
                 .map((una) => (
                   <option key={una.code} value={una.code}>
-                    {tr(una.name)} · {una.role === 'defender' ? tr("defensa") : tr("ataque")}
+                    {tr(una.name)} · {una.role === 'defender' ? tr("defensa") : una.role === 'utility' ? tr("utilidad") : tr("ataque")}
                   </option>
                 ))}
             </optgroup>
@@ -133,32 +122,6 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
         </select>
       </label>
 
-      <fieldset className="aforge__modules">
-        <legend>
-          {tr("Módulos")} <small>{piezas.length}/{MAX_MODULOS}</small>
-        </legend>
-
-        {encajan.length ? (
-          encajan.map((pieza) => (
-            <label className="aforge__module" key={pieza.id}>
-              <input
-                type="checkbox"
-                checked={piezas.includes(pieza.id)}
-                onChange={() => alternar(pieza.id)}
-              />
-              <span>{tr(pieza.name)}</span>
-              <small>{resumir(pieza)}</small>
-            </label>
-          ))
-        ) : (
-          <p className="muted">{tr("Ninguna pieza investigada encaja en esta capacidad.")}</p>
-        )}
-      </fieldset>
-
-      <div className="aforge__preview" aria-live="polite">
-        <h4>{tr("Resultado del diseño")}</h4>
-        {preview ? <StatSheet stats={preview} /> : <p>{previewError || tr("Calculando atributos…")}</p>}
-      </div>
       <button
         data-foco="lab.disenar"
         className={disenar.destacada ? 'es-foco' : undefined}
@@ -167,37 +130,19 @@ export function BlueprintForge({ capacidades, modulos, onCreado }: BlueprintForg
       >
         {saving ? tr("Guardando…") : tr("Guardar el diseño")}
       </button>
+      </div>
+      <aside className="aforge__preview" aria-live="polite" aria-label={tr("Estadísticas del diseño")}>
+        <h4>{tr("Resultado del diseño")}</h4>
+        <p className="muted">{tr("Vista previa · perfil base · ranuras después de compilar")}</p>
+        {preview ? <StatSheet stats={preview} capability={definicion} /> : <p>{previewError || tr("Calculando atributos…")}</p>}
+        {capacidad === 'antivirus' && <p className="muted">{tr("Detección encuentra virus frente a su sigilo; limpieza los elimina frente a su persistencia. Un mismo antivirus realiza ambas tareas.")}</p>}
+        {capacidad === 'port_scan' && <p className="muted">{tr("Descubre los servicios desde Internet → Servicios. Eficacia contra blindaje; sigilo contra detección. Compila y activa el escáner antes de usarlo. Requiere certificación 3.")}</p>}
+      </aside>
+      </div>
+
+      <p className="muted">{tr("Compila el diseño y abre Lab → Mejorar para instalar módulos físicos, añadir capacidades y fusionar copias. Las ranuras se desbloquean al investigar el programa.")}</p>
+
       <StatusMessage text={status.message} />
     </form>
   );
-}
-
-/** Lo que aporta y lo que cuesta una pieza, en una línea y sin los ceros. */
-function resumir(pieza: ResearchModule): string {
-  const { deltas } = pieza;
-
-  const partes = [
-    ['efic', deltas.effectiveness],
-    ['resistencia', deltas.resistance],
-    ['blindaje', deltas.hardening],
-    [tr("manipulación"), deltas.manipulation],
-    ['integridad', deltas.integrity],
-    ['anti-forense', deltas.anti_forensics],
-    ['forense', deltas.forensics],
-    ['persistencia', deltas.persistence],
-    ['sigilo', deltas.stealth],
-    ['detec', deltas.detection],
-    ['limp', deltas.removal],
-    ['penet', deltas.penetration],
-    ['estab', deltas.stability],
-    ['cpu', deltas.cpu],
-    ['ram', deltas.ram],
-    ['red', deltas.net],
-    ['disco', deltas.weight],
-  ] as const;
-
-  return partes
-    .filter(([, valor]) => valor !== 0)
-    .map(([etiqueta, valor]) => `${valor > 0 ? '+' : ''}${valor} ${etiqueta}`)
-    .join(' · ');
 }

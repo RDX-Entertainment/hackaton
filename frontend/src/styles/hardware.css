@@ -5,3 +5,21 @@
 @import './hardware/machine-shop.css';
 @import './hardware/fleet.css';
 @import './hardware/node-map.css';
+/* Assembly readiness and the direct-install picker. */
+.machine__readiness { padding: 16px; border-top: 1px solid var(--color-border); }
+.machine__readiness ul { color: var(--color-warn); padding-left: 20px; }
+.gateway-control { padding: 16px; margin-block: 12px; }
+.gateway-control__actions, .shop__extra { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.gateway-control__actions label { display: grid; gap: 6px; min-width: 0; max-width: 100%; }
+.gateway-control select { max-width: 100%; }
+.gateway-control small { display: block; margin-top: 12px; }
+.shop__extra > div { flex: 1 1 240px; }
+.compatible-parts { margin-block: 16px; }
+.compatible-parts__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block: 8px; border-bottom: 1px solid var(--color-border); }
+.compatible-parts__row span { overflow-wrap: anywhere; }
+.board__deck { grid-template-areas: none; grid-auto-flow: row dense; }
+.board__deck .zone { grid-area: auto; }
+.board__deck .zone--ram, .board__deck .zone--net { grid-column: auto; }
+.board__deck .zone--cpu { grid-column: 1; }
+.board__deck .zone--hdd { grid-column: 1 / -1; }
+@media (max-width: 700px) { .board__deck .zone--ram { grid-column: 1 / -1; } }

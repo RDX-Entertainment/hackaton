@@ -93,6 +93,7 @@ export function Carril() {
           <NavLink
             key={destino.nombre}
             to={`/${abierta.path}`}
+            data-guia-vistas={destino.items.map((item) => `/${item.path}`).join(' ')}
             className={
               destino.nombre === actual?.nombre ? 'carril__tecla is-current' : 'carril__tecla'
             }

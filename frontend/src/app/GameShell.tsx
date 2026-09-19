@@ -11,6 +11,7 @@ import { LegacyRoute } from './LegacyRoute';
 import { LEGACY_ITEMS } from './navigation';
 import { Cerrada } from '../components/onboarding/Cerrada';
 import { TutorialProvider, useTutorial } from './tutorial';
+import { MissionGuide } from '../components/onboarding/MissionGuide';
 import { t } from '../i18n';
 
 /**
@@ -19,8 +20,8 @@ import { t } from '../i18n';
  * que es lo único que este fichero debió tener nunca.
  *
  * El tutorial envuelve el armazón entero: lo que deja hacer cada paso lo preguntan el carril,
- * la tira y los botones de las pantallas, y con una sola respuesta —una consulta cada ocho
- * segundos— en vez de una por sitio que pregunta.
+ * la tira, la guía y los botones comparten la respuesta. Se refresca al actuar y cada cuatro
+ * segundos mientras el worker resuelve lo pendiente.
  */
 export function GameShell() {
   return (
@@ -84,6 +85,7 @@ function Armazon() {
           </div>
         </main>
       </div>
+      <MissionGuide />
     </div>
   );
 }

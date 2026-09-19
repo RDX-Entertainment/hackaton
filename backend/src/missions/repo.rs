@@ -16,19 +16,26 @@ pub async fn find_visible(
     sqlx::query_as::<_, MissionRow>(
         r#"
         SELECT
-            id,
-            type AS mission_type,
-            status,
-            hirer,
-            victim,
-            info,
-            info2,
-            prize,
-            level
-        FROM missions
-        WHERE user_id = $1
-           OR status = 1
-        ORDER BY date_generated DESC
+            m.id,
+            m.type AS mission_type,
+            m.status,
+            m.hirer,
+            m.victim,
+            m.info,
+            m.info2,
+            m.prize,
+            m.level,
+            COALESCE(i.name, 'Objetivo desconocido') AS target_name,
+            m.completed_at,
+            r.name AS reward_module_name,
+            m.reward_module_tier
+        FROM missions m
+        LEFT JOIN npc n ON n.npc_ip = m.victim
+        LEFT JOIN npc_info i ON i.npc_id = n.id
+        LEFT JOIN research_modules r ON r.id = m.reward_module_id
+        WHERE m.user_id = $1
+           OR m.status = 1
+        ORDER BY m.date_generated DESC
         "#,
     )
     .bind(user_id)
@@ -76,17 +83,15 @@ pub async fn find_open_level(
     .await
 }
 
-pub async fn best_cracker_version(
+pub async fn certification_level(
     pool: &PgPool,
     user_id: i64,
-) -> Result<Option<i32>, sqlx::Error> {
+) -> Result<i16, sqlx::Error> {
     sqlx::query_scalar(
         r#"
-        SELECT MAX(soft_version)
-        FROM software
+        SELECT LEAST(3, GREATEST(1, cert_level))::smallint
+        FROM certifications
         WHERE user_id = $1
-          AND NOT is_npc
-          AND soft_type = 1
         "#,
     )
     .bind(user_id)

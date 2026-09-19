@@ -15,9 +15,10 @@ const KINDS: { value: ComponentKind; label: string }[] = [
   { value: 'net', get label() { return tr("red"); } },
 ];
 
-const TIERS: Tier[] = ['domestica', 'gaming', 'server', 'industrial'];
+const TIERS: Tier[] = ['domestica', 'gamer', 'workstation', 'server'];
 
 const DDR: number[] = [2, 3, 4, 5];
+const MAX_SLOTS = 32767; // El catálogo guarda las ranuras como smallint.
 
 const POWER_LABEL: Record<ComponentKind, string> = {
   mobo: '',
@@ -102,6 +103,17 @@ export function PartForm({
   const set = <K extends keyof PartInput>(key: K, value: PartInput[K]) =>
     setDraft((current) => {
       const next = { ...current, [key]: value };
+
+      if (next.kind === 'mobo' && (key === 'cpu_slots' || key === 'ram_slots' || key === 'kind')) {
+        next.cpu_slots = Math.min(MAX_SLOTS, Math.max(1, Math.trunc(next.cpu_slots)));
+        const slotsPerCpu = key === 'cpu_slots'
+          ? Math.ceil(current.ram_slots / Math.max(1, current.cpu_slots))
+          : Math.ceil(next.ram_slots / next.cpu_slots);
+        next.ram_slots = Math.min(
+          Math.floor(MAX_SLOTS / next.cpu_slots),
+          Math.max(1, slotsPerCpu),
+        ) * next.cpu_slots;
+      }
 
       if (key === 'kind' && next.kind !== 'mobo' && next.kind !== 'cpu') {
         next.chipset_id = null;
@@ -239,14 +251,39 @@ export function PartForm({
               <div className="partform__grid partform__grid--limits">
                 {CEILINGS.map((row) => (
                   <div className="partform__limit" key={row.key}>
-                    <label>
+                    {row.slots === 'ram_slots' ? (
+                      <div className="partform__ram-slots">
+                        <label htmlFor="part-ram-slots">{row.slotLabel}</label>
+                        <div className="partform__stepper">
+                          <button
+                            type="button"
+                            aria-label={tr("Reducir slots de RAM")}
+                            disabled={busy || draft.ram_slots <= draft.cpu_slots}
+                            onClick={() => set('ram_slots', draft.ram_slots - draft.cpu_slots)}
+                          >−</button>
+                          <input id="part-ram-slots" value={draft.ram_slots} readOnly aria-describedby="part-ram-layout" />
+                          <button
+                            type="button"
+                            aria-label={tr("Aumentar slots de RAM")}
+                            disabled={busy || draft.ram_slots + draft.cpu_slots > MAX_SLOTS}
+                            onClick={() => set('ram_slots', draft.ram_slots + draft.cpu_slots)}
+                          >+</button>
+                        </div>
+                        <small id="part-ram-layout" aria-live="polite">
+                          {draft.cpu_slots} CPU × {draft.ram_slots / draft.cpu_slots} {tr("slots por CPU")} </small>
+                      </div>
+                    ) : <label>
                       {row.slotLabel}
                       <input
+                        type={row.slots === 'cpu_slots' ? 'number' : 'text'}
+                        min={row.slots === 'cpu_slots' ? 1 : undefined}
+                        max={row.slots === 'cpu_slots' ? MAX_SLOTS : undefined}
+                        step={row.slots === 'cpu_slots' ? 1 : undefined}
                         inputMode="numeric"
                         value={draft[row.slots]}
                         onChange={(event) => set(row.slots, number(event.target.value))}
                       />
-                    </label>
+                    </label>}
 
                     <label>
                       {row.label}

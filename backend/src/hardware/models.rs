@@ -2,6 +2,11 @@ use sqlx::FromRow;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct MachineRow {
+    pub is_gateway: bool,
+    pub node_kind: String,
+    pub switch_ports: i16,
+    pub operational: bool,
+    pub disabled_reasons: Vec<String>,
     pub server_id: i64,
     pub name: String,
     pub cpu: f32,

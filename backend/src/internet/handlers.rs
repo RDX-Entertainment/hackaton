@@ -29,10 +29,15 @@ use super::{
 // ==============================
 //
 
+async fn service_intrusion(state: web::Data<AppState>, ctx: Ctx, input: web::Json<super::dtos::ServiceIntrusionRequest>) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Created().json(services::service_intrusion(&state.pool, ctx.id, input.into_inner()).await?))
+}
+
 pub fn configure(
     cfg: &mut web::ServiceConfig,
 ) {
     cfg
+        .route("/internet/intrusions", web::post().to(service_intrusion))
         .route(
             "/internet/targets",
             web::get().to(internet_targets),
@@ -238,10 +243,11 @@ pub async fn remote_software(
         )
         .await?;
 
-    services::require_access(
+    services::require_permission(
         &state.pool,
         ctx.id,
         ip,
+        "read_files",
     )
     .await?;
 
@@ -250,6 +256,7 @@ pub async fn remote_software(
             &state.pool,
             target.id,
             target.is_npc,
+            target.server_id,
         )
         .await?;
 
@@ -272,10 +279,11 @@ pub async fn transfer_software(
         )
         .await?;
 
-    services::require_access(
+    services::require_permission(
         &state.pool,
         ctx.id,
         ip,
+        if input.direction == "download" { "read_files" } else { "write_files" },
     )
     .await?;
 
@@ -312,10 +320,11 @@ pub async fn delete_remote_software(
         )
         .await?;
 
-    services::require_access(
+    services::require_permission(
         &state.pool,
         ctx.id,
         ip,
+        "write_files",
     )
     .await?;
 

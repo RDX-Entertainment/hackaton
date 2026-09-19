@@ -1,0 +1,33 @@
+.intrusion__recon,.intrusion__root{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.intrusion__recon>div,.intrusion__root>div{flex:1;min-width:15rem}
+.intrusion__recon h3,.intrusion__root h4{margin:0}
+.intrusion p{line-height:1.65;opacity:.8}
+.intrusion__services{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin:1.5rem 0}
+.intrusion__service{border:1px solid #4b626250;background:#0b151533;padding:1.2rem;display:flex;flex-direction:column;gap:.85rem;min-width:0;border-radius:6px}
+.intrusion__service.is-open{border-color:#58c49c77;box-shadow:inset 0 2px #58c49c55}
+.intrusion__service header{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.intrusion__service h4{margin:.2rem 0;font-size:1.05rem}
+.intrusion__icon{font:1.5rem monospace;color:#76c9b0}
+.intrusion__badge{margin-left:auto;font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;opacity:.7}
+.intrusion__service label{display:grid;gap:.5rem;font-size:.8rem}
+.intrusion__service select{width:100%;min-width:0}
+.intrusion__service p{flex:1;margin:0;font-size:.85rem}
+.intrusion__hint{opacity:.65;line-height:1.5}
+.intrusion__stats{display:flex;justify-content:space-between;gap:.5rem;margin:.25rem 0}
+.intrusion__stats dt{font-size:.65rem;opacity:.65}
+.intrusion__stats dd{margin:.3rem 0;font-size:1.2rem}
+.intrusion__root{padding:1rem;border:1px dashed #4b626266;border-radius:6px}
+.intrusion__scanner{padding:1rem;margin-top:1rem;border:1px solid #4b626266;border-radius:6px;display:grid;gap:.7rem}
+.intrusion__scanner h4,.intrusion__scanner p{margin:0}
+.intrusion__scanner label{display:grid;gap:.4rem}
+.intrusion__scanner select{width:100%;min-width:0}
+.intrusion__scanner button{justify-self:start}
+.webedit__grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.webedit__grid label{display:grid;gap:.5rem}
+.webedit__grid textarea{width:100%;min-height:22rem;resize:vertical;font:12px/1.6 monospace;box-sizing:border-box}
+.webedit__grid .site{min-width:0}
+.webedit__actions{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+.viewport__tabs{max-width:100%;overflow-x:auto;flex-shrink:1}
+.viewport__tabs .vtab{flex-shrink:0}
+.viewport__title{overflow-wrap:anywhere}
+@media(max-width:1000px){.intrusion__services{grid-template-columns:1fr}.webedit__grid{grid-template-columns:1fr}}

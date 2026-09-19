@@ -83,6 +83,8 @@ export type Skill = { action: string; attribute: string; threshold: number; unlo
  * exige el programa cargado en memoria, y cargarlo se hace desde Software.
  */
 export type Program = {
+  functions: string[];
+  module_slots: number;
   software_id: number;
   server_id: number;
   resources: { cpu: number; ram: number; net: number } | null;

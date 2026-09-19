@@ -1,8 +1,13 @@
-export type Tier = 'domestica' | 'gaming' | 'server' | 'industrial';
+export type Tier = 'domestica' | 'gamer' | 'server' | 'workstation';
 
 export type ComponentKind = 'cpu' | 'ram' | 'hdd' | 'net' | 'mobo';
 
 export type Machine = {
+  is_gateway: boolean;
+  node_kind: 'computer' | 'switch';
+  switch_ports: number;
+  operational: boolean;
+  disabled_reasons: string[];
   id: number;
   name: string;
   cpu: number;
@@ -134,4 +139,3 @@ export type MachineBought = {
   name: string;
   paid: number;
 };
-

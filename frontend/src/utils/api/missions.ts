@@ -1,8 +1,8 @@
 import { get, post } from './client';
-import type { MissionCommand, UnknownRow } from './types';
+import type { Mission, MissionCommand } from './types';
 
-export function listMissions(): Promise<UnknownRow[]> {
-  return get<UnknownRow[]>('/missions');
+export function listMissions(): Promise<Mission[]> {
+  return get<Mission[]>('/missions');
 }
 
 export function commandMission(id: number, action: MissionCommand): Promise<void> {

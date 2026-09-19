@@ -25,6 +25,7 @@ pub async fn find_accounts(
     sqlx::query_as::<_, BankAccountRow>(
         r#"
         SELECT
+            EXISTS(SELECT 1 FROM users u WHERE u.id=a.bank_user AND u.main_bank_account=a.id) AS is_main,
             a.id,
             a.bank_acc,
             a.bank_id,
@@ -35,7 +36,7 @@ pub async fn find_accounts(
         JOIN organizations o
             ON o.id = a.bank_id
         WHERE a.bank_user = $1
-        ORDER BY a.date_created DESC
+        ORDER BY is_main DESC, a.date_created, a.id
         "#,
     )
     .bind(user_id)
@@ -128,6 +129,7 @@ pub async fn try_insert_account(
 /// No lleva la clave: el panel las administra, no las usa para entrar.
 const ADMIN_ACCOUNT_QUERY: &str = r#"
     SELECT
+        EXISTS(SELECT 1 FROM users u WHERE u.id=a.bank_user AND u.main_bank_account=a.id) AS is_main,
         a.id,
         a.bank_acc,
         a.bank_id,
@@ -518,6 +520,8 @@ pub async fn move_bitcoin(
 /// de los dos, asi que el COALESCE nunca tiene que elegir entre dos nombres.
 const ACCOUNT_AUTH_QUERY: &str = r#"
     SELECT
+        a.bank_user,
+        coalesce(u.main_bank_account=a.id,false) AS is_main,
         a.bank_acc AS number,
         a.bank_id,
         b.name AS bank_name,

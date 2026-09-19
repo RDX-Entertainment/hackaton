@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AccountsBoard } from '../../components/admin/AccountsBoard';
 import { AdminCard } from '../../components/admin/AdminCard';
+import { AdminLoadError } from '../../components/admin/AdminLoadError';
 import { ComputerEditorDialog } from '../../components/admin/ComputerEditorDialog';
 import { OrganizationNodeMap } from '../../components/admin/OrganizationNodeMap';
 import { SiteEditorDialog } from '../../components/admin/SiteEditorDialog';
@@ -107,9 +108,10 @@ export function OrganizationsPage() {
   const [form, setForm] = useState<OrganizationInput>(emptyOrganization());
   const [behaviorJson, setBehaviorJson] = useState('[]');
   const [busy, setBusy] = useState(false);
-  const [denied, setDenied] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       const [organizationRows, kitRows, npcRows, siteRows, partRows] = await Promise.all([
         adminApi.listOrganizations(), adminApi.listKits(), adminApi.listOrganizationNpcs(), adminApi.listSites(), adminApi.listParts(),
@@ -120,7 +122,7 @@ export function OrganizationsPage() {
       setSites(siteRows);
       setParts(partRows);
       setSelectedId((current) => current ?? organizationRows[0]?.id ?? null);
-    } catch { setDenied(true); }
+    } catch (error) { setLoadError(error); }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -166,7 +168,7 @@ export function OrganizationsPage() {
     });
   };
 
-  if (denied) return <><h2>{tr("Organizaciones")}</h2><p className="muted">{tr("Esta sección requiere una cuenta administradora.")}</p></>;
+  if (loadError) return <AdminLoadError title={tr("Organizaciones")} error={loadError} onRetry={() => void load()} />;
   if (!organizations) return <Loading />;
 
   return (

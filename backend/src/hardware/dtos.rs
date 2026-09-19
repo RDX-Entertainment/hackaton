@@ -10,6 +10,11 @@ use super::models::{ChipsetRow, ComponentRow, LinkRow, MachineRow, PartRow};
 
 #[derive(Debug, Serialize)]
 pub struct MachineResponse {
+    pub is_gateway: bool,
+    pub node_kind: String,
+    pub switch_ports: i16,
+    pub operational: bool,
+    pub disabled_reasons: Vec<String>,
     pub id: i64,
     pub name: String,
     pub cpu: f32,
@@ -25,6 +30,11 @@ pub struct MachineResponse {
 impl From<MachineRow> for MachineResponse {
     fn from(value: MachineRow) -> Self {
         Self {
+            is_gateway: value.is_gateway,
+            node_kind: value.node_kind,
+            switch_ports: value.switch_ports,
+            operational: value.operational,
+            disabled_reasons: value.disabled_reasons,
             id: value.server_id,
             name: value.name,
             cpu: value.cpu,
@@ -351,6 +361,8 @@ fn one() -> i32 {
 
 #[derive(Debug, Deserialize)]
 pub struct BuyPartRequest {
+    #[serde(default)]
+    pub machine: Option<i64>,
     pub part: i64,
     pub account: i64,
 }

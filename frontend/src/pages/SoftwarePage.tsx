@@ -6,9 +6,9 @@ import { FileCard } from '../components/software/FileCard';
 import { Migas, Volumenes, type Sitio } from '../components/software/Explorador';
 import { Icono } from '../components/iconos/Icono';
 import { Meter } from '../components/software/Meter';
-import { contextoDe, discoEnUso, ramEnUso } from '../components/software/rules';
+import { contextoDe, discoEnUso, ramEnUso, noSePuedeInstalar } from '../components/software/rules';
 import { CircuitRail } from '../components/onboarding/CircuitRail';
-import { useOnboarding } from '../components/onboarding/useOnboarding';
+import { useTutorial } from '../app/tutorial';
 import { ProcessProgress } from '../components/ProcessProgress';
 import { StatusMessage } from '../components/StatusMessage';
 import { Tag } from '../components/Tag';
@@ -60,7 +60,7 @@ function lecturaDeCompilacion(row: UnknownRow): Compilation | null {
 export function SoftwarePage() {
   useIdioma();
   const status = useStatusMessage();
-  const { onboarding } = useOnboarding();
+  const { onboarding } = useTutorial();
 
   const [ficheros, setFicheros] = useState<OwnedFile[]>([]);
   const [tipos, setTipos] = useState<SoftwareType[]>([]);
@@ -255,8 +255,8 @@ export function SoftwarePage() {
                 <span className="swfile__type">{tr("en curso")}</span>
               </p>
               <p className="swnote__meta">
-                {tr("Tarea #")}{compilacionActiva.id} · {compilacionActiva.workedSeconds}/
-                {compilacionActiva.idealSeconds} {tr("s. Al terminar, el fichero aparece en la raíz del equipo donde quepa.")} </p>
+                {tr("Al terminar, el fichero aparece en la raíz del equipo donde quepa.")} </p>
+              <ProcessProgress processId={compilacionActiva.id} title={tr("Compilando programa")} onFinished={cargar} />
             </article>
           )}
 
@@ -297,6 +297,7 @@ export function SoftwarePage() {
                   <button
                     type="button"
                     className="explorador__abrir"
+                    data-guia={!noSePuedeInstalar(fichero, ctx) ? 'discos.fichero' : undefined}
                     onClick={() =>
                       setAbierto((actual) => (actual === fichero.id ? undefined : fichero.id))
                     }

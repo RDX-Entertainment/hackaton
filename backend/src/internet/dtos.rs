@@ -79,6 +79,8 @@ pub struct InternetNavigateResponse {
     pub down: bool,
     pub access: bool,
     pub access_as: Option<String>,
+    pub permissions: Vec<String>,
+    pub server_id: Option<i64>,
     pub bookmarked: bool,
     pub scanned: bool,
     pub analysis: Option<HardwareAnalysisResponse>,
@@ -148,6 +150,14 @@ pub struct InternetLoginResponse {
 pub struct InternetHackRequest {
     pub ip: i64,
     pub kind: String,
+    pub software_id: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServiceIntrusionRequest {
+    pub ip: i64,
+    pub capability: String,
+    pub software_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -155,8 +165,10 @@ pub struct InternetHackResponse {
     pub process_id: i64,
     pub action: i16,
     pub seconds: i32,
-    pub attacker_version: i32,
-    pub defender_version: i32,
+    pub attacker_version: Option<i32>,
+    pub defender_version: Option<i32>,
+    pub estimated_chance: Option<String>,
+    pub attacker_stats: Option<crate::software_system::dtos::Stats>,
 }
 
 //

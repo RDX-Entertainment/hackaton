@@ -34,6 +34,8 @@ export type OnboardingRules = {
 };
 
 export type Onboarding = {
+  /** Persisted once: the tutorial cannot reopen after graduation. */
+  completed: boolean;
   /** El primer paso sin hacer. `null` cuando ya están todos. */
   current: string | null;
   steps: OnboardingStep[];

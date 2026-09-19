@@ -36,7 +36,7 @@ export function TransferFunds({ accounts, onSent }: TransferFundsProps) {
   const [done, setDone] = useState('');
   const [sending, setSending] = useState(false);
 
-  const usable = accounts.filter((account) => account.pin_set);
+  const usable = accounts.filter((account) => account.pin_set || account.is_main);
   const source = usable.find((account) => account.account === from);
   const wanted = Number(amount);
   const overdraft = source && Number.isFinite(wanted) && wanted > source.cash;
@@ -54,7 +54,8 @@ export function TransferFunds({ accounts, onSent }: TransferFundsProps) {
     setDone('');
 
     try {
-      await financesApi.transferFunds(from, password, Number(to), wanted);
+      if (source?.is_main) await financesApi.transferMain(from, Number(to), wanted);
+      else await financesApi.transferFunds(from, password, Number(to), wanted);
       setPassword('');
       setAmount('');
       setDone(tr("Enviados {0} a la cuenta {1}.", formatMoney(wanted), to));
@@ -84,7 +85,7 @@ export function TransferFunds({ accounts, onSent }: TransferFundsProps) {
         </select>
       </label>
 
-      <label>
+      {!source?.is_main && <label>
         {tr("PIN de la cuenta")} <input
           type="password"
           value={password}
@@ -93,7 +94,8 @@ export function TransferFunds({ accounts, onSent }: TransferFundsProps) {
           onChange={(event) => setPassword(event.target.value)}
           required
         />
-      </label>
+      </label>}
+      {source?.is_main && <small>{tr("Cuenta principal activa: no necesitas volver a introducir el PIN.")}</small>}
 
       <label>
         {tr("Cuenta de destino")} <input

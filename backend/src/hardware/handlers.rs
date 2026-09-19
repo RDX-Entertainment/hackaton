@@ -34,6 +34,8 @@ pub fn configure(
     cfg: &mut web::ServiceConfig,
 ) {
     cfg
+        .route("/hardware/machines/{id}/gateway", web::put().to(set_gateway))
+        .route("/hardware/switches", web::post().to(buy_switch))
         .route(
             "/hardware",
             web::get().to(hardware),
@@ -133,6 +135,15 @@ pub async fn move_machine(
     )
     .await?;
 
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn buy_switch(state: web::Data<AppState>, ctx: Ctx, input: web::Json<BuyMachineRequest>) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(services::buy_switch(&state.pool, ctx.id, input.into_inner()).await?))
+}
+
+pub async fn set_gateway(state: web::Data<AppState>, ctx: Ctx, id: web::Path<i64>) -> Result<HttpResponse, ApiError> {
+    services::set_gateway(&state.pool, ctx.id, id.into_inner()).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

@@ -36,6 +36,8 @@ impl From<PracticeTargetRow> for PracticeTargetResponse {
 
 #[derive(Debug, Serialize)]
 pub struct OnboardingResponse {
+    /// Permanent graduation: changing software or the tutorial definition cannot undo it.
+    pub completed: bool,
     /// El primer paso sin hacer. `null` cuando ya estan todos: entonces el jugador juega y
     /// la pantalla no tiene nada que empujar.
     pub current: Option<String>,

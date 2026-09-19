@@ -27,6 +27,8 @@ pub const PROCESS_ACTIONS: &[(&str, u8)] = &[
     ("RESET_PWD", 26),
     ("DDOS", 27),
     ("INSTALL_WEBSERVER", 28),
+    ("ANTIVIRUS_SCAN", 96),
+    ("ANTIVIRUS_CLEAN", 97),
 ];
 
 /// Names from PC::getSoftwareName. The frontend receives soft_type as a number in every
@@ -59,4 +61,3 @@ pub const SOFTWARE_TYPES: &[(&str, u8)] = &[
     ("Doom virus", 96),
     ("Virus", 99),
 ];
-

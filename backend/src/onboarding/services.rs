@@ -24,8 +24,8 @@ use super::{
 /// El paso actual: **el primero cuyo hecho todavia no se cumple**.
 ///
 /// Se mira en orden y se para en el primero, no se busca el ultimo hecho: quien compilo un
-/// programa y luego lo borro tiene que volver a compilar, y un maximo diria que ya paso de
-/// ahi.
+/// programa y luego lo borro mientras todavía aprende puede necesitar reconstruirlo.
+/// Una vez terminado, la marca persistente evita consultar de nuevo estas condiciones.
 fn current<'a>(
     steps: &'a [TutorialStepRow],
     facts: &OnboardingFacts,
@@ -39,11 +39,12 @@ pub async fn onboarding(
     pool: &PgPool,
     user_id: i64,
 ) -> Result<OnboardingResponse, ApiError> {
+    let completed = repo::completed(pool, user_id).await?;
     let definition = repo::active_steps(pool).await?;
     let facts = repo::facts(pool, user_id).await?;
     let enforced = repo::enforced(pool).await?;
 
-    let actual = current(&definition, &facts);
+    let actual = if completed { None } else { current(&definition, &facts) };
 
     // Con el tutorial apagado se sigue diciendo el paso y el foco, y las listas viajan
     // vacias de contenido --`None`, que es «todo»--. Asi un cliente que se olvide de mirar
@@ -65,7 +66,7 @@ pub async fn onboarding(
         .iter()
         .map(|step| OnboardingStepResponse {
             code: step.code.clone(),
-            done: facts.get(&step.fact),
+            done: completed || facts.get(&step.fact),
         })
         .collect();
 
@@ -76,6 +77,7 @@ pub async fn onboarding(
         .collect();
 
     Ok(OnboardingResponse {
+        completed,
         current: actual.map(|step| step.code.clone()),
         steps,
         compiling: facts.compiling,
@@ -106,6 +108,9 @@ pub async fn guard(
     user_id: i64,
     action: &str,
 ) -> Result<(), ApiError> {
+    if repo::completed(pool, user_id).await? {
+        return Ok(());
+    }
     if !repo::enforced(pool).await? {
         return Ok(());
     }

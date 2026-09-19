@@ -23,6 +23,10 @@ export function listCapabilities(): Promise<Capability[]> {
   return get<Capability[]>('/software-system/capabilities');
 }
 
+export function runAntivirus(softwareId: number, mode: 'scan' | 'clean'): Promise<{ process_id: number; seconds: number }> {
+  return post('/software-system/antivirus', { software_id: softwareId, mode });
+}
+
 export function listModules(): Promise<ResearchModule[]> {
   return get<ResearchModule[]>('/software-system/research/modules');
 }
@@ -60,7 +64,7 @@ export function listLabPrograms(): Promise<Program[]> { return get<Program[]>('/
 export function tuneProgram(softwareId: number, stats: ProgramStats): Promise<void> { return put<void>(`/software-lab/programs/${softwareId}`, { stats }); }
 export function listAccesses(): Promise<MachineAccess[]> { return get('/software-system/accesses'); }
 export function getWebContent(ip: number): Promise<WebContent> { return get(`/software-system/accesses/${ip}/web`); }
-export function modifyWeb(ip: number, content: string): Promise<TacticalActionStarted> { return put(`/software-system/accesses/${ip}/web`, { content }); }
+export function modifyWeb(ip: number, content: string): Promise<WebContent & TacticalActionStarted> { return put(`/software-system/accesses/${ip}/web`, { content }); }
 export function listEvidence(): Promise<EvidenceSummary[]> { return get('/software-system/evidence'); }
 export function analyzeEvidence(evidenceId: number): Promise<TacticalActionStarted> { return post(`/software-system/evidence/${evidenceId}/analyze`, {}); }
 export function discoverEvidence(): Promise<TacticalActionStarted> { return post('/software-system/evidence/discover', {}); }

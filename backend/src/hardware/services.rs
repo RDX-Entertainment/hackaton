@@ -37,7 +37,7 @@ const KINDS: [&str; 5] = ["cpu", "ram", "hdd", "net", "mobo"];
 
 /// Lista cerrada: cada tipo nuevo seria una regla de compatibilidad nueva, y eso no se
 /// decide desde un formulario. Los chipsets si son abiertos, porque solo son una etiqueta.
-const TIERS: [&str; 4] = ["domestica", "gaming", "server", "industrial"];
+const TIERS: [&str; 4] = ["domestica", "gamer", "workstation", "server"];
 
 /// Cuantas plazas admite este servidor, pase lo que pase.
 ///
@@ -61,6 +61,26 @@ pub fn server_slot_ceiling() -> i64 {
 /// cuarta sale por cuatro veces la segunda. Tener flota es una decision, no un tramite.
 const MACHINE_BASE_PRICE: i64 = 25_000;
 
+/// An eight-port LAN switch is a network node, not a computing slot.
+pub async fn buy_switch(pool: &PgPool, user: i64, input: BuyMachineRequest) -> Result<MachineBoughtResponse, ApiError> {
+    let mut tx = pool.begin().await?;
+    repo::machine_slots(&mut tx, user).await?;
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM hardware WHERE user_id=$1 AND NOT is_npc AND node_kind='switch'")
+        .bind(user).fetch_one(&mut *tx).await?;
+    if count >= 16 { return Err(ApiError::BadRequest("Máximo 16 switches por red".into())); }
+    let name = checked_name(input.name.as_deref().unwrap_or("Switch LAN"))?;
+    let price = 1000;
+    let cash = repo::lock_account_cash(&mut tx, input.account, user).await?.ok_or(ApiError::NotFound)?;
+    if cash < price { return Err(ApiError::BadRequest("insufficient funds".into())); }
+    repo::charge_account(&mut tx, input.account, user, price).await?;
+    repo::record_spend(&mut tx, user, price).await?;
+    let machine = repo::insert_machine(&mut tx, user, &name).await?;
+    sqlx::query("UPDATE hardware SET node_kind='switch',switch_ports=8,operational=true,disabled_reasons='{}',map_x=220,map_y=100 WHERE server_id=$1")
+        .bind(machine).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(MachineBoughtResponse { machine, name, paid: price })
+}
+
 /// Lo que cuesta la siguiente plaza de alguien que ya tiene `slots`.
 fn machine_price(slots: i64) -> i64 {
     MACHINE_BASE_PRICE << (slots - 1).max(0).min(16)
@@ -80,6 +100,7 @@ pub async fn machines(
         repo::find_machines(pool, user_id)
             .await?
             .into_iter()
+            .filter(|machine| machine.node_kind == "computer")
             .map(MachineResponse::from)
             .collect();
 
@@ -210,6 +231,36 @@ pub async fn rename_machine(
     Ok(())
 }
 
+/// Choose the reachable computer that represents the player's public identity.
+pub async fn set_gateway(pool: &PgPool, user: i64, machine: i64) -> Result<(), ApiError> {
+    let mut tx = pool.begin().await?;
+    repo::lock_hardware_owner(&mut tx, user).await?;
+    // Lock in a stable order, including the old principal. The unique index enforces
+    // at most one; the transaction never exposes the intermediate unmarked state.
+    let machines = sqlx::query_as::<_, (i64, String, bool, Option<i64>)>(
+        "SELECT server_id,node_kind,operational,public_ip FROM hardware WHERE user_id=$1 AND NOT is_npc ORDER BY server_id FOR UPDATE",
+    ).bind(user).fetch_all(&mut *tx).await?;
+    let (_, kind, operational, ip) = machines.iter().find(|row| row.0 == machine).ok_or(ApiError::NotFound)?;
+    if kind != "computer" {
+        return Err(ApiError::BadRequest("GATEWAY_COMPUTER_ONLY: un switch no puede ser la máquina principal".into()));
+    }
+    if !operational {
+        return Err(ApiError::BadRequest("GATEWAY_MUST_BE_ACTIVE: completa los componentes del equipo antes de nombrarlo principal".into()));
+    }
+    if ip.is_none() || repo::count_nics(&mut tx, machine).await? == 0 {
+        return Err(ApiError::BadRequest("GATEWAY_NEEDS_NIC: instala una tarjeta de red para que el nuevo equipo principal tenga salida a Internet".into()));
+    }
+    sqlx::query("UPDATE hardware SET is_gateway=false WHERE user_id=$1 AND NOT is_npc AND is_gateway AND server_id<>$2")
+        .bind(user).bind(machine).execute(&mut *tx).await?;
+    sqlx::query("UPDATE hardware SET is_gateway=true WHERE server_id=$1")
+        .bind(machine).execute(&mut *tx).await?;
+    // IPs stay with their machines; the account now identifies the new principal.
+    sqlx::query("UPDATE users SET game_ip=$2 WHERE id=$1")
+        .bind(user).bind(ip).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Deshacerse de un equipo.
 ///
 /// Tiene que estar vacio. Vaciarlo pieza a pieza no es burocracia: cada `uninstall` mira si
@@ -222,6 +273,7 @@ pub async fn scrap_machine(
     machine: i64,
 ) -> Result<(), ApiError> {
     let mut tx = pool.begin().await?;
+    repo::lock_hardware_owner(&mut tx, user_id).await?;
 
     if !repo::machine_belongs_to(&mut tx, machine, user_id).await? {
         return Err(ApiError::BadRequest("unknown machine".into()));
@@ -229,10 +281,16 @@ pub async fn scrap_machine(
 
     let owned = repo::count_machines(&mut tx, user_id).await?;
 
-    if owned <= 1 {
+    let kind: String = sqlx::query_scalar("SELECT node_kind FROM hardware WHERE server_id=$1 FOR UPDATE")
+        .bind(machine).fetch_one(&mut *tx).await?;
+    if owned <= 1 && kind == "computer" {
         return Err(ApiError::BadRequest(
             "LAST_MACHINE: es tu unico equipo; no puedes quedarte sin ninguno".into(),
         ));
+    }
+
+    if repo::is_gateway(&mut tx, machine).await? {
+        return Err(ApiError::BadRequest("GATEWAY_NEEDS_NIC: nombra principal a otro equipo antes de dar este de baja".into()));
     }
 
     let inside = repo::count_in_machine(&mut tx, machine).await?;
@@ -361,6 +419,7 @@ pub async fn install(
     input: InstallRequest,
 ) -> Result<ComponentResponse, ApiError> {
     let mut tx = pool.begin().await?;
+    repo::lock_hardware_owner(&mut tx, user_id).await?;
 
     let part = repo::lock_component(&mut tx, component_id, user_id)
         .await?
@@ -373,6 +432,8 @@ pub async fn install(
     if !repo::machine_belongs_to(&mut tx, input.machine, user_id).await? {
         return Err(ApiError::BadRequest("unknown machine".into()));
     }
+
+    repo::require_computer(&mut tx, input.machine).await?;
 
     let board = repo::find_board(&mut tx, input.machine).await?;
 
@@ -416,6 +477,7 @@ pub async fn install(
         // Mover la tarjeta desde otra maquina deja a aquella sin salida, si era la unica.
         if let Some(previous) = previous {
             if repo::count_nics(&mut tx, previous).await? == 0 {
+                repo::protect_gateway_uplink(&mut tx, previous).await?;
                 repo::clear_public_ip(&mut tx, previous).await?;
             }
         }
@@ -439,6 +501,7 @@ pub async fn uninstall(
     component_id: i64,
 ) -> Result<ComponentResponse, ApiError> {
     let mut tx = pool.begin().await?;
+    repo::lock_hardware_owner(&mut tx, user_id).await?;
 
     let part = repo::lock_component(&mut tx, component_id, user_id)
         .await?
@@ -496,13 +559,7 @@ pub async fn uninstall(
         // seria esconder un equipo, seria borrar a alguien del mapa mientras sigue jugando.
         // Esconder maquinas quitandoles la tarjeta es lo que trae la fase 5, y sera para las
         // otras.
-        if repo::is_gateway(&mut tx, machine).await? {
-            return Err(ApiError::BadRequest(
-                "GATEWAY_NEEDS_NIC: esa es tu maquina principal y por ahi te alcanzan. \
-                 Nombra principal a otra antes de dejar esta sin salida"
-                    .into(),
-            ));
-        }
+        repo::protect_gateway_uplink(&mut tx, machine).await?;
 
         repo::clear_public_ip(&mut tx, machine).await?;
     }
@@ -559,7 +616,27 @@ pub async fn buy(
     repo::charge_account(&mut tx, input.account, user_id, part.price).await?;
     repo::record_spend(&mut tx, user_id, part.price).await?;
 
-    let component = repo::insert_component(&mut tx, part.id, user_id).await?;
+    let component = if let Some(machine) = input.machine {
+        if !repo::machine_belongs_to(&mut tx, machine, user_id).await? {
+            return Err(ApiError::BadRequest("unknown machine".into()));
+        }
+        repo::require_computer(&mut tx, machine).await?;
+        let board = repo::find_board(&mut tx, machine).await?;
+        if part.kind == "mobo" {
+            if board.is_some() { return Err(ApiError::BadRequest("BOARD_ALREADY_PRESENT".into())); }
+        } else {
+            let board = board.ok_or_else(|| ApiError::BadRequest("NO_BOARD".into()))?;
+            let count = repo::count_installed(&mut tx, machine, &part.kind).await?;
+            let power = repo::installed_power(&mut tx, machine, &part.kind).await?;
+            fitting::check(&fitting::Board::from(&board), &fitting::Piece::from(&part), count, power)?;
+        }
+        let component = repo::insert_installed(&mut tx, part.id, user_id, machine).await?;
+        repo::recompute_machine(&mut tx, machine).await?;
+        if part.kind == "net" { repo::assign_public_ip(&mut tx, machine).await?; }
+        component
+    } else {
+        repo::insert_component(&mut tx, part.id, user_id).await?
+    };
 
     tx.commit().await?;
 
@@ -617,7 +694,8 @@ fn validate_part(input: &PartInput) -> Result<(), ApiError> {
     // Una placa que no aporta ranuras no sirve para nada, y una pieza que no es placa no
     // tiene ranuras que dar.
     if input.kind == "mobo" {
-        let slots = input.cpu_slots + input.ram_slots + input.hdd_slots + input.net_slots;
+        fitting::check_ram_layout(input.cpu_slots, input.ram_slots)?;
+        let slots = i32::from(input.cpu_slots) + i32::from(input.ram_slots) + i32::from(input.hdd_slots) + i32::from(input.net_slots);
 
         if slots <= 0 {
             return Err(ApiError::BadRequest("a board needs at least one slot".into()));
@@ -920,6 +998,7 @@ pub async fn create_cluster(
     let mut tx = pool.begin().await?;
 
     for machine in &miembros {
+        repo::require_computer(&mut tx, *machine).await?;
         if !repo::machine_belongs_to(&mut tx, *machine, user_id).await? {
             return Err(ApiError::BadRequest("unknown machine".into()));
         }
@@ -995,14 +1074,17 @@ pub async fn create_link(
         ));
     }
 
-    for machine in [from, to] {
-        if !repo::owns_machine(pool, machine, user_id).await? {
+    let mut tx = pool.begin().await?;
+    for machine in [from.min(to), from.max(to)] {
+        let owned: Option<i64> = sqlx::query_scalar("SELECT server_id FROM hardware WHERE server_id=$1 AND user_id=$2 AND NOT is_npc FOR UPDATE")
+            .bind(machine).bind(user_id).fetch_optional(&mut *tx).await?;
+        if owned.is_none() {
             return Err(ApiError::BadRequest("unknown machine".into()));
         }
     }
 
     for machine in [from, to] {
-        let ports = repo::lan_ports(pool, machine).await?;
+        let ports = repo::lan_ports(&mut tx, machine).await?;
 
         if ports == 0 {
             return Err(ApiError::BadRequest(
@@ -1014,8 +1096,8 @@ pub async fn create_link(
         // red ya esta enchufado a algo, aunque ese algo no se dibuje como cable: es la
         // misma cuenta que hace el mapa de organizaciones, donde un nodo publico lleva
         // `INTERNET` entre sus conexiones y le come un puerto.
-        let uplink = i64::from(repo::has_uplink(pool, machine).await?);
-        let usadas = repo::count_links_of(pool, machine).await? + uplink;
+        let uplink = i64::from(repo::has_uplink(&mut tx, machine).await?);
+        let usadas = repo::count_links_of(&mut tx, machine).await? + uplink;
 
         if usadas >= ports {
             return Err(ApiError::BadRequest(format!(
@@ -1025,8 +1107,8 @@ pub async fn create_link(
         }
     }
 
-    match repo::insert_link(pool, user_id, from, to).await {
-        Ok(row) => Ok(LinkResponse::from(row)),
+    match repo::insert_link(&mut tx, user_id, from, to).await {
+        Ok(row) => { tx.commit().await?; Ok(LinkResponse::from(row)) },
 
         // 23505 es la violacion del indice unico del par: ya estaban cableados. Es un
         // error del que pide, no del servidor, y merece decirlo asi.

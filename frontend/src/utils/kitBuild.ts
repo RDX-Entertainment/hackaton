@@ -63,9 +63,9 @@ export const KIND_UNIT: Record<ComponentKind, string> = {
 
 export const TIER_LABEL: Record<Tier, string> = {
   get domestica() { return tr("doméstica"); },
-  gaming: 'gaming',
-  server: 'servidor',
-  industrial: 'industrial',
+  gamer: 'gamer',
+  server: 'server',
+  workstation: 'workstation',
 };
 
 export function build(items: BuildItem[]): Build {

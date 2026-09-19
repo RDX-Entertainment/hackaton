@@ -1,5 +1,14 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
+pub async fn require_computer(tx: &mut Transaction<'_, Postgres>, machine: i64) -> Result<(), crate::error::ApiError> {
+    let kind: Option<String> = sqlx::query_scalar("SELECT node_kind FROM hardware WHERE server_id=$1 FOR UPDATE")
+        .bind(machine).fetch_optional(&mut **tx).await?;
+    if kind.as_deref() != Some("computer") {
+        return Err(crate::error::ApiError::BadRequest("Un switch no admite componentes ni tareas de ordenador".into()));
+    }
+    Ok(())
+}
+
 use super::{
     dtos::PartInput,
     models::{BoardRow, ChipsetRow, ComponentRow, LinkRow, MachineRow, PartRow},
@@ -18,6 +27,7 @@ pub async fn find_machines(
     sqlx::query_as::<_, MachineRow>(
         r#"
         SELECT
+            is_gateway, node_kind, switch_ports, operational, disabled_reasons,
             server_id,
             name,
             cpu,
@@ -50,6 +60,7 @@ pub async fn count_machines(
         FROM hardware
         WHERE user_id = $1
           AND NOT is_npc
+          AND node_kind = 'computer'
         "#,
     )
     .bind(user_id)
@@ -667,22 +678,7 @@ pub async fn recompute_machine(
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        UPDATE hardware h
-        SET cpu = COALESCE(s.cpu, 0),
-            ram = COALESCE(s.ram, 0),
-            hdd = COALESCE(s.hdd, 0),
-            net = COALESCE(s.net, 0)
-        FROM (
-            SELECT
-                sum(k.power) FILTER (WHERE k.kind = 'cpu') AS cpu,
-                sum(k.power) FILTER (WHERE k.kind = 'ram') AS ram,
-                sum(k.power) FILTER (WHERE k.kind = 'hdd') AS hdd,
-                sum(k.power) FILTER (WHERE k.kind = 'net') AS net
-            FROM hardware_components c
-            JOIN hardware_parts k ON k.id = c.part_id
-            WHERE c.installed_in = $1
-        ) s
-        WHERE h.server_id = $1
+        SELECT refresh_hardware($1)
         "#,
     )
     .bind(machine)
@@ -972,28 +968,26 @@ pub async fn owns_machine(
 /// `lan_total` en las redes de organizacion, y sale del mismo sitio: sin placa no hay
 /// puertos, y cambiar de placa cambia el limite.
 pub async fn lan_ports(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     machine: i64,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar::<_, Option<i64>>(
         r#"
-        SELECT mobo.net_slots::bigint
-        FROM hardware_components c
-        JOIN hardware_parts mobo ON mobo.id = c.part_id
-        WHERE c.installed_in = $1
-          AND mobo.kind = 'mobo'
-        LIMIT 1
+        SELECT CASE WHEN h.node_kind='switch' THEN h.switch_ports ELSE
+          (SELECT p.net_slots FROM hardware_components c JOIN hardware_parts p ON p.id=c.part_id
+           WHERE c.installed_in=h.server_id AND p.kind='mobo' LIMIT 1) END::bigint
+        FROM hardware h WHERE h.server_id=$1
         "#,
     )
     .bind(machine)
-    .fetch_optional(pool)
+    .fetch_optional(&mut **tx)
     .await
     .map(|found| found.flatten().unwrap_or(0))
 }
 
 /// Cables que ya salen de ese equipo, mirando por los dos extremos.
 pub async fn count_links_of(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     machine: i64,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar(
@@ -1005,12 +999,12 @@ pub async fn count_links_of(
         "#,
     )
     .bind(machine)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
 }
 
 pub async fn insert_link(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     user_id: i64,
     from: i64,
     to: i64,
@@ -1025,7 +1019,7 @@ pub async fn insert_link(
     .bind(user_id)
     .bind(from)
     .bind(to)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
 }
 
@@ -1054,7 +1048,7 @@ pub async fn delete_link(
 /// Esa salida ocupa boca igual que un cable a otro equipo: es la misma regla que aplica el
 /// mapa de organizaciones, donde un nodo publico cuenta `INTERNET` entre sus conexiones.
 pub async fn has_uplink(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     machine: i64,
 ) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar::<_, i64>(
@@ -1067,7 +1061,7 @@ pub async fn has_uplink(
         "#,
     )
     .bind(machine)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .map(|found| found > 0)
 }
@@ -1163,6 +1157,22 @@ pub async fn is_gateway(
         .fetch_optional(&mut **tx)
         .await
         .map(|found| found.unwrap_or(false))
+}
+
+/// Serialize principal changes with component removal/moves for this owner.
+pub async fn lock_hardware_owner(tx: &mut Transaction<'_, Postgres>, user: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(user).fetch_one(&mut **tx).await?;
+    Ok(())
+}
+
+pub async fn protect_gateway_uplink(tx: &mut Transaction<'_, Postgres>, machine: i64) -> Result<(), crate::error::ApiError> {
+    if is_gateway(tx, machine).await? && count_nics(tx, machine).await? == 0 {
+        return Err(crate::error::ApiError::BadRequest(
+            "GATEWAY_NEEDS_NIC: esta es tu máquina principal. Nombra principal a otra desde Hardware antes de dejar esta sin salida".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub async fn clear_public_ip(

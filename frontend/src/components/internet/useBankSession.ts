@@ -19,12 +19,13 @@ type Bank = { id: number; name: string };
  * salvo que el servidor diga que esa máquina es de una organización con `banking`. En
  * cualquier otra página no hay a quién llamar.
  *
- * La sesión vive en memoria y se pierde al cambiar de máquina, como cerrar la pestaña de un
- * banco de verdad.
+ * La sesión manual vive en memoria. La principal se recupera desde el servidor, sin
+ * almacenar ni devolver el PIN, y solo al visitar el banco al que pertenece.
  */
 export function useBankSession(bank: Bank | null, ip: number) {
   const [holder, setHolder] = useState<string | null>(null);
-  const session = useRef<{ access: BankAccess; pin: string } | null>(null);
+  const session = useRef<{ access: BankAccess; pin: string; main?: boolean } | null>(null);
+  const replyRef = useRef<((fill: SiteFill) => void) | null>(null);
 
   // Lo último que se le mandó a la página. Cambiar de sección reemplaza el documento y se
   // lleva por delante lo rellenado, así que hay que poder volver a ponerlo.
@@ -34,10 +35,23 @@ export function useBankSession(bank: Bank | null, ip: number) {
   // mismo banco pueden servir la misma web, pero saltar entre ellas equivale a abrir una
   // pestaÃ±a nueva y nunca debe conservar credenciales ni saldo ya pintado.
   useEffect(() => {
+    let cancelled = false;
     session.current = null;
     painted.current = null;
     setHolder(null);
-  }, [ip]);
+    if (bank) void financesApi.mainAccount().then((access) => {
+      if (cancelled || access.bank_id !== bank.id || session.current) return;
+      session.current = { access, pin: '', main: true };
+      setHolder(access.holder);
+      const fill: SiteFill = { session: true, values: {
+        bank: bank.name, account: String(access.account), holder: access.holder,
+        balance: formatMoney(access.cash), status: tr("Cuenta principal activa."),
+      } };
+      painted.current = fill;
+      replyRef.current?.(fill);
+    }).catch(() => {});
+    return () => { cancelled = true; replyRef.current = null; };
+  }, [ip, bank?.id]);
 
   const handle = useCallback(
     async (message: SiteMessage, reply: (fill: SiteFill) => void) => {
@@ -75,6 +89,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
 
       try {
         if (message.kind === 'bank_logout') {
+          if (session.current?.main) { say(tr("Tu cuenta principal permanece activa para ti.")); return; }
           session.current = null;
           setHolder(null);
           send({
@@ -121,7 +136,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
 
         if (message.kind === 'bank_transfer') {
           const amount = Number(fields.amount);
-          const movement = await bankApi.transfer({
+          const movement = open.main ? await financesApi.transferMain(open.access.account, Number(fields.to_account), amount, fields.concept ?? '') : await bankApi.transfer({
             account: open.access.account,
             pin: open.pin,
             to_account: Number(fields.to_account),
@@ -142,7 +157,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
         }
 
         if (message.kind === 'bank_statement') {
-          const rows = await bankApi.statement({
+          const rows = open.main ? await financesApi.mainStatement() : await bankApi.statement({
             account: open.access.account,
             pin: open.pin,
           });
@@ -177,6 +192,7 @@ export function useBankSession(bank: Bank | null, ip: number) {
 
   /** Vuelve a pintar lo que la sesión ya sabía, en la página que acaba de cargar. */
   const restore = useCallback((reply: (fill: SiteFill) => void) => {
+    replyRef.current = reply;
     reply(painted.current ?? {
       session: session.current !== null,
     });

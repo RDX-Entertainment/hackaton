@@ -21,7 +21,8 @@ pub struct ResearchModule {
     pub capability: Option<String>,
     pub deltas: Stats,
 }
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct Stats {
     pub effectiveness: i32,
     pub resistance: i32,
@@ -75,6 +76,8 @@ pub struct CompilationQueued {
 /// sirve para una operacion: que capacidad tiene y con que atributos se compilo.
 #[derive(Serialize)]
 pub struct Program {
+    pub functions: Vec<String>,
+    pub module_slots: i32,
     pub software_id: i64,
     pub server_id: i64,
     pub resources: Option<super::models::OriginMachine>,
@@ -136,6 +139,16 @@ pub struct WebContent {
     pub revision: i64,
 }
 
+/// Publicación ya confirmada. Conserva el recibo de proceso para clientes anteriores.
+#[derive(Serialize)]
+pub struct WebPublication {
+    pub process_id: i64,
+    pub seconds: i32,
+    pub estimated_chance: String,
+    #[serde(flatten)]
+    pub web: WebContent,
+}
+
 #[derive(Deserialize)]
 pub struct ModifyWebRequest {
     pub content: String,
@@ -151,6 +164,22 @@ pub struct TacticalActionStarted {
     pub process_id: i64,
     pub seconds: i32,
     pub estimated_chance: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AntivirusMode { Scan, Clean }
+
+#[derive(Deserialize)]
+pub struct AntivirusRequest {
+    pub software_id: i64,
+    pub mode: AntivirusMode,
+}
+
+#[derive(Serialize)]
+pub struct AntivirusQueued {
+    pub process_id: i64,
+    pub seconds: i32,
 }
 
 #[derive(Serialize)]

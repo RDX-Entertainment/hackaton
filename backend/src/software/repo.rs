@@ -135,6 +135,7 @@ pub async fn find_remote_software(
     pool: &PgPool,
     owner_id: i64,
     is_npc: bool,
+    server: Option<i64>,
 ) -> Result<Vec<RemoteSoftwareRow>, sqlx::Error> {
     sqlx::query_as::<_, RemoteSoftwareRow>(
         r#"
@@ -151,11 +152,13 @@ pub async fn find_remote_software(
         WHERE user_id = $1
           AND is_npc = $2
           AND NOT soft_hidden
+          AND server_id = $3
         ORDER BY soft_name
         "#,
     )
     .bind(owner_id)
     .bind(is_npc)
+    .bind(server)
     .fetch_all(pool)
     .await
 }

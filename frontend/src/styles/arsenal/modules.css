@@ -1,0 +1,10 @@
+.module-workshop{max-width:1080px;width:100%;box-sizing:border-box}
+.module-slots,.module-inventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.75rem;margin:1rem 0}
+.module-slots button{display:flex;flex-direction:column;align-items:flex-start;gap:.4rem;white-space:normal;text-align:left;min-height:75px}
+.module-slots .is-selected{border-color:#65e5d5;box-shadow:0 0 14px #65e5d533}
+.module-card{display:flex;flex-direction:column;gap:.5rem;padding:1rem;border:1px solid #72859955;border-radius:10px;overflow-wrap:anywhere;min-width:0}
+.module-card p{margin:.2rem 0}.module-card button{margin-top:auto;white-space:normal}
+.module-card.grade-1{border-color:#65b898}.module-card.grade-2{border-color:#62a8e8}.module-card.grade-3{border-color:#bb86e8}.module-card.grade-4{border-color:#efb85b;box-shadow:inset 0 0 20px #efb85b0d}
+.module-workshop select,.module-admin input,.module-admin select{max-width:100%;min-width:0}
+.module-admin fieldset{display:flex;flex-wrap:wrap;gap:.75rem}.module-admin fieldset label{flex:1 1 140px;min-width:0}
+.module-admin .module-check{display:flex;align-items:center;gap:.5rem}.module-admin .module-check input{width:auto}

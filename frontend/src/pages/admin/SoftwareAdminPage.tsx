@@ -2,6 +2,7 @@ import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { Loading } from '../../components/Notice';
+import { ModuleAdmin } from '../../components/admin/ModuleAdmin';
 import { StatusMessage } from '../../components/StatusMessage';
 import {
   adminApi,
@@ -19,6 +20,7 @@ const blank = (): AdminSoftwareInput => ({
 
 export function SoftwareAdminPage() {
   useIdioma();
+  const [tab,setTab] = useState<'files'|'modules'>('files');
   const status = useStatusMessage();
   const [users, setUsers] = useState<AdminUser[]>();
   const [types, setTypes] = useState<SoftwareType[]>([]);
@@ -69,10 +71,13 @@ export function SoftwareAdminPage() {
     try { await work(); status.report(message); loadFiles(); } catch (error) { status.reportError(error); } finally { setBusy(false); }
   };
 
-  if (!users) return <Loading />;
+  const tabs = <nav className="mesas"><button onClick={() => setTab('files')}>{tr("Software de usuarios")}</button><button onClick={() => setTab('modules')}>{tr("Módulos")}</button></nav>;
+  if (tab === 'modules') return <>{tabs}<ModuleAdmin /></>;
+  if (!users) return <>{tabs}<StatusMessage text={status.message} /><Loading /></>;
 
   return (
     <>
+      {tabs}
       <h2>{tr("Software de usuarios")}</h2>
       <p className="muted">{tr("Gestiona el inventario y los programas ejecutándose de cualquier usuario.")}</p>
       <StatusMessage text={status.message} as="block" />

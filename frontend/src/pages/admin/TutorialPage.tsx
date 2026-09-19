@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 
 import { FOCOS, VISTAS, nombreDeVista } from '../../app/focos';
 import { AdminCard } from '../../components/admin/AdminCard';
+import { AdminLoadError } from '../../components/admin/AdminLoadError';
 import { Loading } from '../../components/Notice';
 import { StatusMessage } from '../../components/StatusMessage';
 import {
@@ -54,15 +55,19 @@ export function TutorialPage() {
   const [vocabulario, setVocabulario] = useState<TutorialVocabulary>();
   const [editando, setEditando] = useState<TutorialStep | 'nuevo' | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
 
   const cargar = useCallback(async () => {
-    const [datos, vocab] = await Promise.all([
-      adminApi.getTutorial(),
-      adminApi.getTutorialVocabulary(),
-    ]);
+    setLoadError(null);
+    try {
+      const [datos, vocab] = await Promise.all([
+        adminApi.getTutorial(),
+        adminApi.getTutorialVocabulary(),
+      ]);
 
-    setTutorial(datos);
-    setVocabulario(vocab);
+      setTutorial(datos);
+      setVocabulario(vocab);
+    } catch (error) { setLoadError(error); }
   }, []);
 
   useEffect(() => {
@@ -119,6 +124,7 @@ export function TutorialPage() {
       return tr("Paso «{0}» guardado.", valores.code);
     });
 
+  if (loadError) return <AdminLoadError title="Tutorial" error={loadError} onRetry={() => void cargar()} />;
   if (!tutorial || !vocabulario) {
     return <Loading />;
   }
@@ -128,7 +134,7 @@ export function TutorialPage() {
       <h2>Tutorial</h2>
 
       <p className="lead">
-        {tr("El circuito que recorre quien acaba de registrarse. El paso no se guarda en ninguna parte: se deduce del mundo, así que llegar por otro camino también cuenta.")} </p>
+        {tr("El circuito que recorre quien acaba de registrarse. Mientras aprende, el paso se deduce del mundo. Al terminar, la finalización queda guardada y nunca se reinicia.")} </p>
 
       <StatusMessage text={status.message} as="block" />
 

@@ -80,7 +80,7 @@ pub async fn find_npc_by_ip(
         SELECT
             n.id,
             n.npc_type,
-            n.down_until > now() AS down,
+            n.down_until > now() OR NOT coalesce(h.operational, false) AS down,
             COALESCE(i.name, '') AS name,
             i.web,
             h.server_id
@@ -134,7 +134,20 @@ pub async fn find_machine_on_lan(
 ) -> Result<Option<LanRemoteRow>, sqlx::Error> {
     sqlx::query_as::<_, LanRemoteRow>(
         r#"
+        WITH RECURSIVE reachable(origin, node) AS (
+          SELECT h.server_id, h.server_id FROM hardware h
+          WHERE h.operational AND (h.user_id=$2 AND NOT h.is_npc OR EXISTS(
+            SELECT 1 FROM internet_access a WHERE a.user_id=$2 AND a.ip IN(h.public_ip,h.lan_ip)))
+          UNION
+          SELECT r.origin, peer.server_id FROM reachable r
+          JOIN hardware hop ON hop.server_id=r.node
+          JOIN hardware_links cable ON cable.from_server=r.node OR cable.to_server=r.node
+          JOIN hardware peer ON peer.server_id=CASE WHEN cable.from_server=r.node THEN cable.to_server ELSE cable.from_server END
+          WHERE (r.node=r.origin OR hop.node_kind='switch') AND hop.operational
+            AND peer.user_id=hop.user_id AND peer.is_npc=hop.is_npc
+        )
         SELECT
+            NOT destino.operational AS down,
             destino.server_id,
             destino.user_id AS owner_id,
             destino.is_npc,
@@ -143,22 +156,7 @@ pub async fn find_machine_on_lan(
 
         FROM hardware destino
 
-        -- El cable. Da igual en que orden se tendio: A-B y B-A son el mismo.
-        JOIN hardware_links cable
-            ON cable.from_server = destino.server_id
-            OR cable.to_server = destino.server_id
-
-        -- Y el equipo del otro extremo, que es desde donde se pivota.
-        JOIN hardware pivote
-            ON pivote.server_id = CASE
-                   WHEN cable.from_server = destino.server_id THEN cable.to_server
-                   ELSE cable.from_server
-               END
-
-        -- Acceso vivo en ese extremo. Sin esto, conocer la direccion no sirve de nada.
-        JOIN internet_access acceso
-            ON acceso.user_id = $2
-           AND acceso.ip IN (pivote.public_ip, pivote.lan_ip)
+        JOIN reachable r ON r.node=destino.server_id AND r.origin<>destino.server_id
 
         LEFT JOIN users u
             ON u.id = destino.user_id AND NOT destino.is_npc
@@ -168,9 +166,7 @@ pub async fn find_machine_on_lan(
             ON i.npc_id = destino.user_id AND destino.is_npc
 
         WHERE destino.lan_ip = $1
-          -- Los dos extremos son de la misma red, que es lo que significa un cable.
-          AND pivote.user_id = destino.user_id
-          AND pivote.is_npc  = destino.is_npc
+          AND destino.node_kind='computer'
 
         ORDER BY destino.server_id
         LIMIT 1
@@ -189,6 +185,7 @@ pub async fn find_player_by_ip(
     sqlx::query_as::<_, PlayerRemoteRow>(
         r#"
         SELECT
+            NOT h.operational AS down,
             u.id,
             u.login,
             p.web,
@@ -401,6 +398,18 @@ pub async fn grant_access(
 // HACK
 // ==============================
 //
+
+/// El campo de tiro pertenece al alumno. Ni otro NPC ni el de otro jugador da esta excepcion.
+pub async fn is_own_practice(pool: &PgPool, user_id: i64, npc_id: i64) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM npc_purpose
+         WHERE npc_id = $1 AND kind = 'practice' AND owner_id = $2)",
+    )
+    .bind(npc_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+}
 
 pub async fn certification_level(
     pool: &PgPool,

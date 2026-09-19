@@ -40,7 +40,7 @@ pub const RULES: &[SkillRule] = &[
         threshold: 50,
     },
     SkillRule {
-        capability: "antivirus_remove",
+        capability: "antivirus",
         attribute: "removal",
         action: "remove_persistence",
         threshold: 50,

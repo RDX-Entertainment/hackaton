@@ -2,11 +2,8 @@ use sqlx::FromRow;
 
 /// Los hechos del mundo de los que se deduce el paso.
 ///
-/// Cada campo es una pregunta cerrada al estado real —¿tiene un diseño?, ¿hay algo en
-/// memoria?— y no una marca guardada. **No existe una columna `tutorial_step`** a proposito:
-/// seria una segunda verdad que se desincroniza en cuanto alguien haga las cosas en otro
-/// orden, y lo que se calcula de los hechos no puede mentir. Llegar por otro camino tambien
-/// cuenta.
+/// Mientras se aprende se consulta el estado real. Al terminar se guarda una graduación
+/// permanente; quitar programas o cambiar la definición nunca reactiva el tutorial.
 #[derive(Debug, FromRow)]
 pub struct OnboardingFacts {
     pub modules: bool,

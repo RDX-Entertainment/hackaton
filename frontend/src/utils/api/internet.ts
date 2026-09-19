@@ -27,8 +27,12 @@ export function login(
 }
 
 /** Both cracking a password and scanning ports are the same queued attack. */
-export function hack(ip: number, kind: HackKind): Promise<HackResult> {
-  return post<HackResult>('/internet/hack', { ip, kind });
+export function hack(ip: number, kind: HackKind, softwareId?: number): Promise<HackResult> {
+  return post<HackResult>('/internet/hack', { ip, kind, software_id: softwareId });
+}
+
+export function intrude(ip: number, capability: string, softwareId: number): Promise<import('./types').OperationStarted> {
+  return post('/internet/intrusions', { ip, capability, software_id: softwareId });
 }
 
 export function analyze(ip: number): Promise<QueuedProcess & { analyzer_version: number }> {

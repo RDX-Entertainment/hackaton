@@ -35,6 +35,10 @@ pub fn configure(
     cfg: &mut web::ServiceConfig,
 ) {
     cfg
+        .route("/finances/accounts/{id}/main", web::post().to(set_main))
+        .route("/finances/main", web::get().to(main_account))
+        .route("/finances/main/statement", web::get().to(main_statement))
+        .route("/finances/main/transfer", web::post().to(main_transfer))
         .route(
             "/finances/banks",
             web::get().to(banks),
@@ -117,6 +121,36 @@ async fn ordered_from(state: &AppState, ctx: &Ctx) -> Option<i64> {
         .await
         .ok()
         .flatten()
+}
+
+async fn set_main(state: web::Data<AppState>, ctx: Ctx, id: web::Path<i64>) -> Result<HttpResponse, ApiError> {
+    let mut tx = state.pool.begin().await?;
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE").bind(ctx.id).execute(&mut *tx).await?;
+    let changed = sqlx::query("UPDATE users SET main_bank_account=$2 WHERE id=$1 AND EXISTS(SELECT 1 FROM bank_accounts WHERE id=$2 AND bank_user=$1)")
+        .bind(ctx.id).bind(id.into_inner()).execute(&mut *tx).await?.rows_affected();
+    if changed == 0 { return Err(ApiError::NotFound); }
+    tx.commit().await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+async fn main_account(state: web::Data<AppState>, ctx: Ctx) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(actions::main_access(&state.pool, ctx.id).await?))
+}
+
+async fn main_statement(state: web::Data<AppState>, ctx: Ctx) -> Result<HttpResponse, ApiError> {
+    let access = actions::main_access(&state.pool, ctx.id).await?;
+    let rows: Vec<super::dtos::TransactionResponse> = super::repo::find_transactions(&state.pool, access.account).await?
+        .into_iter().map(Into::into).collect();
+    Ok(HttpResponse::Ok().json(rows))
+}
+
+#[derive(serde::Deserialize)]
+struct MainTransfer { from_account: i64, to_account: i64, amount: i64, #[serde(default)] concept: String }
+
+async fn main_transfer(state: web::Data<AppState>, ctx: Ctx, input: web::Json<MainTransfer>) -> Result<HttpResponse, ApiError> {
+    crate::onboarding::services::guard(&state.pool, ctx.id, "banco.transferir").await?;
+    let ip = ordered_from(&state, &ctx).await;
+    Ok(HttpResponse::Ok().json(actions::transfer_main(&state.pool, ctx.id, input.from_account, input.to_account, input.amount, &input.concept, ip).await?))
 }
 
 pub async fn bank_login(

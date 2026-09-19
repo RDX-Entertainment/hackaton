@@ -2,6 +2,7 @@ import { tr, useIdioma } from '../../i18n/text';
 import { useCallback, useEffect, useState } from 'react';
 
 import { CatalogBrowser } from '../../components/admin/CatalogBrowser';
+import { AdminLoadError } from '../../components/admin/AdminLoadError';
 import { DeliveryCard } from '../../components/admin/DeliveryCard';
 import { PartForm } from '../../components/admin/PartForm';
 import { Loading } from '../../components/Notice';
@@ -23,7 +24,7 @@ export function CatalogPage() {
   const [parts, setParts] = useState<Part[]>();
   const [chipsets, setChipsets] = useState<Chipset[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [denied, setDenied] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [editing, setEditing] = useState<Part | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -32,12 +33,13 @@ export function CatalogPage() {
   }, []);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setParts(await adminApi.listParts());
       await loadChipsets();
       setUsers(await adminApi.listUsers());
-    } catch {
-      setDenied(true);
+    } catch (error) {
+      setLoadError(error);
     }
   }, [loadChipsets]);
 
@@ -84,15 +86,7 @@ export function CatalogPage() {
       return tr("{0} piezas entregadas a {1}.", made.components.length, who);
     });
 
-  if (denied) {
-    return (
-      <>
-        <h2>{tr("Catálogo")}</h2>
-        <p className="muted">
-          {tr("Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es administrador, igual que a una ruta inventada.")} </p>
-      </>
-    );
-  }
+  if (loadError) return <AdminLoadError title={tr("Catálogo")} error={loadError} onRetry={() => void load()} />;
 
   if (!parts) {
     return <Loading />;

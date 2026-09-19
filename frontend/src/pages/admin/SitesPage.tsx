@@ -2,6 +2,7 @@ import { tr, useIdioma, idiomaActual } from '../../i18n/text';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AdminCard } from '../../components/admin/AdminCard';
+import { AdminLoadError } from '../../components/admin/AdminLoadError';
 import { SiteEditor } from '../../components/internet/SiteEditor';
 import { Loading } from '../../components/Notice';
 import { StatusMessage } from '../../components/StatusMessage';
@@ -28,7 +29,7 @@ export function SitesPage() {
   const status = useStatusMessage();
 
   const [sites, setSites] = useState<Site[]>();
-  const [denied, setDenied] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [text, setText] = useState('');
@@ -39,10 +40,11 @@ export function SitesPage() {
   const [refused, setRefused] = useState('');
 
   const load = useCallback(async () => {
+    setLoadError(null);
     try {
       setSites(await adminApi.listSites());
-    } catch {
-      setDenied(true);
+    } catch (error) {
+      setLoadError(error);
     }
   }, []);
 
@@ -93,15 +95,7 @@ export function SitesPage() {
     }
   };
 
-  if (denied) {
-    return (
-      <>
-        <h2>{tr("Sitios")}</h2>
-        <p className="muted">
-          {tr("Esta sección no existe para tu cuenta. El servidor responde 404 a quien no es administrador, igual que a una ruta inventada.")} </p>
-      </>
-    );
-  }
+  if (loadError) return <AdminLoadError title={tr("Sitios")} error={loadError} onRetry={() => void load()} />;
 
   if (!sites) {
     return <Loading />;

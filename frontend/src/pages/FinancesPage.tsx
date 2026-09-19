@@ -13,6 +13,13 @@ export function FinancesPage() {
   useIdioma();
   const [accounts, setAccounts] = useState<BankAccount[]>();
   const [failed, setFailed] = useState('');
+  const [changing, setChanging] = useState(false);
+  const makeMain = async (id: number) => {
+    setChanging(true);
+    try { await financesApi.setMainAccount(id); load(); }
+    catch (error) { setFailed(messageFrom(error)); }
+    finally { setChanging(false); }
+  };
 
   const load = useCallback(() => {
     financesApi
@@ -42,7 +49,7 @@ export function FinancesPage() {
 
   const pending = accounts.filter((account) => !account.pin_set);
   const total = accounts
-    .filter((account) => account.pin_set)
+    .filter((account) => account.pin_set || account.is_main)
     .reduce((sum, account) => sum + account.cash, 0);
 
   return (
@@ -58,18 +65,18 @@ export function FinancesPage() {
       {accounts.length > 1 && (
         <article className="tarjeta tarjeta--viva" style={{ marginBottom: '1rem' }}>
           <span className="tarjeta__rotulo">
-            <Icono nombre="dinero" tamano={12} /> {tr("entre todas las cuentas con PIN")} </span>
+            <Icono nombre="dinero" tamano={12} /> {tr("entre todas las cuentas activas")} </span>
           <b className="tarjeta__cifra">{formatMoney(total)}</b>
           <div className="tarjeta__regla" />
           <p className="tarjeta__pie">
-            {accounts.length} {tr("cuentas &middot; el saldo de una cuenta sin PIN no cuenta.")} </p>
+            {accounts.length} {tr("cuentas &middot; tu cuenta principal permanece activa.")} </p>
         </article>
       )}
 
       <div className="rejilla-tarjetas">
         {accounts.map((account) => (
           <article
-            className={account.pin_set ? 'tarjeta' : 'tarjeta tarjeta--bloqueada'}
+            className={account.pin_set || account.is_main ? 'tarjeta' : 'tarjeta tarjeta--bloqueada'}
             key={account.id}
           >
             <div className="tarjeta__cabecera">
@@ -79,12 +86,14 @@ export function FinancesPage() {
 
             <span className="tarjeta__rotulo" style={{ marginTop: '0.75rem' }}>
               <Icono nombre="dinero" tamano={12} /> {tr("saldo")} </span>
-            <b className={account.pin_set ? 'tarjeta__cifra' : 'tarjeta__cifra tarjeta__cifra--quieta'}>
-              {account.pin_set ? formatMoney(account.cash) : '—'}
+            <b className={account.pin_set || account.is_main ? 'tarjeta__cifra' : 'tarjeta__cifra tarjeta__cifra--quieta'}>
+              {account.pin_set || account.is_main ? formatMoney(account.cash) : '—'}
             </b>
             <div className="tarjeta__regla" />
 
-            {!account.pin_set && (
+            {account.is_main ? <p className="tarjeta__pie">{tr("★ Principal · siempre activa para ti")}</p>
+              : <button disabled={changing} onClick={() => void makeMain(account.id)}>{tr("Hacer principal")}</button>}
+            {!account.pin_set && !account.is_main && (
               <p className="tarjeta__pie">{tr("Sin PIN todavía: no puede mover dinero.")}</p>
             )}
           </article>
@@ -146,7 +155,7 @@ function ChoosePin({ account, onDone }: { account: BankAccount; onDone: () => vo
       <div className="pin-setup__lead">
         <b>{tr("Elige el PIN de tu cuenta")}</b>
         <small>
-          {account.account} · {account.bank_name} {tr("— se abrió contigo al registrarte. Sin PIN no puede mover dinero. Son")} {PIN_LENGTH} {tr("letras o números.")} </small>
+          {account.account} · {account.bank_name} {tr("— el PIN permite el acceso bancario manual. Tu cuenta principal ya está activa para ti. Son")} {PIN_LENGTH} {tr("letras o números.")} </small>
       </div>
 
       <label>

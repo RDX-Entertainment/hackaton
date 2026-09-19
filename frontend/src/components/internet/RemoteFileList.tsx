@@ -6,9 +6,11 @@ type RemoteFileListProps = {
   files: RemoteFile[];
   onDownload: (file: RemoteFile) => void;
   onDelete: (file: RemoteFile) => void;
+  canDelete?: boolean;
+  busy?: boolean;
 };
 
-export function RemoteFileList({ files, onDownload, onDelete }: RemoteFileListProps) {
+export function RemoteFileList({ files, onDownload, onDelete, canDelete = true, busy = false }: RemoteFileListProps) {
   useIdioma();
   if (!files.length) {
     return <p className="rfiles__empty">{tr("Sin ficheros, o ninguno visible desde aquí.")}</p>;
@@ -34,9 +36,9 @@ export function RemoteFileList({ files, onDownload, onDelete }: RemoteFileListPr
           </span>
 
           <span className="rfile__actions">
-            <button type="button" onClick={() => onDownload(file)}>
+            <button type="button" disabled={busy} onClick={() => onDownload(file)}>
               {tr("bajar")} </button>
-            <button type="button" onClick={() => onDelete(file)}>
+            <button type="button" disabled={busy || !canDelete} onClick={() => onDelete(file)}>
               {tr("borrar")} </button>
           </span>
         </li>
