@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 use super::models::{
     RemoteSoftwareRow,
@@ -488,7 +488,8 @@ pub async fn create_admin_software(
     ram: i32,
     soft_type: i16,
 ) -> Result<Option<i64>, sqlx::Error> {
-    sqlx::query_scalar(
+    let mut tx = pool.begin().await?;
+    let id = sqlx::query_scalar(
         r#"
         INSERT INTO software(user_id,soft_name,soft_version,soft_size,soft_ram,soft_type,server_id)
         SELECT $1,$2,$3,$4,$5,$6,h.server_id
@@ -505,8 +506,50 @@ pub async fn create_admin_software(
     .bind(size)
     .bind(ram)
     .bind(soft_type)
-    .fetch_optional(pool)
-    .await
+    .fetch_optional(&mut *tx)
+    .await?;
+    if let Some(id) = id {
+        upsert_admin_software_profile(&mut tx, id, soft_type, size, ram).await?;
+    }
+    tx.commit().await?;
+    Ok(id)
+}
+
+/// El editor administrativo crea programas heredados, pero siguen necesitando el perfil
+/// modular que relaciona el tipo clásico con una capacidad. Sin esta fila un fichero tipo
+/// SSH existe en el disco, aunque el arsenal no puede reconocerlo como `ssh_exploit`.
+async fn upsert_admin_software_profile(
+    tx: &mut Transaction<'_, Postgres>,
+    software_id: i64,
+    soft_type: i16,
+    size: i32,
+    ram: i32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO software_profiles(
+            software_id, origin, capability_id, cpu_need, ram_need, net_need, weight
+        )
+        SELECT $1, 'legacy', c.id, GREATEST(1,$4), GREATEST(1,$4), 1, GREATEST(1,$3)
+          FROM (VALUES (1,'cracker'), (2,'anti_bruteforce'), (3,'port_scan'),
+                       (4,'firewall_ssh'), (7,'antivirus'), (13,'ftp_exploit'),
+                       (14,'ssh_exploit'), (99,'virus_infect')) AS legacy(soft_type, capability)
+          JOIN software_capabilities c ON c.code=legacy.capability
+         WHERE legacy.soft_type=$2
+        ON CONFLICT(software_id) DO UPDATE SET
+            capability_id=EXCLUDED.capability_id,
+            cpu_need=EXCLUDED.cpu_need,
+            ram_need=EXCLUDED.ram_need,
+            weight=EXCLUDED.weight
+        "#,
+    )
+    .bind(software_id)
+    .bind(soft_type)
+    .bind(size)
+    .bind(ram)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 pub async fn update_admin_software(
@@ -519,7 +562,8 @@ pub async fn update_admin_software(
     ram: i32,
     soft_type: i16,
 ) -> Result<bool, sqlx::Error> {
-    Ok(sqlx::query(
+    let mut tx = pool.begin().await?;
+    let updated = sqlx::query(
         "UPDATE software SET soft_name=$3,soft_version=$4,soft_size=$5,soft_ram=$6,soft_type=$7 WHERE id=$1 AND user_id=$2 AND NOT is_npc",
     )
     .bind(software_id)
@@ -529,9 +573,14 @@ pub async fn update_admin_software(
     .bind(size)
     .bind(ram)
     .bind(soft_type)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?
-    .rows_affected() > 0)
+    .rows_affected() > 0;
+    if updated {
+        upsert_admin_software_profile(&mut tx, software_id, soft_type, size, ram).await?;
+    }
+    tx.commit().await?;
+    Ok(updated)
 }
 
 pub async fn delete_admin_software(pool: &PgPool, user_id: i64, software_id: i64) -> Result<bool, sqlx::Error> {
